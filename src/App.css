@@ -1,0 +1,44 @@
+@media print {
+  /* cacher tout sauf le journal */
+  body * {
+    visibility: hidden;
+  }
+
+  #journal-print,
+  #journal-print * {
+    visibility: visible;
+  }
+
+  /* position du bloc imprimé */
+  #journal-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 20px;
+    background: white;
+  }
+
+  /* tableau propre */
+  #journal-print table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #journal-print th,
+  #journal-print td {
+    border: 1px solid #333;
+    padding: 8px;
+  }
+
+  /* éviter coupures */
+  #journal-print tr {
+    page-break-inside: avoid;
+  }
+
+  /* A4 */
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+}
