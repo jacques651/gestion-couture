@@ -35,11 +35,14 @@ import {
   IconPlus,
   IconSearch,
   IconRefresh,
-  IconCash,
+  IconFileInvoice,
+  IconReceipt,
 } from '@tabler/icons-react';
 import { getDb, getNextVenteCode } from '../../database/db';
 import { notifications } from '@mantine/notifications';
 import FormulaireClient from '../clients/FormulaireClient';
+import ModalFacture from '../factures/ModalFacture';
+import ModalRecu from '../paiements/ModalRecu';
 
 interface FormulaireVenteProps {
   onSuccess: () => void;
@@ -101,6 +104,8 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientNom, setClientNom] = useState('');
   const [clientTelephone, setClientTelephone] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
+  const [clientAdresse, setClientAdresse] = useState('');
 
   // Client - Prêt-à-porter et Matière (optionnel)
   const [clientNomSimple, setClientNomSimple] = useState('');
@@ -109,8 +114,9 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
   // Produit - Commande
   const [produitCommande, setProduitCommande] = useState('');
   const [montantCommande, setMontantCommande] = useState(0);
+  const [quantiteCommande, setQuantiteCommande] = useState(1);
   const [avanceMontant, setAvanceMontant] = useState(0);
-  const [avanceMode, setAvanceMode] = useState('Espèces');
+  const [, setAvanceMode] = useState('Espèces');
 
   // Produit - Prêt-à-porter (panier)
   const [panier, setPanier] = useState<PanierItem[]>([]);
@@ -131,15 +137,18 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
   const [nouveauClientModalOpen, setNouveauClientModalOpen] = useState(false);
   const [nouveauClient, setNouveauClient] = useState({ nom: '', telephone: '', adresse: '' });
   const [infoModalOpen, setInfoModalOpen] = useState(false);
-  const [avanceModalOpen, setAvanceModalOpen] = useState(false);
   const [observation, setObservation] = useState('');
   const [dateCommande, setDateCommande] = useState(new Date().toISOString().split('T')[0]);
   const [showFormulaireClient, setShowFormulaireClient] = useState(false);
 
+  // États pour facture et reçu
+  const [showFacture, setShowFacture] = useState(false);
+  const [showRecu, setShowRecu] = useState(false);
+  const [factureData, setFactureData] = useState<any>(null);
+  const [venteIdForRecu, setVenteIdForRecu] = useState<number | null>(null);
+
   // Calculs
   const totalPanier = panier.reduce((sum, item) => sum + item.total, 0);
-  const montantTotal = venteType === 'commande' ? montantCommande : totalPanier;
-  const resteAPayer = montantTotal - avanceMontant;
 
   // Pré-remplir le client si fourni
   useEffect(() => {
@@ -168,7 +177,7 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
       const db = await getDb();
 
       const clientsData = await db.select<Client[]>(`
-        SELECT telephone_id, nom_prenom, adresse 
+        SELECT telephone_id, nom_prenom, adresse, email 
         FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom
       `);
       setClients(clientsData);
@@ -230,7 +239,166 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
     }
   };
 
-  // Ajouter au panier (prêt-à-porter)
+  // Générer la facture
+  const handleGenererFacture = () => {
+    if (!produitCommande || montantCommande <= 0 || quantiteCommande <= 0) {
+      notifications.show({ title: 'Erreur', message: 'Renseignez le produit, la quantité et le prix', color: 'red' });
+      return;
+    }
+
+    const total = quantiteCommande * montantCommande;
+
+    setFactureData({
+      client: {
+        nom_prenom: clientNom || (clientId ? clients.find(c => c.telephone_id === clientId)?.nom_prenom : ''),
+        telephone_id: clientTelephone || clientId || '',
+        email: clientEmail,
+        adresse: clientAdresse,
+      },
+      lignes: [{
+        designation: produitCommande,
+        quantite: quantiteCommande,
+        prix_unitaire: montantCommande
+      }],
+      total_general: total,
+      avance: avanceMontant,
+      reste: total - avanceMontant,
+      numero: codeVente,
+      date_commande: dateCommande
+    });
+
+    setShowFacture(true);
+  };
+
+ // Soumettre la vente après paiement
+const submitVenteAvecPaiement = async (montantRegle: number, mode: string) => {
+  setLoading(true);
+
+  try {
+    const db = await getDb();
+
+    let finalClientId = null;
+    let finalClientNom = clientNom;
+
+    if (clientId) {
+      finalClientId = clientId;
+      const client = clients.find(c => c.telephone_id === clientId);
+      finalClientNom = client?.nom_prenom || '';
+    }
+
+    const totalVente = quantiteCommande * montantCommande;
+    const statut = montantRegle >= totalVente ? 'PAYEE' : (montantRegle > 0 ? 'PARTIEL' : 'EN_ATTENTE');
+
+    // ✅ Changé 'commande' en 'tenue'
+    const result = await db.execute(`
+      INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom, mode_paiement,
+        montant_total, montant_regle, statut, observation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      codeVente, 'tenue', dateCommande, finalClientId, finalClientNom, mode,
+      totalVente, montantRegle, statut, observation, null
+    ]);
+
+    const venteId = result.lastInsertId as number;
+    
+    if (venteId) {
+      await db.execute(`
+        INSERT INTO vente_details (vente_id, designation, quantite, prix_unitaire, total, observation)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [venteId, produitCommande, quantiteCommande, montantCommande, totalVente, `Commande sur mesure - Avance: ${montantRegle} FCFA`]);
+
+      notifications.show({ title: 'Succès', message: `Vente ${codeVente} enregistrée`, color: 'green' });
+
+      setVenteIdForRecu(venteId);
+      setShowFacture(false);
+      setShowRecu(true);
+    } else {
+      throw new Error("Erreur lors de la création de la vente");
+    }
+
+  } catch (err: any) {
+    console.error(err);
+    notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Soumettre vente prêt-à-porter ou matière
+const handleSubmitVente = async () => {
+  setLoading(true);
+
+  if (venteType === 'pret_a_porter' && panier.length === 0) {
+    notifications.show({ title: 'Erreur', message: 'Ajoutez des produits au panier', color: 'red' });
+    setLoading(false);
+    return;
+  }
+
+  if (venteType === 'matiere' && panier.length === 0) {
+    notifications.show({ title: 'Erreur', message: 'Ajoutez des matières au panier', color: 'red' });
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const db = await getDb();
+
+    const finalClientNom = clientNomSimple || 'Client anonyme';
+    const montantTotalVente = totalPanier;
+
+    // ✅ Utiliser 'matiere' ou 'tenue' selon le type
+    const typeVenteValue = venteType === 'matiere' ? 'matiere' : 'tenue';
+    
+    const result = await db.execute(`
+      INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom, mode_paiement,
+        montant_total, montant_regle, statut)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      codeVente, typeVenteValue, dateCommande, null, finalClientNom, 'Espèces',
+      montantTotalVente, montantTotalVente, 'PAYEE', observation, null
+    ]);
+
+    const venteId = result.lastInsertId as number;
+    
+    if (venteId) {
+      for (const item of panier) {
+        await db.execute(`
+          INSERT INTO vente_details (vente_id, matiere_id, tenue_variante_id, designation, quantite, prix_unitaire, total, taille_libelle)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          venteId,
+          item.type_produit === 'matiere' ? item.produitId : null,
+          item.varianteId || null,
+          item.designation,
+          item.quantite,
+          item.prixUnitaire,
+          item.total,
+          item.taille || null
+        ]);
+
+        if (item.varianteId) {
+          await db.execute(`UPDATE tenues_variantes SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.varianteId]);
+        } else if (item.type_produit === 'matiere') {
+          await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.produitId]);
+        }
+      }
+
+      notifications.show({ title: 'Succès', message: `Vente ${codeVente} enregistrée`, color: 'green' });
+      setVenteIdForRecu(venteId);
+      setShowRecu(true);
+    } else {
+      throw new Error("Erreur lors de la création de la vente");
+    }
+
+  } catch (err: any) {
+    console.error(err);
+    notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Ajouter au panier (prêt-à-porter et matière)
   const handleAjouterAuPanier = () => {
     if (!selectedProduit) return;
 
@@ -287,117 +455,6 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
     setPanier(panier.filter(item => item.id !== id));
   };
 
-  // Soumettre la vente
-  const handleSubmit = async () => {
-    setLoading(true);
-
-    // Validation
-    if (venteType === 'commande' && (!produitCommande || montantCommande <= 0)) {
-      notifications.show({ title: 'Erreur', message: 'Renseignez le produit et le montant', color: 'red' });
-      setLoading(false);
-      return;
-    }
-
-    if (venteType === 'pret_a_porter' && panier.length === 0) {
-      notifications.show({ title: 'Erreur', message: 'Ajoutez des produits au panier', color: 'red' });
-      setLoading(false);
-      return;
-    }
-
-    if (venteType === 'matiere' && panier.length === 0) {
-      notifications.show({ title: 'Erreur', message: 'Ajoutez des matières au panier', color: 'red' });
-      setLoading(false);
-      return;
-    }
-
-    if (venteType === 'commande' && !clientId && !clientNom) {
-      notifications.show({ title: 'Erreur', message: 'Client requis pour une commande', color: 'red' });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const db = await getDb();
-
-      // Déterminer le client final
-      let finalClientId = null;
-      let finalClientNom = '';
-      let finalClientTel = '';
-
-      if (venteType === 'commande') {
-        if (clientId) {
-          finalClientId = clientId;
-          const client = clients.find(c => c.telephone_id === clientId);
-          finalClientNom = client?.nom_prenom || '';
-          finalClientTel = client?.telephone_id || '';
-        } else if (clientNom) {
-          finalClientNom = clientNom;
-          finalClientTel = clientTelephone;
-        }
-      } else {
-        finalClientNom = clientNomSimple || 'Client anonyme';
-        finalClientTel = clientTelephoneSimple;
-      }
-
-      const montantTotalVente = venteType === 'commande' ? montantCommande : totalPanier;
-      const montantRegle = venteType === 'commande' ? avanceMontant : montantTotalVente;
-      const statut = montantRegle >= montantTotalVente ? 'PAYEE' : (montantRegle > 0 ? 'PARTIEL' : 'EN_ATTENTE');
-
-      // Insérer l'entête
-      const result = await db.execute(`
-        INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom, client_telephone,
-          mode_paiement, montant_total, montant_regle, statut, observation, date_livraison)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        codeVente, venteType, dateCommande, finalClientId, finalClientNom, finalClientTel,
-        venteType === 'commande' ? avanceMode : 'Espèces',
-        montantTotalVente, montantRegle, statut, observation, null
-      ]);
-
-      const venteId = result.lastInsertId;
-
-      // Insérer les détails
-      if (venteType === 'commande') {
-        await db.execute(`
-          INSERT INTO vente_details (vente_id, designation, quantite, prix_unitaire, total, observation)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `, [venteId, produitCommande, 1, montantCommande, montantCommande, `Commande sur mesure - Avance: ${avanceMontant} FCFA`]);
-      } else {
-        for (const item of panier) {
-          await db.execute(`
-            INSERT INTO vente_details (vente_id, matiere_id, tenue_variante_id, designation, quantite, prix_unitaire, total, taille_libelle)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            venteId,
-            item.type_produit === 'matiere' ? item.produitId : null,
-            item.varianteId || null,
-            item.designation,
-            item.quantite,
-            item.prixUnitaire,
-            item.total,
-            item.taille || null
-          ]);
-
-          // Mise à jour stock
-          if (item.varianteId) {
-            await db.execute(`UPDATE tenues_variantes SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.varianteId]);
-          } else if (item.type_produit === 'matiere') {
-            await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.produitId]);
-          }
-        }
-      }
-
-      notifications.show({ title: 'Succès', message: `Vente ${codeVente} enregistrée`, color: 'green' });
-      setTimeout(() => onSuccess(), 1500);
-
-    } catch (err: any) {
-      console.error(err);
-      notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const resetForm = () => {
     setVenteType(defaultType || 'commande');
     setClientId(null);
@@ -408,6 +465,7 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
     setPanier([]);
     setSelectedProduit(null);
     setMontantCommande(0);
+    setQuantiteCommande(1);
     setAvanceMontant(0);
     setObservation('');
     setProduitCommande('');
@@ -416,31 +474,59 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
 
   const clientOptions = clients.map(c => ({ value: c.telephone_id, label: `${c.nom_prenom} - ${c.telephone_id}` }));
 
- if (showFormulaireClient) {
-  return (
-    <FormulaireClient
-      onBack={() => setShowFormulaireClient(false)}
-      onSuccess={(clientId, clientNom) => {
-        setShowFormulaireClient(false);
-        // Recharger les clients
-        const loadClients = async () => {
-          const db = await getDb();
-          const clientsData = await db.select<Client[]>(`
-            SELECT telephone_id, nom_prenom, adresse 
-            FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom
-          `);
-          setClients(clientsData);
-          // Présélectionner le client créé
-          if (clientId) {
-            setClientId(clientId);
-            setClientNom(clientNom || '');
-          }
-        };
-        loadClients();
-      }}
-    />
-  );
-}
+  // Affichage FormulaireClient
+  if (showFormulaireClient) {
+    return (
+      <FormulaireClient
+        onBack={() => setShowFormulaireClient(false)}
+        onSuccess={(clientId, clientNom) => {
+          setShowFormulaireClient(false);
+          const loadClients = async () => {
+            const db = await getDb();
+            const clientsData = await db.select<Client[]>(`
+              SELECT telephone_id, nom_prenom, adresse 
+              FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom
+            `);
+            setClients(clientsData);
+            if (clientId) {
+              setClientId(clientId);
+              setClientNom(clientNom || '');
+            }
+          };
+          loadClients();
+        }}
+      />
+    );
+  }
+
+  // Affichage Facture
+  if (showFacture && factureData) {
+    return (
+      <ModalFacture
+        commande={factureData}
+        onClose={() => setShowFacture(false)}
+        onConfirmPaiement={(montant, mode) => {
+          setAvanceMontant(montant);
+          setAvanceMode(mode);
+          submitVenteAvecPaiement(montant, mode);
+        }}
+      />
+    );
+  }
+
+  // Affichage Reçu
+  if (showRecu && venteIdForRecu) {
+    return (
+      <ModalRecu
+        commande={{ id: venteIdForRecu }}
+        onClose={() => {
+          setShowRecu(false);
+          setVenteIdForRecu(null);
+          onSuccess();
+        }}
+      />
+    );
+  }
 
   return (
     <Container size="xl" p={0}>
@@ -478,7 +564,7 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
             </Radio.Group>
           </Card>
 
-          {/* SECTION CLIENT SELON TYPE */}
+          {/* SECTION CLIENT */}
           <Card withBorder radius="lg" shadow="sm" p="lg">
             <Title order={4} mb="md">👤 Informations client</Title>
 
@@ -498,11 +584,11 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                   <TextInput label="Nom complet" placeholder="Nom du client" value={clientNom} onChange={(e) => setClientNom(e.target.value)} />
                   <TextInput label="Téléphone" placeholder="Numéro" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} />
                 </SimpleGrid>
-                <Button
-                  variant="light"
-                  size="xs"
-                  onClick={() => setShowFormulaireClient(true)}
-                >
+                <SimpleGrid cols={2} spacing="md">
+                  <TextInput label="Email" placeholder="Email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
+                  <TextInput label="Adresse" placeholder="Adresse" value={clientAdresse} onChange={(e) => setClientAdresse(e.target.value)} />
+                </SimpleGrid>
+                <Button variant="light" size="xs" onClick={() => setShowFormulaireClient(true)}>
                   + Nouveau client
                 </Button>
               </Stack>
@@ -514,7 +600,7 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
             )}
           </Card>
 
-          {/* SECTION PRODUIT SELON TYPE */}
+          {/* SECTION COMMANDE */}
           {venteType === 'commande' && (
             <Card withBorder radius="lg" shadow="sm" p="lg">
               <Title order={4} mb="md">📝 Détails de la commande</Title>
@@ -530,8 +616,8 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                   <NumberInput
                     label="Quantité"
                     placeholder="1"
-                    value={quantiteCmd}
-                    onChange={(val) => setQuantiteCmd(Number(val) || 1)}
+                    value={quantiteCommande}
+                    onChange={(val) => setQuantiteCommande(Number(val) || 1)}
                     min={1}
                     required
                   />
@@ -545,31 +631,33 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                     required
                   />
                 </SimpleGrid>
-                {avanceMontant > 0 && (
+
+                {quantiteCommande > 0 && montantCommande > 0 && (
                   <Alert color="blue" variant="light">
                     <Group justify="space-between">
-                      <Text>Avance :</Text>
-                      <Text fw={700}>{avanceMontant.toLocaleString()} FCFA</Text>
-                      <Text>Mode :</Text>
-                      <Text fw={500}>{avanceMode}</Text>
-                      <Text>Reste :</Text>
-                      <Text fw={700} c="orange">{resteAPayer.toLocaleString()} FCFA</Text>
+                      <Text fw={600}>Total TTC :</Text>
+                      <Text fw={700} size="lg" c="blue">
+                        {(quantiteCommande * montantCommande).toLocaleString()} FCFA
+                      </Text>
                     </Group>
                   </Alert>
                 )}
+
                 <Button
-                  leftSection={<IconCash size={16} />}
-                  onClick={() => setAvanceModalOpen(true)}
-                  variant="outline"
-                  disabled={montantCommande <= 0}
+                  onClick={handleGenererFacture}
+                  variant="gradient"
+                  gradient={{ from: '#1b365d', to: '#2a4a7a' }}
+                  disabled={!produitCommande || montantCommande <= 0 || quantiteCommande <= 0}
+                  leftSection={<IconFileInvoice size={16} />}
+                  fullWidth
                 >
-                  {avanceMontant > 0 ? 'Modifier l\'avance' : 'Ajouter une avance'}
+                  Générer la facture
                 </Button>
               </Stack>
             </Card>
           )}
 
-          {/* SECTION PRODUITS POUR PRÊT-À-PORTER ET MATIÈRE */}
+          {/* SECTION PRÊT-À-PORTER ET MATIÈRE */}
           {(venteType === 'pret_a_porter' || venteType === 'matiere') && (
             <Card withBorder radius="lg" shadow="sm" p="lg">
               <Title order={4} mb="md">
@@ -597,33 +685,23 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                   <Table.Tbody>
                     {venteType === 'pret_a_porter' ? (
                       gammesTenues
-                        .filter(tenue =>
-                          tenue.designation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          tenue.code.toLowerCase().includes(searchTerm.toLowerCase())
-                        )
+                        .filter(tenue => tenue.designation.toLowerCase().includes(searchTerm.toLowerCase()))
                         .map((tenue) => (
                           <Table.Tr key={tenue.id}>
                             <Table.Td fw={500}>{tenue.designation}</Table.Td>
                             <Table.Td>{tenue.prix_vente.toLocaleString()} FCFA</Table.Td>
-                            <Table.Td>
-                              <Badge color="blue" variant="light">Voir tailles</Badge>
-                            </Table.Td>
+                            <Table.Td><Badge color="blue" variant="light">Voir tailles</Badge></Table.Td>
                             <Table.Td>
                               <Button size="xs" variant="light" onClick={() => {
                                 setSelectedProduit(tenue);
                                 setTailleModalOpen(true);
-                              }}>
-                                Sélectionner
-                              </Button>
+                              }}>Sélectionner</Button>
                             </Table.Td>
                           </Table.Tr>
                         ))
                     ) : (
                       matieres
-                        .filter(matiere =>
-                          matiere.designation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          matiere.code.toLowerCase().includes(searchTerm.toLowerCase())
-                        )
+                        .filter(matiere => matiere.designation.toLowerCase().includes(searchTerm.toLowerCase()))
                         .map((matiere) => (
                           <Table.Tr key={matiere.id}>
                             <Table.Td fw={500}>{matiere.designation}</Table.Td>
@@ -637,9 +715,7 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                               <Button size="xs" variant="light" onClick={() => {
                                 setSelectedProduit(matiere);
                                 handleAjouterAuPanier();
-                              }}>
-                                Ajouter
-                              </Button>
+                              }}>Ajouter</Button>
                             </Table.Td>
                           </Table.Tr>
                         ))
@@ -648,7 +724,6 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                 </Table>
               </ScrollArea>
 
-              {/* Panier pour prêt-à-porter et matière */}
               {panier.length > 0 && (
                 <>
                   <Divider my="md" label="🛒 Panier" labelPosition="center" />
@@ -686,6 +761,17 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
                     <Text fw={700}>Total général :</Text>
                     <Text fw={700} size="xl" c="blue">{totalPanier.toLocaleString()} FCFA</Text>
                   </Group>
+                  <Button
+                    onClick={handleSubmitVente}
+                    loading={loading}
+                    variant="gradient"
+                    gradient={{ from: 'green', to: 'teal' }}
+                    leftSection={<IconReceipt size={16} />}
+                    fullWidth
+                    mt="md"
+                  >
+                    Finaliser la vente et générer le reçu
+                  </Button>
                 </>
               )}
             </Card>
@@ -695,71 +781,21 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
           <Card withBorder radius="lg" shadow="sm" p="lg">
             <Title order={4} mb="md">ℹ️ Informations complémentaires</Title>
             <SimpleGrid cols={2} spacing="md">
-              <TextInput
-                label="Date de vente"
-                type="date"
-                value={dateCommande}
-                onChange={(e) => setDateCommande(e.target.value)}
-              />
-              <Textarea
-                label="Observation"
-                placeholder="Notes..."
-                value={observation}
-                onChange={(e) => setObservation(e.target.value)}
-                rows={2}
-              />
+              <TextInput label="Date de vente" type="date" value={dateCommande} onChange={(e) => setDateCommande(e.target.value)} />
+              <Textarea label="Observation" placeholder="Notes..." value={observation} onChange={(e) => setObservation(e.target.value)} rows={2} />
             </SimpleGrid>
           </Card>
 
           {/* ACTIONS */}
           <Group justify="flex-end">
             <Button variant="outline" color="red" onClick={onCancel} size="md">Annuler</Button>
-            <Button onClick={handleSubmit} loading={loading} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }} size="md">
-              Enregistrer la vente
-            </Button>
           </Group>
-
-          {/* MODAL AVANCE */}
-          <Modal opened={avanceModalOpen} onClose={() => setAvanceModalOpen(false)} title="💰 Paiement de l'avance" size="md" centered>
-            <Stack>
-              <NumberInput
-                label="Montant de l'avance (FCFA)"
-                value={avanceMontant}
-                onChange={(val) => setAvanceMontant(Number(val) || 0)}
-                min={0}
-                max={montantCommande}
-              />
-              <Select
-                label="Mode de paiement"
-                data={[
-                  { value: 'Espèces', label: '💵 Espèces' },
-                  { value: 'Orange money', label: '📱 Orange Money' },
-                  { value: 'Wave', label: '🌊 Wave' }
-                ]}
-                value={avanceMode}
-                onChange={(val) => setAvanceMode(val || 'Espèces')}
-              />
-              <Group justify="flex-end">
-                <Button variant="light" onClick={() => setAvanceModalOpen(false)}>Annuler</Button>
-                <Button onClick={() => setAvanceModalOpen(false)}>Valider</Button>
-              </Group>
-            </Stack>
-          </Modal>
 
           {/* MODAL TAILLES */}
           <Modal opened={tailleModalOpen} onClose={() => setTailleModalOpen(false)} title={`Choisir une taille - ${selectedProduit?.designation}`} size="lg" centered>
             <SimpleGrid cols={3} spacing="md">
               {variantes.map((v) => (
-                <Paper
-                  key={v.id}
-                  p="md"
-                  withBorder
-                  style={{
-                    cursor: 'pointer',
-                    backgroundColor: selectedVariante?.id === v.id ? '#e0f7fa' : 'white'
-                  }}
-                  onClick={() => setSelectedVariante(v)}
-                >
+                <Paper key={v.id} p="md" withBorder style={{ cursor: 'pointer', backgroundColor: selectedVariante?.id === v.id ? '#e0f7fa' : 'white' }} onClick={() => setSelectedVariante(v)}>
                   <Stack align="center">
                     <Badge size="lg" color="blue">{v.taille_libelle}</Badge>
                     <Text fw={700}>{(v.prix_vente || selectedProduit?.prix_vente || 0).toLocaleString()} FCFA</Text>
@@ -772,18 +808,10 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
               <Paper p="md" mt="md" bg="blue.0">
                 <Grid align="flex-end">
                   <Grid.Col span={6}>
-                    <NumberInput
-                      label="Quantité"
-                      value={quantiteCmd}
-                      onChange={(val) => setQuantiteCmd(Number(val) || 1)}
-                      min={1}
-                      max={selectedVariante.stock_actuel}
-                    />
+                    <NumberInput label="Quantité" value={quantiteCmd} onChange={(val) => setQuantiteCmd(Number(val) || 1)} min={1} max={selectedVariante.stock_actuel} />
                   </Grid.Col>
                   <Grid.Col span={6}>
-                    <Button fullWidth onClick={handleAjouterAuPanier} leftSection={<IconPlus size={16} />}>
-                      Ajouter au panier
-                    </Button>
+                    <Button fullWidth onClick={handleAjouterAuPanier} leftSection={<IconPlus size={16} />}>Ajouter au panier</Button>
                   </Grid.Col>
                 </Grid>
               </Paper>
@@ -793,23 +821,9 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
           {/* MODAL NOUVEAU CLIENT */}
           <Modal opened={nouveauClientModalOpen} onClose={() => setNouveauClientModalOpen(false)} title="➕ Nouveau client" size="md" centered>
             <Stack>
-              <TextInput
-                label="Nom complet"
-                value={nouveauClient.nom}
-                onChange={(e) => setNouveauClient({ ...nouveauClient, nom: e.target.value })}
-                required
-              />
-              <TextInput
-                label="Téléphone"
-                value={nouveauClient.telephone}
-                onChange={(e) => setNouveauClient({ ...nouveauClient, telephone: e.target.value })}
-                required
-              />
-              <TextInput
-                label="Adresse"
-                value={nouveauClient.adresse}
-                onChange={(e) => setNouveauClient({ ...nouveauClient, adresse: e.target.value })}
-              />
+              <TextInput label="Nom complet" value={nouveauClient.nom} onChange={(e) => setNouveauClient({ ...nouveauClient, nom: e.target.value })} required />
+              <TextInput label="Téléphone" value={nouveauClient.telephone} onChange={(e) => setNouveauClient({ ...nouveauClient, telephone: e.target.value })} required />
+              <TextInput label="Adresse" value={nouveauClient.adresse} onChange={(e) => setNouveauClient({ ...nouveauClient, adresse: e.target.value })} />
               <Group justify="flex-end">
                 <Button variant="light" onClick={() => setNouveauClientModalOpen(false)}>Annuler</Button>
                 <Button onClick={handleCreerClient}>Créer</Button>
@@ -821,18 +835,22 @@ const FormulaireVente: React.FC<FormulaireVenteProps> = ({
           <Modal opened={infoModalOpen} onClose={() => setInfoModalOpen(false)} title="📖 Guide" size="md" centered>
             <Stack>
               <Text fw={600}>1️⃣ Commande (Sur mesure)</Text>
-              <Text size="sm">- Client obligatoire (existant ou nouveau)</Text>
-              <Text size="sm">- Décrivez le produit commandé</Text>
-              <Text size="sm">- Ajoutez une avance si nécessaire</Text>
+              <Text size="sm">- Client obligatoire</Text>
+              <Text size="sm">- Remplissez le produit, quantité et prix</Text>
+              <Text size="sm">- Générez la facture</Text>
+              <Text size="sm">- Procédez au paiement</Text>
+              <Text size="sm">- Le reçu s'affiche automatiquement</Text>
               <Divider />
               <Text fw={600}>2️⃣ Prêt-à-porter</Text>
               <Text size="sm">- Client optionnel</Text>
               <Text size="sm">- Sélectionnez produits et tailles</Text>
-              <Text size="sm">- Ajoutez au panier, plusieurs produits possibles</Text>
+              <Text size="sm">- Ajoutez au panier</Text>
+              <Text size="sm">- Finalisez et obtenez le reçu</Text>
               <Divider />
               <Text fw={600}>3️⃣ Matière</Text>
               <Text size="sm">- Client optionnel</Text>
-              <Text size="sm">- Vente directe de matières en stock</Text>
+              <Text size="sm">- Ajoutez les matières au panier</Text>
+              <Text size="sm">- Validez la vente</Text>
             </Stack>
           </Modal>
         </Stack>
