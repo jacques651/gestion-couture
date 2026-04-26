@@ -20,6 +20,11 @@ import {
   ThemeIcon,
   PasswordInput,
   SimpleGrid,
+  Container,
+  Avatar,
+  Center,
+  Paper,
+  Notification,
 } from '@mantine/core';
 import {
   IconUsers,
@@ -33,6 +38,8 @@ import {
   IconUser,
   IconLock,
   IconUserShield,
+  IconUserCheck,
+  IconShield,
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
 import { useReactToPrint } from 'react-to-print';
@@ -52,6 +59,8 @@ const ListeUtilisateurs: React.FC = () => {
   const [vueForm, setVueForm] = useState(false);
   const [editionId, setEditionId] = useState<number | null>(null);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const [nom, setNom] = useState('');
   const [login, setLogin] = useState('');
@@ -97,11 +106,14 @@ const ListeUtilisateurs: React.FC = () => {
     setVueForm(true);
   };
 
-  const supprimerUtilisateur = async (id: number) => {
-    if (!window.confirm('Supprimer cet utilisateur ?')) return;
+  const supprimerUtilisateur = async (id: number, nom: string) => {
+    if (!window.confirm(`Supprimer l'utilisateur "${nom}" ?`)) return;
     const db = await getDb();
     await db.execute(`DELETE FROM utilisateurs WHERE id = ?`, [id]);
     chargerDonnees();
+    setSuccessMessage(`Utilisateur "${nom}" supprimé avec succès`);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const sauvegarderUtilisateur = async (e: React.FormEvent) => {
@@ -128,6 +140,7 @@ const ListeUtilisateurs: React.FC = () => {
            VALUES (?, ?, ?, ?, 1)`,
           [nom, login, hash, role]
         );
+        setSuccessMessage(`Utilisateur "${nom}" créé avec succès`);
       } else {
         if (motDePasse) {
           const hash = await bcrypt.hash(motDePasse, 10);
@@ -145,11 +158,14 @@ const ListeUtilisateurs: React.FC = () => {
             [nom, login, role, editionId]
           );
         }
+        setSuccessMessage(`Utilisateur "${nom}" modifié avec succès`);
       }
 
       setVueForm(false);
       resetForm();
       chargerDonnees();
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
 
     } catch (err: any) {
       alert(err.message);
@@ -181,71 +197,72 @@ const ListeUtilisateurs: React.FC = () => {
     currentPage * itemsPerPage
   );
 
-  const roleColors = {
-    admin: { color: 'red', label: 'Admin' },
-    caissier: { color: 'green', label: 'Caissier' },
-    couturier: { color: 'blue', label: 'Couturier' },
+  const roleConfig = {
+    admin: { color: 'red', label: 'Administrateur', icon: IconShield, bg: '#fff5f5' },
+    caissier: { color: 'green', label: 'Caissier', icon: IconUserCheck, bg: '#ebfbee' },
+    couturier: { color: 'blue', label: 'Couturier', icon: IconUser, bg: '#e8f4fd' },
   };
 
   const roleOptions = [
-    { value: 'admin', label: '👑 Admin' },
+    { value: 'admin', label: '👑 Administrateur' },
     { value: 'caissier', label: '💰 Caissier' },
     { value: 'couturier', label: '✂️ Couturier' },
   ];
 
   const filterOptions = [
-    { value: '', label: 'Tous' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'caissier', label: 'Caissier' },
-    { value: 'couturier', label: 'Couturier' },
+    { value: '', label: 'Tous les rôles' },
+    { value: 'admin', label: '👑 Administrateurs' },
+    { value: 'caissier', label: '💰 Caissiers' },
+    { value: 'couturier', label: '✂️ Couturiers' },
   ];
 
   if (vueForm) {
     return (
-      <Box style={{ maxWidth: 500, margin: '0 auto' }} p="sm">
-        <Stack gap="md">
-          <Card withBorder radius="md" p="sm" bg="#1b365d">
+      <Container size="sm" p="md">
+        <Stack gap="lg">
+          <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between">
-              <Group gap="xs">
-                <IconUserShield size={18} color="white" />
-                <Title order={4} size="h5" c="white">
-                  {editionId ? 'Modifier utilisateur' : 'Nouvel utilisateur'}
-                </Title>
+              <Group gap="md">
+                <Avatar size={45} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  {editionId ? <IconEdit size={22} color="white" /> : <IconUserShield size={22} color="white" />}
+                </Avatar>
+                <Box>
+                  <Title order={2} c="white" size="h3">
+                    {editionId ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
+                  </Title>
+                  <Text c="gray.3" size="xs">
+                    {editionId ? 'Modifiez les informations de l\'utilisateur' : 'Ajoutez un nouvel utilisateur à l\'application'}
+                  </Text>
+                </Box>
               </Group>
-              <Button
-                variant="subtle"
-                color="white"
-                size="compact-sm"
-                onClick={() => {
-                  setVueForm(false);
-                  resetForm();
-                }}
-              >
+              <Button variant="light" color="white" onClick={() => { setVueForm(false); resetForm(); }} radius="md">
                 Retour
               </Button>
             </Group>
           </Card>
 
-          <Card withBorder radius="md" p="sm">
+          <Card withBorder radius="lg" shadow="md" p="xl">
             <form onSubmit={sauvegarderUtilisateur}>
-              <Stack gap="sm">
+              <Stack gap="lg">
                 <TextInput
-                  label="Nom"
-                  placeholder="Nom complet"
+                  label="Nom complet"
+                  placeholder="Nom et prénom"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
-                  leftSection={<IconUser size={14} />}
-                  size="sm"
+                  leftSection={<IconUser size={16} />}
+                  size="md"
+                  radius="md"
                   required
                 />
 
                 <TextInput
-                  label="Login"
-                  placeholder="Identifiant"
+                  label="Identifiant"
+                  placeholder="Nom d'utilisateur"
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
-                  leftSection={<IconUser size={14} />}
-                  size="sm"
+                  leftSection={<IconUser size={16} />}
+                  size="md"
+                  radius="md"
                   required
                 />
 
@@ -254,292 +271,344 @@ const ListeUtilisateurs: React.FC = () => {
                   placeholder={editionId ? "Laisser vide pour conserver" : "Mot de passe"}
                   value={motDePasse}
                   onChange={(e) => setMotDePasse(e.target.value)}
-                  leftSection={<IconLock size={14} />}
-                  size="sm"
+                  leftSection={<IconLock size={16} />}
+                  size="md"
+                  radius="md"
                   required={!editionId}
                 />
 
                 <Select
                   label="Rôle"
-                  placeholder="Choisir un rôle"
+                  placeholder="Sélectionner un rôle"
                   data={roleOptions}
                   value={role}
                   onChange={setRole}
-                  size="sm"
+                  size="md"
+                  radius="md"
                   required
                 />
 
                 <Divider />
 
-                <Group justify="space-between">
-                  <Button size="sm" variant="light" color="red" onClick={() => setVueForm(false)}>
+                <Group justify="flex-end" gap="md">
+                  <Button 
+                    variant="light" 
+                    color="red" 
+                    onClick={() => setVueForm(false)}
+                    radius="md"
+                  >
                     Annuler
                   </Button>
                   <Button
-                    size="sm"
                     type="submit"
                     variant="gradient"
-                    gradient={{ from: 'blue', to: 'cyan' }}
+                    gradient={{ from: '#1b365d', to: '#2a4a7a' }}
+                    leftSection={editionId ? <IconEdit size={16} /> : <IconPlus size={16} />}
+                    radius="md"
                   >
-                    {editionId ? 'Mettre à jour' : 'Enregistrer'}
+                    {editionId ? 'Mettre à jour' : 'Créer l\'utilisateur'}
                   </Button>
                 </Group>
               </Stack>
             </form>
           </Card>
         </Stack>
-      </Box>
+      </Container>
     );
   }
 
   if (loading) {
     return (
-      <Card withBorder radius="md" p="lg" pos="relative">
-        <LoadingOverlay visible={true} />
-        <Text>Chargement des utilisateurs...</Text>
-      </Card>
+      <Center style={{ height: '50vh' }}>
+        <Card withBorder radius="lg" p="xl">
+          <LoadingOverlay visible={true} />
+          <Stack align="center" gap="md">
+            <IconUsers size={40} stroke={1.5} />
+            <Text>Chargement des utilisateurs...</Text>
+          </Stack>
+        </Card>
+      </Center>
     );
   }
 
   return (
     <Box p="md">
-      <Stack gap="lg">
-        {/* HEADER */}
-        <Card withBorder radius="md" p="lg" bg="#1b365d">
-          <Group justify="space-between">
-            <Stack gap={4}>
-              <Group gap="xs">
-                <IconUsers size={24} color="white" />
-                <Title order={2} c="white">Gestion des utilisateurs</Title>
+      <Container size="full ">
+        <Stack gap="lg">
+          {/* Notification de succès */}
+          {showSuccess && (
+            <Notification
+              icon={<IconUserCheck size={18} />}
+              color="green"
+              title="Succès !"
+              onClose={() => setShowSuccess(false)}
+              radius="md"
+            >
+              {successMessage}
+            </Notification>
+          )}
+
+          {/* Header amélioré */}
+          <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
+            <Group justify="space-between" align="center">
+              <Group gap="md">
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconUsers size={30} color="white" />
+                </Avatar>
+                <Box>
+                  <Title order={1} c="white" size="h2">Gestion des utilisateurs</Title>
+                  <Text c="gray.3" size="sm" mt={4}>
+                    Gérez les accès et les rôles des utilisateurs
+                  </Text>
+                  <Group gap="xs" mt={8}>
+                    <Badge size="sm" variant="white" color="blue">
+                      {utilisateursFiltres.length} utilisateur{utilisateursFiltres.length > 1 ? 's' : ''}
+                    </Badge>
+                  </Group>
+                </Box>
               </Group>
-              <Text size="sm" c="gray.3">
-                {utilisateursFiltres.length} utilisateur{utilisateursFiltres.length > 1 ? 's' : ''}
-              </Text>
-            </Stack>
-            <Group gap="md">
               <Button
                 variant="light"
                 color="white"
                 leftSection={<IconInfoCircle size={18} />}
                 onClick={() => setInfoModalOpen(true)}
+                radius="md"
               >
                 Instructions
               </Button>
-              <ThemeIcon size={48} radius="md" color="white" variant="light">
-                <IconUsers size={28} />
-              </ThemeIcon>
             </Group>
-          </Group>
-        </Card>
-
-        {/* STATS KPI */}
-        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-          <Card withBorder radius="md" p="md">
-            <Group justify="space-between" mb="xs">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Total utilisateurs
-              </Text>
-              <ThemeIcon size={30} radius="md" color="blue" variant="light">
-                <IconUsers size={18} />
-              </ThemeIcon>
-            </Group>
-            <Text fw={700} size="xl" c="blue">
-              {utilisateurs.length}
-            </Text>
           </Card>
 
-          <Card withBorder radius="md" p="md" bg="red.0">
-            <Group justify="space-between" mb="xs">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Administrateurs
-              </Text>
-              <ThemeIcon size={30} radius="md" color="red" variant="light">
-                <IconUserShield size={18} />
-              </ThemeIcon>
+          {/* Statistiques KPI modernisées */}
+          <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+            <Paper p="md" radius="lg" withBorder>
+              <Group justify="space-between" mb="xs">
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Total utilisateurs</Text>
+                <ThemeIcon size="lg" radius="md" color="blue" variant="light">
+                  <IconUsers size={18} />
+                </ThemeIcon>
+              </Group>
+              <Text fw={700} size="xl" c="blue">{utilisateurs.length}</Text>
+              <Text size="xs" c="dimmed" mt={4}>Comptes actifs</Text>
+            </Paper>
+
+            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#fff5f5' }}>
+              <Group justify="space-between" mb="xs">
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Administrateurs</Text>
+                <ThemeIcon size="lg" radius="md" color="red" variant="light">
+                  <IconShield size={18} />
+                </ThemeIcon>
+              </Group>
+              <Text fw={700} size="xl" c="red">{utilisateurs.filter(u => u.role === 'admin').length}</Text>
+              <Text size="xs" c="dimmed" mt={4}>Accès total</Text>
+            </Paper>
+
+            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#ebfbee' }}>
+              <Group justify="space-between" mb="xs">
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Caissiers & Couturiers</Text>
+                <ThemeIcon size="lg" radius="md" color="green" variant="light">
+                  <IconUserCheck size={18} />
+                </ThemeIcon>
+              </Group>
+              <Text fw={700} size="xl" c="green">{utilisateurs.filter(u => u.role !== 'admin').length}</Text>
+              <Text size="xs" c="dimmed" mt={4}>Accès limité</Text>
+            </Paper>
+          </SimpleGrid>
+
+          {/* Barre d'outils modernisée */}
+          <Card withBorder radius="lg" shadow="sm" p="md">
+            <Group justify="space-between" wrap="wrap" gap="sm">
+              <Group gap="sm">
+                <TextInput
+                  placeholder="Rechercher par nom..."
+                  leftSection={<IconSearch size={16} />}
+                  value={recherche}
+                  onChange={(e) => {
+                    setRecherche(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  size="md"
+                  radius="md"
+                  style={{ width: 280 }}
+                />
+                <Select
+                  placeholder="Filtrer par rôle"
+                  data={filterOptions}
+                  value={filtreRole}
+                  onChange={setFiltreRole}
+                  size="md"
+                  radius="md"
+                  style={{ width: 180 }}
+                  clearable
+                />
+              </Group>
+              <Group gap="sm">
+                <Tooltip label="Actualiser">
+                  <ActionIcon variant="light" onClick={handleReset} size="lg" radius="md">
+                    <IconRefresh size={18} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Imprimer la liste">
+                  <ActionIcon variant="light" color="teal" onClick={handlePrint} size="lg" radius="md">
+                    <IconPrinter size={18} />
+                  </ActionIcon>
+                </Tooltip>
+                <Button
+                  leftSection={<IconPlus size={18} />}
+                  onClick={() => {
+                    resetForm();
+                    setVueForm(true);
+                  }}
+                  variant="gradient"
+                  gradient={{ from: '#1b365d', to: '#2a4a7a' }}
+                  radius="md"
+                >
+                  Nouvel utilisateur
+                </Button>
+              </Group>
             </Group>
-            <Text fw={700} size="xl" c="red">
-              {utilisateurs.filter(u => u.role === 'admin').length}
-            </Text>
           </Card>
 
-          <Card withBorder radius="md" p="md" bg="green.0">
-            <Group justify="space-between" mb="xs">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Caissiers / Couturiers
-              </Text>
-              <ThemeIcon size={30} radius="md" color="green" variant="light">
-                <IconUser size={18} />
-              </ThemeIcon>
-            </Group>
-            <Text fw={700} size="xl" c="green">
-              {utilisateurs.filter(u => u.role !== 'admin').length}
-            </Text>
-          </Card>
-        </SimpleGrid>
-
-        {/* BARRE D'OUTILS */}
-        <Card withBorder radius="md" p="md">
-          <Group justify="space-between" wrap="wrap" gap="sm">
-            <Group>
-              <TextInput
-                placeholder="Rechercher par nom..."
-                leftSection={<IconSearch size={16} />}
-                value={recherche}
-                onChange={(e) => {
-                  setRecherche(e.target.value);
-                  setCurrentPage(1);
-                }}
-                size="sm"
-                style={{ width: 250 }}
-              />
-              <Select
-                placeholder="Filtrer par rôle"
-                data={filterOptions}
-                value={filtreRole}
-                onChange={setFiltreRole}
-                size="sm"
-                style={{ width: 130 }}
-                clearable
-              />
-            </Group>
-            <Group>
-              <Tooltip label="Actualiser">
-                <ActionIcon variant="light" onClick={handleReset} size="lg">
-                  <IconRefresh size={18} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Imprimer">
-                <ActionIcon variant="light" color="teal" onClick={handlePrint} size="lg">
-                  <IconPrinter size={18} />
-                </ActionIcon>
-              </Tooltip>
-              <Button
-                leftSection={<IconPlus size={16} />}
-                onClick={() => {
-                  resetForm();
-                  setVueForm(true);
-                }}
-                variant="gradient"
-                gradient={{ from: 'blue', to: 'cyan' }}
-              >
-                Nouvel utilisateur
-              </Button>
-            </Group>
-          </Group>
-        </Card>
-
-        {/* TABLEAU DES UTILISATEURS */}
-        <div ref={printRef}>
-          <Card withBorder radius="md" p={0} style={{ overflow: 'hidden' }}>
-            {utilisateursFiltres.length === 0 ? (
-              <Text ta="center" c="dimmed" py={60}>
-                Aucun utilisateur trouvé
-              </Text>
-            ) : (
-              <>
-                <Table striped highlightOnHover>
-                  <Table.Thead style={{ backgroundColor: '#1b365d' }}>
-                    <Table.Tr>
-                      <Table.Th style={{ color: 'white' }}>Nom</Table.Th>
-                      <Table.Th style={{ color: 'white' }}>Login</Table.Th>
-                      <Table.Th style={{ color: 'white' }}>Rôle</Table.Th>
-                      <Table.Th style={{ color: 'white', textAlign: 'center' }}>Actions</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {paginatedData.map((u) => (
-                      <Table.Tr key={u.id}>
-                        <Table.Td fw={500}>{u.nom}</Table.Td>
-                        <Table.Td>{u.login}</Table.Td>
-                        <Table.Td>
-                          <Badge
-                            color={roleColors[u.role].color}
-                            variant="light"
-                            size="sm"
-                          >
-                            {roleColors[u.role].label}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap={6} justify="center">
-                            <Tooltip label="Modifier">
-                              <ActionIcon
-                                size="sm"
-                                variant="subtle"
-                                color="orange"
-                                onClick={() => handleEdit(u)}
-                              >
-                                <IconEdit size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Supprimer">
-                              <ActionIcon
-                                size="sm"
-                                variant="subtle"
-                                color="red"
-                                onClick={() => supprimerUtilisateur(u.id)}
-                              >
-                                <IconTrash size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                          </Group>
-                        </Table.Td>
+          {/* Tableau des utilisateurs amélioré */}
+          <div ref={printRef}>
+            <Card withBorder radius="lg" shadow="sm" p={0} style={{ overflow: 'hidden' }}>
+              {utilisateursFiltres.length === 0 ? (
+                <Stack align="center" py={60} gap="sm">
+                  <ThemeIcon size="xl" radius="xl" color="gray" variant="light">
+                    <IconUsers size={30} />
+                  </ThemeIcon>
+                  <Text c="dimmed" size="lg">Aucun utilisateur trouvé</Text>
+                  <Button variant="light" onClick={() => { resetForm(); setVueForm(true); }}>
+                    Ajouter un utilisateur
+                  </Button>
+                </Stack>
+              ) : (
+                <>
+                  <Table striped highlightOnHover>
+                    <Table.Thead style={{ backgroundColor: '#1b365d' }}>
+                      <Table.Tr>
+                        <Table.Th style={{ color: 'white' }}>Utilisateur</Table.Th>
+                        <Table.Th style={{ color: 'white' }}>Identifiant</Table.Th>
+                        <Table.Th style={{ color: 'white' }}>Rôle</Table.Th>
+                        <Table.Th style={{ textAlign: 'center', color: 'white' }}>Actions</Table.Th>
                       </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {paginatedData.map((u) => {
+                        const config = roleConfig[u.role];
+                        return (
+                          <Table.Tr key={u.id}>
+                            <Table.Td fw={500}>
+                              <Group gap="xs">
+                                <Avatar size="sm" radius="xl" color={config.color}>
+                                  <config.icon size={14} />
+                                </Avatar>
+                                {u.nom}
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>{u.login}</Table.Td>
+                            <Table.Td>
+                              <Badge color={config.color} variant="light" size="md">
+                                {config.label}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="xs" justify="center">
+                                <Tooltip label="Modifier">
+                                  <ActionIcon size="md" variant="subtle" color="orange" onClick={() => handleEdit(u)}>
+                                    <IconEdit size={18} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Supprimer">
+                                  <ActionIcon size="md" variant="subtle" color="red" onClick={() => supprimerUtilisateur(u.id, u.nom)}>
+                                    <IconTrash size={18} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
+                    </Table.Tbody>
+                  </Table>
 
-                {/* PAGINATION */}
-                {totalPages > 1 && (
-                  <Group justify="center" p="md">
-                    <Pagination
-                      value={currentPage}
-                      onChange={setCurrentPage}
-                      total={totalPages}
-                      color="blue"
-                      size="sm"
-                    />
+                  {totalPages > 1 && (
+                    <Group justify="center" p="md">
+                      <Pagination
+                        value={currentPage}
+                        onChange={setCurrentPage}
+                        total={totalPages}
+                        color="#1b365d"
+                        size="md"
+                        radius="md"
+                      />
+                    </Group>
+                  )}
+                </>
+              )}
+            </Card>
+          </div>
+
+          {/* Modal Instructions améliorée */}
+          <Modal
+            opened={infoModalOpen}
+            onClose={() => setInfoModalOpen(false)}
+            title="📋 Gestion des utilisateurs"
+            size="md"
+            centered
+            radius="lg"
+            styles={{
+              header: {
+                backgroundColor: '#1b365d',
+                padding: '16px 20px',
+              },
+              title: {
+                color: 'white',
+                fontWeight: 600,
+              },
+              body: {
+                padding: '24px',
+              },
+            }}
+          >
+            <Stack gap="md">
+              <Paper p="md" radius="md" withBorder bg="blue.0">
+                <Text fw={600} size="sm" mb="md">📌 Fonctionnalités :</Text>
+                <Stack gap="xs">
+                  <Text size="sm">1️⃣ Utilisez le bouton "Nouvel utilisateur" pour ajouter un utilisateur</Text>
+                  <Text size="sm">2️⃣ La recherche filtre par nom</Text>
+                  <Text size="sm">3️⃣ Le filtre par rôle permet de voir les utilisateurs par catégorie</Text>
+                  <Text size="sm">4️⃣ Cliquez sur ✏️ pour modifier un utilisateur</Text>
+                  <Text size="sm">5️⃣ Cliquez sur 🗑️ pour supprimer un utilisateur</Text>
+                </Stack>
+              </Paper>
+
+              <Paper p="md" radius="md" withBorder bg="yellow.0">
+                <Text fw={600} size="sm" mb="md">💡 Rôles et permissions :</Text>
+                <Stack gap="xs">
+                  <Group gap="xs">
+                    <Badge color="red" size="sm">Admin</Badge>
+                    <Text size="xs">Accès complet à toutes les fonctionnalités</Text>
                   </Group>
-                )}
-              </>
-            )}
-          </Card>
-        </div>
+                  <Group gap="xs">
+                    <Badge color="green" size="sm">Caissier</Badge>
+                    <Text size="xs">Gestion des paiements et factures</Text>
+                  </Group>
+                  <Group gap="xs">
+                    <Badge color="blue" size="sm">Couturier</Badge>
+                    <Text size="xs">Gestion des commandes et mesures clients</Text>
+                  </Group>
+                </Stack>
+              </Paper>
 
-        {/* MODAL INSTRUCTIONS */}
-        <Modal
-          opened={infoModalOpen}
-          onClose={() => setInfoModalOpen(false)}
-          title="📋 Instructions"
-          size="md"
-          centered
-          styles={{
-            header: {
-              backgroundColor: '#1b365d',
-              padding: '16px 20px',
-            },
-            title: {
-              color: 'white',
-              fontWeight: 600,
-            },
-            body: {
-              padding: '20px',
-            },
-          }}
-        >
-          <Stack gap="md">
-            <Text size="sm">1. Utilisez le bouton "Nouvel utilisateur" pour ajouter un utilisateur</Text>
-            <Text size="sm">2. La recherche filtre par nom</Text>
-            <Text size="sm">3. Le filtre par rôle permet de voir les utilisateurs par catégorie</Text>
-            <Text size="sm">4. Cliquez sur ✏️ pour modifier un utilisateur</Text>
-            <Text size="sm">5. Cliquez sur 🗑️ pour supprimer un utilisateur</Text>
-            <Divider />
-            <Text size="xs" c="dimmed" ta="center">
-              Version 1.0.0 - Gestion Couture
-            </Text>
-          </Stack>
-        </Modal>
-      </Stack>
+              <Divider />
+              <Text size="xs" c="dimmed" ta="center">
+                Version 1.0.0 - Gestion Couture
+              </Text>
+            </Stack>
+          </Modal>
+        </Stack>
+      </Container>
     </Box>
   );
 };

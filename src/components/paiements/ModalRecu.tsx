@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Modal,
   Stack,
@@ -9,25 +9,19 @@ import {
   Divider,
   Paper,
   Table,
-  Badge,
   Box,
-  Image,
   SimpleGrid,
+  LoadingOverlay,
+  Center,
+  Image,
 } from '@mantine/core';
 import {
   IconPrinter,
   IconX,
-  IconMapPin,
-  IconPhone,
-  IconMail,
-  IconId,
-  IconReceipt,
-  IconCalendar,
-  IconUser,
+  IconBuildingStore,
 } from '@tabler/icons-react';
 import { getRecuData, getDb } from '../../database/db';
 
-// ======================
 interface Paiement {
   montant: number;
   date_paiement: string;
@@ -61,68 +55,148 @@ interface Props {
   onClose: () => void;
 }
 
-// ======================
 const ModalRecu: React.FC<Props> = ({ commande, onClose }) => {
-
   const [data, setData] = useState<RecuData | null>(null);
   const [config, setConfig] = useState<ConfigAtelier | null>(null);
   const [loading, setLoading] = useState(true);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [gerant] = useState('KORGO Jacques');
 
-  // ======================
-  // LOAD DATA
-  // ======================
+  // Extraire le lieu depuis l'adresse de l'atelier
+
   useEffect(() => {
     const load = async () => {
       try {
         const db = await getDb();
-
         const recu = await getRecuData(commande.id);
         setData(recu);
-
         const conf = await db.select<ConfigAtelier[]>(`
           SELECT * FROM configuration_atelier WHERE id = 1
         `);
-
         setConfig(conf[0] || null);
-
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     };
-
     load();
   }, [commande.id]);
 
-  if (loading || !data) return null;
-
-  // ======================
-  // CALCULS
-  // ======================
-  const totalPaye = data.paiements.reduce(
-    (s, p) => s + (p.montant || 0),
-    0
-  );
-
-  const totalCommande = data.commande?.total || 0;
+  const totalPaye = data?.paiements.reduce((s, p) => s + (p.montant || 0), 0) || 0;
+  const totalCommande = data?.commande?.total || 0;
   const reste = totalCommande - totalPaye;
-
-  const getStatut = () => {
-    if (reste <= 0) {
-      return { label: 'PAYÉ', color: 'green', icon: <IconReceipt size={14} /> };
-    }
-    if (totalPaye > 0) {
-      return { label: 'PARTIEL', color: 'orange', icon: <IconReceipt size={14} /> };
-    }
-    return { label: 'NON PAYÉ', color: 'red', icon: <IconReceipt size={14} /> };
-  };
-
-  const statut = getStatut();
+  let cumul = 0;
 
   const handlePrint = () => {
-    window.print();
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
+    let stylesHTML = '';
+    styles.forEach((style) => {
+      if (style.tagName === 'STYLE') {
+        stylesHTML += style.outerHTML;
+      } else if (style.tagName === 'LINK') {
+        stylesHTML += `<link rel="stylesheet" href="${(style as HTMLLinkElement).href}">`;
+      }
+    });
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) return;
+
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reçu de règlement</title>
+        ${stylesHTML}
+        <style>
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background: white;
+          }
+          .print-container {
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          @media print {
+            body {
+              padding: 0;
+              margin: 0;
+            }
+            .no-break {
+              page-break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-container">
+          ${printContent.innerHTML}
+        </div>
+      </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    };
   };
+
+  if (loading) {
+    return (
+      <Modal opened={true} onClose={onClose} size="xl" centered title="Reçu de paiement">
+        <Center style={{ height: 200 }}>
+          <LoadingOverlay visible={true} />
+        </Center>
+      </Modal>
+    );
+  }
+
+  if (!data) return null;
+
+  const paiementsAffiches = data.paiements.map((p) => {
+    cumul += p.montant;
+    return {
+      ...p,
+      cumul,
+      reste: totalCommande - cumul
+    };
+  });
+
+  const dernierPaiement = paiementsAffiches[paiementsAffiches.length - 1];
+  const montantVersement = dernierPaiement?.montant || totalPaye;
+
+  const nombreEnLettres = (montant: number): string => {
+    if (montant >= 1000000) return `${Math.floor(montant / 1000000)} million(s) ${nombreEnLettres(montant % 1000000)}`;
+    if (montant >= 1000) return `${Math.floor(montant / 1000)} mille ${nombreEnLettres(montant % 1000)}`;
+    if (montant === 0) return 'zéro';
+    const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+    const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
+    if (montant < 10) return unites[montant];
+    if (montant < 20) return montant === 11 ? 'onze' : montant === 12 ? 'douze' : `${dizaines[1]}${montant > 10 ? '-' + unites[montant - 10] : ''}`;
+    const d = Math.floor(montant / 10);
+    const u = montant % 10;
+    if (d === 7 || d === 9) return `${dizaines[d - 1]}${u > 0 ? '-' + unites[u] : ''}`;
+    return `${dizaines[d]}${u > 0 ? '-' + unites[u] : ''}`;
+  };
+
+  const montantLettres = `${nombreEnLettres(montantVersement)} ${montantVersement >= 1000 ? 'Francs' : 'Franc'} CFA`;
 
   return (
     <Modal
@@ -130,219 +204,140 @@ const ModalRecu: React.FC<Props> = ({ commande, onClose }) => {
       onClose={onClose}
       size="xl"
       centered
-      title="Reçu de paiement"
+      title="Reçu de règlement"
+      radius="md"
       styles={{
         header: {
           backgroundColor: '#1b365d',
-          padding: '16px 20px',
+          padding: '16px 24px',
+          borderBottom: '1px solid #e9ecef',
         },
         title: {
           color: 'white',
           fontWeight: 600,
+          fontSize: '1.1rem',
         },
         body: {
           padding: 0,
         },
       }}
     >
-      {/* ZONE IMPRIMABLE */}
-      <div id="print-zone">
+      <div ref={printRef}>
         <Stack gap={0}>
-          {/* EN-TÊTE ATELIER */}
-          <Paper p="lg" radius={0} style={{ borderBottom: '2px solid #e9ecef' }}>
-            <Group justify="space-between" align="center" wrap="nowrap">
-              <Box style={{ flex: 1, textAlign: 'center' }}>
-                <Title order={3} ta="center" mb="xs" c="#1b365d">
-                  {config?.nom_atelier || "Mon Atelier"}
-                </Title>
-                <Stack gap={4} align="center">
-                  {config?.adresse && (
-                    <Group gap={4}>
-                      <IconMapPin size={14} />
-                      <Text size="xs">{config.adresse}</Text>
-                    </Group>
-                  )}
-                  {config?.telephone && (
-                    <Group gap={4}>
-                      <IconPhone size={14} />
-                      <Text size="xs">Tél: {config.telephone}</Text>
-                    </Group>
-                  )}
-                  {config?.email && (
-                    <Group gap={4}>
-                      <IconMail size={14} />
-                      <Text size="xs">{config.email}</Text>
-                    </Group>
-                  )}
-                  {config?.nif && (
-                    <Group gap={4}>
-                      <IconId size={14} />
-                      <Text size="xs">NIF: {config.nif}</Text>
-                    </Group>
-                  )}
+          {/* En-tête avec logo */}
+          <Paper p="xl" radius={0} style={{ borderBottom: '2px solid #ddd' }}>
+            {/* Ligne Gérant et Date */}
+            <SimpleGrid cols={{ base: 2 }} spacing="md" mb="md">
+              <Box>
+                <Text size="sm" fw={600}>Gérant(e) :</Text>
+                <Text size="sm">{gerant}</Text>
+              </Box>
+              <Box ta="right">
+                <Text size="sm" fw={600}>Date :</Text>
+                <Text size="sm">{new Date().toLocaleDateString('fr-FR')}</Text>
+              </Box>
+            </SimpleGrid>
+
+            {/* Logo + Coordonnées atelier */}
+            <Group justify="space-between" align="center" wrap="nowrap" mb="md">
+              <Box style={{ flex: 1 }}>
+                <Group justify="center" mb={4}>
+                  <IconBuildingStore size={24} color="#1b365d" />
+                  <Title order={2} size="h3" c="#1b365d">
+                    {config?.nom_atelier || "SAID TELECOM"}
+                  </Title>
+                </Group>
+                <Stack gap={2} align="center">
+                  <Text size="xs" c="dimmed">Commerce général</Text>
+                  <Text size="xs" c="dimmed">Ventes des accessoires et téléphones</Text>
+                  <Text size="xs" c="dimmed">{config?.adresse || "Saaba à Kossodo"}</Text>
+                  <Text size="xs" c="dimmed">Tel: {config?.telephone || "5130 61 16"}</Text>
                 </Stack>
               </Box>
+              {/* Logo de l'atelier */}
               {config?.logo_base64 && (
-                <Image
-                  src={config.logo_base64}
-                  w={80}
-                  h={80}
-                  fit="contain"
-                  radius="md"
-                  style={{ border: '1px solid #dee2e6', padding: 8 }}
-                />
+                <Box>
+                  <Image
+                    src={config.logo_base64}
+                    w={80}
+                    h={80}
+                    fit="contain"
+                    radius="md"
+                    style={{ border: '1px solid #dee2e6', padding: 8, backgroundColor: 'white' }}
+                  />
+                </Box>
               )}
             </Group>
-          </Paper>
 
-          <Divider />
+            <Title order={3} size="h4" ta="center" my="md" tt="uppercase">Reçu de règlement de factures</Title>
 
-          {/* TITRE REÇU */}
-          <Paper p="md" radius={0} bg="gray.0">
-            <Group justify="space-between">
-              <Group gap="xs">
-                <IconReceipt size={20} />
-                <Text fw={700} size="lg">REÇU DE PAIEMENT</Text>
-                <Badge color={statut.color} size="lg" leftSection={statut.icon}>
-                  {statut.label}
-                </Badge>
-              </Group>
-              <Group gap="xs">
-                <IconCalendar size={14} />
-                <Text size="sm">{new Date().toLocaleDateString('fr-FR')}</Text>
-                <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
-              </Group>
-            </Group>
-          </Paper>
-
-          <Divider />
-
-          {/* INFOS CLIENT */}
-          <Paper p="lg" radius={0}>
-            <Title order={5} mb="md" c="#1b365d">Informations client</Title>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-              <Group gap="xs">
-                <IconUser size={16} />
-                <Text size="sm" c="dimmed">Nom :</Text>
-                <Text fw={500} size="sm">{data.commande.nom_prenom}</Text>
-              </Group>
-              <Group gap="xs">
-                <IconPhone size={16} />
-                <Text size="sm" c="dimmed">Téléphone :</Text>
-                <Text fw={500} size="sm">{data.commande.telephone_id}</Text>
-              </Group>
-            </SimpleGrid>
-          </Paper>
-
-          <Divider />
-
-          {/* TABLEAU DES PAIEMENTS */}
-          <Paper p="lg" radius={0}>
-            <Title order={5} mb="md" c="#1b365d">Historique des paiements</Title>
-            <Table striped highlightOnHover>
-              <Table.Thead style={{ backgroundColor: '#f8f9fa' }}>
+            {/* Tableau des paiements */}
+            <Table striped highlightOnHover mt="md">
+              <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                 <Table.Tr>
-                  <Table.Th>Date</Table.Th>
-                  <Table.Th>Mode</Table.Th>
-                  <Table.Th ta="right">Montant</Table.Th>
+                  <Table.Th style={{ color: 'white' }}>Références</Table.Th>
+                  <Table.Th style={{ color: 'white' }}>Date</Table.Th>
+                  <Table.Th style={{ color: 'white' }}>Mode Règlement</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'right' }}>Montant</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'right' }}>Versement</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'right' }}>Cumul</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'right' }}>Reste à payer</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {data.paiements.length === 0 ? (
-                  <Table.Tr>
-                    <Table.Td colSpan={3} ta="center" c="dimmed">
-                      Aucun paiement enregistré
-                    </Table.Td>
+                {paiementsAffiches.map((p, idx) => (
+                  <Table.Tr key={idx}>
+                    <Table.Td>CMD-{data.commande.id}</Table.Td>
+                    <Table.Td>{new Date(p.date_paiement).toLocaleDateString('fr-FR')}</Table.Td>
+                    <Table.Td>{p.mode === 'cash' ? 'Espèce' : p.mode === 'mobile' ? 'Mobile Money' : p.mode}</Table.Td>
+                    <Table.Td ta="right">{totalCommande.toLocaleString()}</Table.Td>
+                    <Table.Td ta="right">{p.montant.toLocaleString()}</Table.Td>
+                    <Table.Td ta="right">{p.cumul.toLocaleString()}</Table.Td>
+                    <Table.Td ta="right">{p.reste.toLocaleString()}</Table.Td>
                   </Table.Tr>
-                ) : (
-                  data.paiements.map((p, i) => (
-                    <Table.Tr key={i}>
-                      <Table.Td>{new Date(p.date_paiement).toLocaleDateString('fr-FR')}</Table.Td>
-                      <Table.Td>{p.mode}</Table.Td>
-                      <Table.Td ta="right" fw={500} c="green">
-                        {p.montant.toLocaleString()} FCFA
-                      </Table.Td>
-                    </Table.Tr>
-                  ))
-                )}
+                ))}
               </Table.Tbody>
             </Table>
-          </Paper>
 
-          <Divider />
-
-          {/* RÉCAPITULATIF FINANCIER */}
-          <Paper p="lg" radius={0} bg="gray.0">
-            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-              <Box ta="center">
-                <Text size="xs" c="dimmed">Total commande</Text>
-                <Text fw={700} size="lg" c="blue">
-                  {totalCommande.toLocaleString()} FCFA
-                </Text>
+            <SimpleGrid cols={{ base: 2 }} spacing="md" mt="xl">
+              <Box>
+                <Text fw={600}>Montant versé :</Text>
+                <Text size="xl" fw={700} c="green">{montantVersement.toLocaleString()} FCFA</Text>
               </Box>
-              <Box ta="center">
-                <Text size="xs" c="dimmed">Total payé</Text>
-                <Text fw={700} size="lg" c="green">
-                  {totalPaye.toLocaleString()} FCFA
-                </Text>
-              </Box>
-              <Box ta="center">
-                <Text size="xs" c="dimmed">Reste à payer</Text>
-                <Text fw={700} size="lg" c={reste > 0 ? "red" : "green"}>
-                  {reste.toLocaleString()} FCFA
-                </Text>
+              <Box ta="right">
+                <Text fw={600}>Reste à payer :</Text>
+                <Text size="xl" fw={700} c={reste > 0 ? "red" : "green"}>{reste.toLocaleString()} FCFA</Text>
               </Box>
             </SimpleGrid>
-          </Paper>
 
-          {/* MESSAGE FACTURE */}
-          {config?.message_facture && (
-            <>
-              <Divider />
-              <Paper p="lg" radius={0} ta="center">
-                <Text size="sm" fs="italic" c="dimmed">
-                  {config.message_facture}
-                </Text>
-              </Paper>
-            </>
-          )}
+            <Paper p="md" mt="md" style={{ backgroundColor: '#f8f9fa', borderRadius: 8 }}>
+              <Text size="sm">
+                Arrêté le présent reçu à la somme de : <strong>{montantLettres} ({montantVersement.toLocaleString()}) Francs CFA</strong>
+              </Text>
+            </Paper>
+
+            {/* Signature avec lieu dynamique */}
+            <SimpleGrid cols={{ base: 2 }} spacing="md" mt="xl">
+              <Box ta="right">
+                <Text size="sm" fw={600}>Signature et cachet</Text>
+                <Box mt={20} style={{ borderTop: '1px solid #000', width: 150, marginLeft: 'auto' }} />
+              </Box>
+            </SimpleGrid>
+
+            {config?.message_facture && (
+              <Text size="xs" c="dimmed" ta="center" mt="xl" fs="italic">
+                {config.message_facture}
+              </Text>
+            )}
+          </Paper>
         </Stack>
       </div>
 
-      {/* ACTIONS */}
       <Divider />
-      <Group justify="flex-end" p="md" className="no-print">
-        <Button variant="light" onClick={onClose} leftSection={<IconX size={16} />}>
-          Fermer
-        </Button>
-        <Button
-          onClick={handlePrint}
-          variant="gradient"
-          gradient={{ from: 'blue', to: 'cyan' }}
-          leftSection={<IconPrinter size={16} />}
-        >
-          Imprimer
-        </Button>
+      <Group justify="flex-end" p="md">
+        <Button variant="light" onClick={onClose} leftSection={<IconX size={16} />}>Fermer</Button>
+        <Button onClick={handlePrint} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }} leftSection={<IconPrinter size={16} />}>Imprimer</Button>
       </Group>
-
-      {/* STYLES D'IMPRESSION */}
-      <style>{`
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          #print-zone {
-            margin: 0;
-            padding: 0;
-          }
-          body {
-            background: white;
-          }
-          .mantine-Modal-root {
-            display: none;
-          }
-        }
-      `}</style>
     </Modal>
   );
 };

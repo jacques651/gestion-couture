@@ -1,3 +1,4 @@
+// src/components/stock/FormulaireSortieStock.tsx
 import React, { useEffect, useState } from 'react';
 import {
   Stack,
@@ -15,6 +16,8 @@ import {
   LoadingOverlay,
   Paper,
   SimpleGrid,
+  Textarea,
+  TextInput,
 } from '@mantine/core';
 import {
   IconDeviceFloppy,
@@ -24,66 +27,100 @@ import {
   IconInfoCircle,
   IconCheck,
   IconAlertCircle,
+  IconTruck,
+  IconShoppingBag,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import { getDb, getNextSortieCode } from '../../database/db';
+import { notifications } from '@mantine/notifications';
 
 interface MatiereStock {
   id: number;
+  code_matiere: string;
   designation: string;
   unite: string;
-  stock: number;
-  cout_moyen: number;
+  stock_actuel: number;
+  prix_achat: number;
 }
 
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  editingSortie?: {
+    id: number;
+    matiere_id: number;
+    quantite: number;
+    observation: string;
+  } | null;
 }
 
-const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
+const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess, editingSortie }) => {
   const [matieres, setMatieres] = useState<MatiereStock[]>([]);
   const [matiereId, setMatiereId] = useState<string | null>(null);
   const [selectedMatiere, setSelectedMatiere] = useState<MatiereStock | null>(null);
   const [quantite, setQuantite] = useState<number | undefined>(undefined);
+  const [motif, setMotif] = useState<string>('production');
+  const [observation, setObservation] = useState('');
+  const [commandeId, setCommandeId] = useState<string | null>(null);
+  const [commandes, setCommandes] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [codeSortie, setCodeSortie] = useState('');
+
+  // Générer le code sortie
+  useEffect(() => {
+    const generateCode = async () => {
+      const code = await getNextSortieCode();
+      setCodeSortie(code);
+    };
+    generateCode();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       const db = await getDb();
 
-      const data = await db.select<MatiereStock[]>(`
+      // Charger les matières avec stock
+      const matieresData = await db.select<MatiereStock[]>(`
         SELECT 
-          m.id,
-          m.designation,
-          m.unite,
-          COALESCE(SUM(e.quantite), 0) - COALESCE(SUM(s.quantite), 0) as stock,
-          CASE 
-            WHEN SUM(e.quantite) > 0 
-            THEN SUM(e.quantite * e.cout_unitaire) / SUM(e.quantite)
-            ELSE 0
-          END as cout_moyen
-        FROM matieres m
-        LEFT JOIN entrees_stock e ON e.matiere_id = m.id
-        LEFT JOIN sorties_stock s ON s.matiere_id = m.id
-        WHERE m.est_supprime = 0
-        GROUP BY m.id
-        HAVING stock > 0
-        ORDER BY m.designation
+          id,
+          code_matiere,
+          designation,
+          unite,
+          stock_actuel,
+          prix_achat
+        FROM matieres
+        WHERE est_supprime = 0 AND stock_actuel > 0
+        ORDER BY designation
       `);
+      setMatieres(matieresData);
 
-      setMatieres(data);
+      // Charger les commandes pour liaison
+      const commandesData = await db.select<any[]>(`
+        SELECT id, code_commande, designation 
+        FROM commandes 
+        WHERE est_supprime = 0 AND etat != 'LIVREE'
+        ORDER BY date_commande DESC
+        LIMIT 50
+      `);
+      setCommandes(commandesData);
+
+      if (editingSortie) {
+        setMatiereId(editingSortie.matiere_id.toString());
+        setQuantite(editingSortie.quantite);
+        setObservation(editingSortie.observation || '');
+      }
+
       setLoading(false);
     };
 
     load();
-  }, []);
+  }, [editingSortie]);
 
-  // Mettre à jour la matière sélectionnée quand l'ID change
+  // Mettre à jour la matière sélectionnée
   useEffect(() => {
     if (matiereId) {
       const matiere = matieres.find(m => m.id.toString() === matiereId);
@@ -95,9 +132,23 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
     setError('');
   }, [matiereId, matieres]);
 
+  const motifs = [
+    { value: 'production', label: '🏭 Production', color: 'blue' },
+    { value: 'commande', label: '📦 Commande client', color: 'green' },
+    { value: 'perte', label: '⚠️ Perte / Casse', color: 'red' },
+    { value: 'retour_fournisseur', label: '🔄 Retour fournisseur', color: 'orange' },
+    { value: 'don', label: '🎁 Don / Échantillon', color: 'purple' },
+    { value: 'autre', label: '📝 Autre', color: 'gray' },
+  ];
+
   const matieresOptions = matieres.map(m => ({
     value: m.id.toString(),
-    label: `${m.designation} (${m.unite}) - Stock: ${m.stock}`
+    label: `${m.code_matiere} - ${m.designation} (Stock: ${m.stock_actuel} ${m.unite})`
+  }));
+
+  const commandesOptions = commandes.map(c => ({
+    value: c.id.toString(),
+    label: `${c.code_commande} - ${c.designation}`
   }));
 
   const enregistrer = async () => {
@@ -114,8 +165,8 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
       return;
     }
 
-    if (quantite > selectedMatiere.stock) {
-      setError(`Stock insuffisant. Disponible: ${selectedMatiere.stock} ${selectedMatiere.unite}`);
+    if (quantite > selectedMatiere.stock_actuel) {
+      setError(`Stock insuffisant. Disponible: ${selectedMatiere.stock_actuel} ${selectedMatiere.unite}`);
       return;
     }
 
@@ -123,11 +174,58 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
     const db = await getDb();
 
     try {
-      await db.execute(
-        `INSERT INTO sorties_stock (matiere_id, quantite, cout_unitaire, date_sortie)
-         VALUES (?, ?, ?, DATE('now'))`,
-        [parseInt(matiereId), quantite, selectedMatiere.cout_moyen]
-      );
+      const cout_unitaire = selectedMatiere.prix_achat;
+
+      if (editingSortie) {
+        // Restaurer l'ancienne quantité
+        const oldSortie = await db.select<{ quantite: number }[]>(
+          `SELECT quantite FROM sorties_stock WHERE id = ?`,
+          [editingSortie.id]
+        );
+        if (oldSortie.length > 0) {
+          await db.execute(`
+            UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?
+          `, [oldSortie[0].quantite, selectedMatiere.id]);
+        }
+
+        // Mettre à jour la sortie
+        await db.execute(`
+          UPDATE sorties_stock 
+          SET matiere_id = ?, quantite = ?, cout_unitaire = ?, 
+              motif = ?, observation = ?, commande_id = ?, date_sortie = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [selectedMatiere.id, quantite, cout_unitaire, motif, observation || null, commandeId || null, editingSortie.id]);
+
+        // Appliquer la nouvelle quantité
+        await db.execute(`
+          UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?
+        `, [quantite, selectedMatiere.id]);
+
+        notifications.show({
+          title: 'Succès',
+          message: `Sortie modifiée avec succès`,
+          color: 'green',
+        });
+      } else {
+        // Nouvelle sortie
+        await db.execute(`
+          INSERT INTO sorties_stock (
+            code_sortie, matiere_id, quantite, cout_unitaire, 
+            motif, observation, commande_id, date_sortie
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `, [codeSortie, selectedMatiere.id, quantite, cout_unitaire, motif, observation || null, commandeId || null]);
+
+        // Mettre à jour le stock
+        await db.execute(`
+          UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?
+        `, [quantite, selectedMatiere.id]);
+
+        notifications.show({
+          title: 'Succès',
+          message: `Sortie de ${quantite} ${selectedMatiere.unite} de ${selectedMatiere.designation} enregistrée`,
+          color: 'green',
+        });
+      }
 
       setSuccess(true);
       setTimeout(() => {
@@ -135,13 +233,19 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
         onClose();
       }, 1500);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Erreur lors de l'enregistrement");
+      setError(err.message || "Erreur lors de l'enregistrement");
+      notifications.show({
+        title: 'Erreur',
+        message: err.message || "Erreur lors de l'enregistrement",
+        color: 'red',
+      });
     } finally {
       setSaving(false);
     }
   };
+
 
   if (loading) {
     return (
@@ -155,12 +259,14 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
   return (
     <Box style={{ maxWidth: 800, margin: '0 auto' }} p="sm">
       <Stack gap="md">
-        {/* HEADER COMPACT */}
+        {/* HEADER */}
         <Card withBorder radius="md" p="sm" bg="#1b365d">
           <Group justify="space-between">
             <Group gap="xs">
-              <IconPackage size={18} color="white" />
-              <Title order={4} size="h5" c="white">Nouvelle sortie de stock</Title>
+              <IconTruck size={18} color="white" />
+              <Title order={4} size="h5" c="white">
+                {editingSortie ? 'Modifier la sortie' : 'Nouvelle sortie de stock'}
+              </Title>
             </Group>
             <Group gap="xs">
               <Button
@@ -185,9 +291,21 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
           </Group>
         </Card>
 
-        {/* FORMULAIRE PRINCIPAL */}
+        {/* FORMULAIRE */}
         <Card withBorder radius="md" p="sm">
           <Stack gap="sm">
+            {/* Code sortie */}
+            {!editingSortie && (
+              <TextInput
+                label="Code sortie"
+                value={codeSortie}
+                readOnly
+                disabled
+                size="sm"
+                styles={{ input: { backgroundColor: '#f5f5f5', cursor: 'not-allowed' } }}
+              />
+            )}
+
             {/* SUCCÈS */}
             {success && (
               <Alert icon={<IconCheck size={14} />} color="green" variant="light" p="xs">
@@ -214,6 +332,7 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
               required
               searchable
               nothingFoundMessage="Aucune matière avec stock disponible"
+              disabled={!!editingSortie}
             />
 
             {/* INFOS STOCK */}
@@ -222,18 +341,44 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
                 <SimpleGrid cols={2} spacing="sm">
                   <div>
                     <Text size="xs" c="dimmed">Stock disponible</Text>
-                    <Text fw={700} size="md" c={selectedMatiere.stock <= 5 ? "orange" : "green"}>
-                      {selectedMatiere.stock} {selectedMatiere.unite}
+                    <Text fw={700} size="md" c={selectedMatiere.stock_actuel <= 5 ? "orange" : "green"}>
+                      {selectedMatiere.stock_actuel} {selectedMatiere.unite}
                     </Text>
                   </div>
                   <div>
-                    <Text size="xs" c="dimmed">Coût moyen</Text>
+                    <Text size="xs" c="dimmed">Coût unitaire</Text>
                     <Text fw={700} size="md" c="blue">
-                      {selectedMatiere.cout_moyen.toFixed(2)} FCFA
+                      {selectedMatiere.prix_achat.toLocaleString()} FCFA
                     </Text>
                   </div>
                 </SimpleGrid>
               </Paper>
+            )}
+
+            {/* MOTIF */}
+            <Select
+              label="Motif de la sortie"
+              placeholder="Choisir un motif"
+              data={motifs.map(m => ({ value: m.value, label: m.label }))}
+              value={motif}
+              onChange={(val) => setMotif(val || 'production')}
+              size="sm"
+              required
+            />
+
+            {/* COMMANDE LIÉE (optionnel) */}
+            {motif === 'commande' && (
+              <Select
+                label="Commande liée"
+                placeholder="Lier à une commande"
+                data={commandesOptions}
+                value={commandeId}
+                onChange={setCommandeId}
+                leftSection={<IconShoppingBag size={14} />}
+                size="sm"
+                clearable
+                searchable
+              />
             )}
 
             {/* QUANTITÉ */}
@@ -245,20 +390,41 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
               leftSection={<IconPackage size={14} />}
               size="sm"
               min={0}
-              step={1}
+              max={selectedMatiere?.stock_actuel}
+              step={0.1}
               required
               disabled={!selectedMatiere}
             />
 
-            {/* ALERTE STOCK BAS */}
-            {selectedMatiere && selectedMatiere.stock <= 5 && selectedMatiere.stock > 0 && (
-              <Alert color="orange" variant="light" p="xs">
-                <Group gap="xs">
-                  <IconAlertCircle size={14} />
-                  <Text size="xs">Stock bas ! Il reste {selectedMatiere.stock} {selectedMatiere.unite}</Text>
+            {/* TOTAL */}
+            {quantite && quantite > 0 && selectedMatiere && (
+              <Alert color="blue" variant="light" p="xs">
+                <Group justify="space-between">
+                  <Text size="sm">Valeur totale :</Text>
+                  <Text fw={700}>{(quantite * selectedMatiere.prix_achat).toLocaleString()} FCFA</Text>
                 </Group>
               </Alert>
             )}
+
+            {/* ALERTE STOCK BAS */}
+            {selectedMatiere && selectedMatiere.stock_actuel <= 5 && selectedMatiere.stock_actuel > 0 && (
+              <Alert color="orange" variant="light" p="xs">
+                <Group gap="xs">
+                  <IconAlertCircle size={14} />
+                  <Text size="xs">Stock bas ! Il reste {selectedMatiere.stock_actuel} {selectedMatiere.unite}</Text>
+                </Group>
+              </Alert>
+            )}
+
+            {/* OBSERVATION */}
+            <Textarea
+              label="Observation (optionnel)"
+              placeholder="Informations complémentaires..."
+              value={observation}
+              onChange={(e) => setObservation(e.target.value)}
+              size="sm"
+              rows={2}
+            />
 
             <Divider />
 
@@ -275,7 +441,7 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
                 variant="gradient"
                 gradient={{ from: 'blue', to: 'cyan' }}
               >
-                Enregistrer
+                {editingSortie ? 'Modifier' : 'Enregistrer'}
               </Button>
             </Group>
           </Stack>
@@ -285,7 +451,7 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
         <Modal
           opened={infoModalOpen}
           onClose={() => setInfoModalOpen(false)}
-          title="📋 Instructions"
+          title="📋 Instructions - Sortie de stock"
           size="sm"
           centered
           styles={{
@@ -305,10 +471,12 @@ const FormulaireSortieStock: React.FC<Props> = ({ onClose, onSuccess }) => {
         >
           <Stack gap="xs">
             <Text size="xs">1. Sélectionnez la matière première à sortir</Text>
-            <Text size="xs">2. Vérifiez le stock disponible affiché</Text>
-            <Text size="xs">3. Saisissez la quantité à sortir</Text>
-            <Text size="xs">4. La sortie est automatiquement valorisée au coût moyen</Text>
-            <Text size="xs">5. Cliquez sur "Enregistrer" pour valider</Text>
+            <Text size="xs">2. Le stock disponible et le coût moyen s'affichent</Text>
+            <Text size="xs">3. Choisissez le motif de la sortie</Text>
+            <Text size="xs">4. Si "Commande client", vous pouvez lier une commande</Text>
+            <Text size="xs">5. Saisissez la quantité à sortir</Text>
+            <Text size="xs">6. La valeur totale est calculée automatiquement</Text>
+            <Text size="xs">7. Cliquez sur "Enregistrer" pour valider</Text>
             <Divider />
             <Text size="xs" c="dimmed" ta="center">
               Version 1.0.0 - Gestion Couture

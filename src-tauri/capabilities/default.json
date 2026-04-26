@@ -6,22 +6,25 @@
   "permissions": [
     "core:default",
     "opener:default",
-
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
-
     "fs:default",
-    "fs:allow-read",
-    "fs:allow-write",
-    "fs:write-all",
-    "fs:read-all",
-
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-write",
+    "fs:allow-appdata-meta",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "fs:allow-exists",
+    "fs:allow-copy-file",
+    "fs:allow-rename",
+    "fs:allow-remove",
+    "fs:allow-stat",
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-
     "log:default"
   ]
 }

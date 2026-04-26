@@ -10,7 +10,10 @@ import {
   FileText,
   Calendar,
   TrendingUp,
-  Wallet
+  Wallet,
+  HelpCircle,
+  Download,
+  LifeBuoy,
 } from 'lucide-react';
 import { Role } from '../types/auth';
 import { LucideIcon } from 'lucide-react';
@@ -83,12 +86,19 @@ export const menuSections: MenuSection[] = [
       { id: 'etats_financiers', label: 'État journalier', icon: Calendar, roles: ADMIN_CAISSIER },
     ],
   },
-  
   {
     title: "Configuration",
     items: [
       { id: 'mesures', label: 'Types Mesures', icon: Settings, roles: ADMIN_ONLY },
-      { id: 'parametres', label: 'Atelier', icon: Building2, roles: ADMIN_ONLY },
+      { id: 'parametres', label: 'Paramètres atelier', icon: Building2, roles: ADMIN_ONLY },
+    ],
+  },
+  {
+    title: "Support & Aide",
+    items: [
+      { id: 'support', label: 'Support technique', icon: LifeBuoy, roles: ALL_USERS },
+      { id: 'export_support', label: 'Exporter pour support', icon: Download, roles: ADMIN_ONLY },
+      { id: 'aide', label: "Guide d'utilisation", icon: HelpCircle, roles: ALL_USERS },
     ],
   },
   {
@@ -98,3 +108,43 @@ export const menuSections: MenuSection[] = [
     ],
   },
 ];
+
+// ================= FONCTIONS UTILITAIRES =================
+
+/**
+ * Vérifie si un utilisateur a accès à un élément de menu
+ */
+export const hasAccess = (item: MenuItem, userRole: Role): boolean => {
+  return item.roles.includes(userRole);
+};
+
+/**
+ * Filtre les sections de menu selon le rôle de l'utilisateur
+ */
+export const filterMenuByRole = (sections: MenuSection[], userRole: Role): MenuSection[] => {
+  return sections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => hasAccess(item, userRole))
+    }))
+    .filter(section => section.items.length > 0);
+};
+
+/**
+ * Trouve un élément de menu par son ID
+ */
+export const findMenuItemById = (id: string): MenuItem | undefined => {
+  for (const section of menuSections) {
+    const item = section.items.find(item => item.id === id);
+    if (item) return item;
+  }
+  return undefined;
+};
+
+/**
+ * Récupère le libellé d'un élément par son ID
+ */
+export const getMenuItemLabel = (id: string): string => {
+  const item = findMenuItemById(id);
+  return item?.label || id;
+};

@@ -1,4 +1,5 @@
-export type Role = 'admin' | 'caissier' | 'couturier';
+// src/types/auth.ts
+export type Role = 'admin' | 'caissier' | 'couturier' | 'gestionnaire';
 
 export interface User {
   id: number;

@@ -17,6 +17,9 @@ import {
   Modal,
   Divider,
   ThemeIcon,
+  Center,
+  Container,
+  Avatar,
 } from '@mantine/core';
 import {
   IconFileText,
@@ -80,7 +83,7 @@ const FacturesRecus: React.FC = () => {
 
   const getStatut = (c: Commande) => {
     const reste = c.total - (c.total_paye || 0);
-    if (reste <= 0) return { label: 'Payé', color: 'green', variant: 'light' };
+    if (reste <= 0) return { label: 'Payé', color: 'green', variant: 'filled' };
     if (c.total_paye > 0) return { label: 'Partiel', color: 'orange', variant: 'light' };
     return { label: 'Non payé', color: 'red', variant: 'light' };
   };
@@ -95,7 +98,6 @@ const FacturesRecus: React.FC = () => {
     return matchSearch;
   });
 
-  // Pagination
   const totalPages = Math.ceil(commandesFiltrees.length / itemsPerPage);
   const paginatedData = commandesFiltrees.slice(
     (currentPage - 1) * itemsPerPage,
@@ -122,217 +124,212 @@ const FacturesRecus: React.FC = () => {
 
   if (loading) {
     return (
-      <Card withBorder radius="md" p="lg" pos="relative">
-        <LoadingOverlay visible={true} />
-        <Text>Chargement des factures...</Text>
-      </Card>
+      <Center style={{ height: '50vh' }}>
+        <Card withBorder radius="lg" p="xl">
+          <LoadingOverlay visible={true} />
+          <Stack align="center" gap="md">
+            <IconFileText size={40} stroke={1.5} />
+            <Text>Chargement des factures...</Text>
+          </Stack>
+        </Card>
+      </Center>
     );
   }
 
   return (
     <Box p="md">
-      <Stack gap="lg">
-        {/* HEADER AVEC BOUTON INSTRUCTIONS */}
-        <Card withBorder radius="md" p="lg" bg="#1b365d">
-          <Group justify="space-between">
-            <Stack gap={4}>
-              <Group gap="xs">
-                <IconFileText size={24} color="white" />
-                <Title order={2} c="white">Factures & Reçus</Title>
+      <Container size="full">
+        <Stack gap="lg">
+          {/* Header */}
+          <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
+            <Group justify="space-between" align="center">
+              <Group gap="md">
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconFileText size={30} color="white" />
+                </Avatar>
+                <Box>
+                  <Title order={1} c="white" size="h2">Factures & Reçus</Title>
+                  <Text c="gray.3" size="sm">Gestion des factures et reçus de paiement</Text>
+                </Box>
               </Group>
-              <Text size="sm" c="gray.3">
-                Gestion des factures et reçus de paiement
-              </Text>
-            </Stack>
-            <Group gap="md">
-              <Button
-                variant="light"
-                color="white"
-                leftSection={<IconInfoCircle size={18} />}
-                onClick={() => setInfoModalOpen(true)}
-              >
+              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">
                 Instructions
               </Button>
-              <ThemeIcon size={48} radius="md" color="white" variant="light">
-                <IconReceipt size={28} />
-              </ThemeIcon>
             </Group>
-          </Group>
-        </Card>
+          </Card>
 
-        {/* BARRE D'OUTILS */}
-        <Card withBorder radius="md" p="md">
-          <Group justify="space-between">
-            <TextInput
-              placeholder="Rechercher client ou produit..."
-              leftSection={<IconSearch size={16} />}
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              size="sm"
-              style={{ width: 300 }}
-            />
-            <Select
-              value={filterStatus}
-              onChange={(val) => {
-                setFilterStatus(val || 'all');
-                setCurrentPage(1);
-              }}
-              data={statusOptions}
-              size="sm"
-              style={{ width: 130 }}
-            />
-          </Group>
-        </Card>
+          {/* Barre d'outils */}
+          <Card withBorder radius="lg" shadow="sm">
+            <Group justify="space-between">
+              <TextInput
+                placeholder="Rechercher client ou produit..."
+                leftSection={<IconSearch size={16} />}
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                size="md"
+                radius="md"
+                style={{ flex: 1, maxWidth: 350 }}
+              />
+              <Select
+                value={filterStatus}
+                onChange={(val) => {
+                  setFilterStatus(val || 'all');
+                  setCurrentPage(1);
+                }}
+                data={statusOptions}
+                size="md"
+                radius="md"
+                style={{ width: 150 }}
+              />
+            </Group>
+          </Card>
 
-        {/* TABLEAU */}
-        <Card withBorder radius="md" p={0} style={{ overflow: 'hidden' }}>
-          {commandesFiltrees.length === 0 ? (
-            <Text ta="center" c="dimmed" py={60}>
-              Aucune commande trouvée
-            </Text>
-          ) : (
-            <>
-              <Table striped highlightOnHover>
-                <Table.Thead style={{ backgroundColor: '#1b365d' }}>
-                  <Table.Tr>
-                    <Table.Th style={{ color: 'white' }}>Client</Table.Th>
-                    <Table.Th style={{ color: 'white' }}>Désignation</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 100 }}>Date</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 120, textAlign: 'right' }}>Total</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 120, textAlign: 'right' }}>Payé</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 120, textAlign: 'right' }}>Reste</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 100, textAlign: 'center' }}>Statut</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 150, textAlign: 'center' }}>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {paginatedData.map((c) => {
-                    const reste = c.total - (c.total_paye || 0);
-                    const statut = getStatut(c);
-                    return (
-                      <Table.Tr key={c.id}>
-                        <Table.Td fw={500}>
-                          <Group gap={4}>
-                            <IconUser size={12} />
-                            {c.client_nom}
-                          </Group>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap={4}>
-                            <IconShoppingBag size={12} />
-                            <Text size="sm" lineClamp={1}>
-                              {c.designation}
-                            </Text>
-                          </Group>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap={4} wrap="nowrap">
-                            <IconCalendar size={12} />
-                            <Text size="sm">{new Date(c.date_commande).toLocaleDateString('fr-FR')}</Text>
-                          </Group>
-                        </Table.Td>
-                        <Table.Td ta="right" fw={600}>
-                          {c.total.toLocaleString()} FCFA
-                        </Table.Td>
-                        <Table.Td ta="right" c="green" fw={500}>
-                          {c.total_paye.toLocaleString()} FCFA
-                        </Table.Td>
-                        <Table.Td ta="right" c="red" fw={500}>
-                          {reste.toLocaleString()} FCFA
-                        </Table.Td>
-                        <Table.Td ta="center">
-                          <Badge color={statut.color} variant={statut.variant as any} size="sm">
-                            {statut.label}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap="xs" justify="center">
-                            <Tooltip label="Voir facture">
-                              <Button
-                                variant="subtle"
-                                color="blue"
-                                size="compact-sm"
-                                leftSection={<IconFileText size={14} />}
-                                onClick={() => ouvrirFacture(c)}
-                              >
-                                Facture
-                              </Button>
-                            </Tooltip>
-                            <Tooltip label={!c.a_des_paiements ? "Aucun paiement enregistré" : "Voir reçu"}>
-                              <Button
-                                variant="subtle"
-                                color="green"
-                                size="compact-sm"
-                                leftSection={<IconReceipt size={14} />}
-                                onClick={() => setRecu(c)}
-                                disabled={!c.a_des_paiements}
-                              >
-                                Reçu
-                              </Button>
-                            </Tooltip>
-                          </Group>
-                        </Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
+          {/* Tableau */}
+          <Card withBorder radius="lg" shadow="sm" p={0} style={{ overflow: 'hidden' }}>
+            {commandesFiltrees.length === 0 ? (
+              <Stack align="center" py={60} gap="sm">
+                <ThemeIcon size="xl" radius="xl" color="gray" variant="light">
+                  <IconFileText size={30} />
+                </ThemeIcon>
+                <Text c="dimmed" size="lg">Aucune facture trouvée</Text>
+              </Stack>
+            ) : (
+              <>
+                <Table striped highlightOnHover>
+                  <Table.Thead style={{ backgroundColor: '#1b365d' }}>
+                    <Table.Tr>
+                      <Table.Th style={{ color: 'white' }}>Client</Table.Th>
+                      <Table.Th style={{ color: 'white' }}>Désignation</Table.Th>
+                      <Table.Th style={{ color: 'white', width: 100 }}>Date</Table.Th>
+                      <Table.Th style={{ color: 'white', width: 120, textAlign: 'right' }}>Total</Table.Th>
+                      <Table.Th style={{ color: 'white', width: 120, textAlign: 'right' }}>Payé</Table.Th>
+                      <Table.Th style={{ color: 'white', width: 120, textAlign: 'right' }}>Reste</Table.Th>
+                      <Table.Th style={{ color: 'white', width: 100, textAlign: 'center' }}>Statut</Table.Th>
+                      <Table.Th style={{ color: 'white', width: 180, textAlign: 'center' }}>Actions</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {paginatedData.map((c) => {
+                      const reste = c.total - (c.total_paye || 0);
+                      const statut = getStatut(c);
+                      return (
+                        <Table.Tr key={c.id}>
+                          <Table.Td fw={500}>
+                            <Group gap={4}>
+                              <IconUser size={14} color="#1b365d" />
+                              {c.client_nom}
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap={4}>
+                              <IconShoppingBag size={14} color="#1b365d" />
+                              <Text size="sm" lineClamp={1}>
+                                {c.designation}
+                              </Text>
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap={4} wrap="nowrap">
+                              <IconCalendar size={14} color="#1b365d" />
+                              <Text size="sm">{new Date(c.date_commande).toLocaleDateString('fr-FR')}</Text>
+                            </Group>
+                          </Table.Td>
+                          <Table.Td ta="right" fw={600}>
+                            {c.total.toLocaleString()} FCFA
+                          </Table.Td>
+                          <Table.Td ta="right" c="green" fw={600}>
+                            {c.total_paye.toLocaleString()} FCFA
+                          </Table.Td>
+                          <Table.Td ta="right" c="red" fw={600}>
+                            {reste.toLocaleString()} FCFA
+                          </Table.Td>
+                          <Table.Td ta="center">
+                            <Badge color={statut.color} variant={statut.variant as any} size="sm">
+                              {statut.label}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap="xs" justify="center" wrap="nowrap">
+                              <Tooltip label="Générer la facture">
+                                <Button
+                                  variant="subtle"
+                                  color="blue"
+                                  size="compact-sm"
+                                  onClick={() => ouvrirFacture(c)}
+                                  style={{ minWidth: 80 }}
+                                >
+                                  <IconFileText size={14} style={{ marginRight: 4 }} />
+                                  Facture
+                                </Button>
+                              </Tooltip>
+                              <Tooltip label={!c.a_des_paiements ? "Aucun paiement enregistré" : "Voir le reçu"}>
+                                <Button
+                                  variant="subtle"
+                                  color="green"
+                                  size="compact-sm"
+                                  onClick={() => setRecu(c)}
+                                  disabled={!c.a_des_paiements}
+                                  style={{ minWidth: 70 }}
+                                >
+                                  <IconReceipt size={14} style={{ marginRight: 4 }} />
+                                  Reçu
+                                </Button>
+                              </Tooltip>
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
 
-              {/* PAGINATION */}
-              {totalPages > 1 && (
-                <Group justify="center" p="md">
-                  <Pagination
-                    value={currentPage}
-                    onChange={setCurrentPage}
-                    total={totalPages}
-                    color="blue"
-                    size="sm"
-                  />
-                </Group>
-              )}
-            </>
-          )}
-        </Card>
+                {totalPages > 1 && (
+                  <Group justify="center" p="md">
+                    <Pagination
+                      value={currentPage}
+                      onChange={setCurrentPage}
+                      total={totalPages}
+                      color="#1b365d"
+                      size="sm"
+                      radius="md"
+                    />
+                  </Group>
+                )}
+              </>
+            )}
+          </Card>
 
-        {/* MODAL INSTRUCTIONS */}
-        <Modal
-          opened={infoModalOpen}
-          onClose={() => setInfoModalOpen(false)}
-          title="📋 Instructions"
-          size="md"
-          centered
-          styles={{
-            header: {
-              backgroundColor: '#1b365d',
-              padding: '16px 20px',
-            },
-            title: {
-              color: 'white',
-              fontWeight: 600,
-            },
-            body: {
-              padding: '20px',
-            },
-          }}
-        >
-          <Stack gap="md">
-            <Text size="sm">1. Utilisez la recherche pour filtrer par client ou produit</Text>
-            <Text size="sm">2. Le filtre par statut permet de voir les commandes payées, partielles ou impayées</Text>
-            <Text size="sm">3. Cliquez sur "Facture" pour générer une facture détaillée</Text>
-            <Text size="sm">4. Cliquez sur "Reçu" pour voir le reçu de paiement (disponible uniquement si des paiements ont été effectués)</Text>
-            <Text size="sm">5. Les montants sont affichés en FCFA</Text>
-            <Divider />
-            <Text size="xs" c="dimmed" ta="center">
-              Version 1.0.0 - Gestion Couture
-            </Text>
-          </Stack>
-        </Modal>
-      </Stack>
+          {/* Modal Instructions */}
+          <Modal
+            opened={infoModalOpen}
+            onClose={() => setInfoModalOpen(false)}
+            title="📋 Instructions"
+            size="md"
+            centered
+            radius="md"
+            styles={{
+              header: { backgroundColor: '#1b365d', padding: '16px 20px' },
+              title: { color: 'white', fontWeight: 600 },
+              body: { padding: '24px' },
+            }}
+          >
+            <Stack gap="md">
+              <Text size="sm">1️⃣ Utilisez la recherche pour filtrer par client ou produit</Text>
+              <Text size="sm">2️⃣ Le filtre par statut permet de voir les commandes payées, partielles ou impayées</Text>
+              <Text size="sm">3️⃣ Cliquez sur "Facture" pour générer une facture détaillée</Text>
+              <Text size="sm">4️⃣ Cliquez sur "Reçu" pour voir le reçu de paiement (disponible uniquement si des paiements ont été effectués)</Text>
+              <Text size="sm">5️⃣ Les montants sont affichés en FCFA</Text>
+              <Divider />
+              <Text size="xs" c="dimmed" ta="center">Version 1.0.0 - Gestion Couture</Text>
+            </Stack>
+          </Modal>
+        </Stack>
+      </Container>
 
-      {/* MODALS */}
+      {/* Modals */}
       {facture && <ModalFacture commande={facture} onClose={() => setFacture(null)} />}
       {recu && <ModalRecu commande={recu} onClose={() => setRecu(null)} />}
     </Box>

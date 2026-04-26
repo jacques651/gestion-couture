@@ -11,7 +11,6 @@ import {
   Paper,
   Badge,
   Box,
-  Grid,
   ThemeIcon,
   LoadingOverlay,
 } from '@mantine/core';
@@ -24,7 +23,6 @@ import {
   IconArrowLeft,
   IconRuler,
   IconNotes,
-  IconBuildingStore,
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
 
@@ -196,7 +194,7 @@ const FicheClient: React.FC<FicheClientProps> = ({ client, mesures, onBack }) =>
         </Group>
         <Divider mb="md" />
         <Text size="sm" c="dimmed" fs="italic">
-          {client?.observations || client?.recommandations || "Aucune observation particulière."}
+          {client?.observations || client?.observations || "Aucune observation particulière."}
         </Text>
       </Card>
 

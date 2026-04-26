@@ -10,7 +10,6 @@ import {
   Table,
   Badge,
   Divider,
-  ThemeIcon,
   TextInput,
   ActionIcon,
   ScrollArea,
@@ -20,6 +19,9 @@ import {
   Tooltip,
   Menu,
   Box,
+  Container,
+  Avatar,
+  Center,
 } from '@mantine/core';
 import {
   IconUsers,
@@ -40,16 +42,12 @@ import { getDb } from '../../database/db';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import FormulaireClient from './FormulaireClient';
+import FormulaireVente from '../ventes/FormulaireVente';
 import ModalMesures from './ModalMesures';
-
-// Déclaration du type pour jspdf-autotable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 interface Mesure {
   nom: string;
@@ -62,7 +60,8 @@ interface Client {
   nom_prenom: string;
   adresse?: string;
   email?: string;
-  recommandations?: string;
+  observations?: string;
+  date_enregistrement?: string;
 }
 
 interface ClientAvecMesures extends Client {
@@ -82,57 +81,91 @@ export default function ListeClientsAvecMesures() {
   const [showModal, setShowModal] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [showVenteForm, setShowVenteForm] = useState(false);
+  const [venteClientData, setVenteClientData] = useState<{ id: string; nom: string } | null>(null);
   const itemsPerPage = 10;
 
   // Récupérer tous les clients avec leurs mesures
-  const { data: clientsAvecMesures = [], isLoading, error, refetch } = useQuery<ClientAvecMesures[]>({
+  const { 
+    data: clientsAvecMesures = [], 
+    isLoading, 
+    error, 
+    refetch,
+    isError 
+  } = useQuery<ClientAvecMesures[]>({
     queryKey: ['clients_avec_mesures'],
     queryFn: async () => {
-      const db = await getDb();
+      try {
+        const db = await getDb();
+        
+        if (!db) {
+          throw new Error("Base de données non initialisée");
+        }
 
-      // 1. Récupérer tous les clients actifs
-      const clients = await db.select(
-        `SELECT telephone_id, nom_prenom, adresse, email, recommandations 
-         FROM clients WHERE est_supprime = 0`
-      ) as Client[];
+        // Récupérer les clients (non supprimés)
+        const clients = await db.select(
+          `SELECT telephone_id, nom_prenom, adresse, email, observations, date_enregistrement
+           FROM clients 
+           WHERE est_supprime = 0 OR est_supprime IS NULL
+           ORDER BY nom_prenom`
+        ) as Client[];
 
-      if (clients.length === 0) return [];
+        console.log(`Clients chargés: ${clients.length}`);
 
-      // 2. Récupérer toutes les mesures
-      const ids = clients.map(c => c.telephone_id);
-      const mesuresRows = await db.select(
-        `SELECT mc.client_id, tm.nom, mc.valeur, tm.unite
-         FROM mesures_clients mc
-         JOIN types_mesures tm ON tm.id = mc.type_mesure_id
-         WHERE mc.client_id IN (${ids.map(() => '?').join(',')})`,
-        ids
-      ) as { client_id: string; nom: string; valeur: number; unite: string }[];
+        if (clients.length === 0) return [];
 
-      // 3. Grouper les mesures par client
-      const mesuresParClient = new Map<string, Mesure[]>();
-      for (const row of mesuresRows) {
-        if (!mesuresParClient.has(row.client_id)) mesuresParClient.set(row.client_id, []);
-        mesuresParClient.get(row.client_id)!.push({
-          nom: row.nom,
-          valeur: row.valeur,
-          unite: row.unite
-        });
+        const ids = clients.map(c => c.telephone_id);
+        
+        // Récupérer les mesures pour tous les clients
+        const placeholders = ids.map(() => '?').join(',');
+        const mesuresRows = await db.select(
+          `SELECT mc.client_id, tm.nom, mc.valeur, tm.unite
+           FROM mesures_clients mc
+           JOIN types_mesures tm ON tm.id = mc.type_mesure_id
+           WHERE mc.client_id IN (${placeholders})
+           ORDER BY tm.ordre_affichage, tm.nom`,
+          ids
+        ) as Array<{ client_id: string; nom: string; valeur: number; unite: string | null }>;
+
+        // Organiser les mesures par client
+        const mesuresParClient = new Map<string, Mesure[]>();
+        for (const row of mesuresRows) {
+          if (!mesuresParClient.has(row.client_id)) {
+            mesuresParClient.set(row.client_id, []);
+          }
+          mesuresParClient.get(row.client_id)!.push({
+            nom: row.nom,
+            valeur: row.valeur,
+            unite: row.unite || 'cm'
+          });
+        }
+
+        return clients.map(client => ({
+          ...client,
+          observations: client.observations || '',
+          mesures: mesuresParClient.get(client.telephone_id) || []
+        }));
+      } catch (err) {
+        console.error("Erreur dans queryFn:", err);
+        throw err;
       }
-
-      // 4. Construire le tableau final
-      return clients.map(client => ({
-        ...client,
-        mesures: mesuresParClient.get(client.telephone_id) || []
-      }));
     },
+    retry: 1,
+    staleTime: 1000 * 60 * 5,
   });
 
-  // Extraire tous les noms de mesures distincts (pour les en-têtes de colonnes)
+  // Extraire tous les noms de mesures uniques
   const tousNomsMesures = useMemo(() => {
     const noms = new Set<string>();
-    for (const client of clientsAvecMesures) {
-      for (const mesure of client.mesures) {
-        noms.add(mesure.nom);
+    if (clientsAvecMesures && clientsAvecMesures.length > 0) {
+      for (const client of clientsAvecMesures) {
+        if (client.mesures && client.mesures.length > 0) {
+          for (const mesure of client.mesures) {
+            if (mesure.nom) {
+              noms.add(mesure.nom);
+            }
+          }
+        }
       }
     }
     return Array.from(noms).sort();
@@ -140,35 +173,35 @@ export default function ListeClientsAvecMesures() {
 
   // Filtrer et trier les données
   const filteredAndSortedData = useMemo(() => {
+    if (!clientsAvecMesures || clientsAvecMesures.length === 0) return [];
+    
     let filtered = clientsAvecMesures.filter(c =>
-      c.nom_prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.telephone_id.includes(searchTerm)
+      (c.nom_prenom && c.nom_prenom.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (c.telephone_id && c.telephone_id.includes(searchTerm))
     );
 
     return [...filtered].sort((a, b) => {
       let comparison = 0;
       if (sortBy === 'nom_prenom') {
-        comparison = a.nom_prenom.localeCompare(b.nom_prenom);
+        comparison = (a.nom_prenom || '').localeCompare(b.nom_prenom || '');
       } else if (sortBy === 'telephone_id') {
-        comparison = a.telephone_id.localeCompare(b.telephone_id);
+        comparison = (a.telephone_id || '').localeCompare(b.telephone_id || '');
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
   }, [clientsAvecMesures, searchTerm, sortBy, sortOrder]);
 
-  // Pagination
   const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
   const paginatedData = filteredAndSortedData.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  // ============================================================
-  // MUTATIONS
-  // ============================================================
+  // Mutation pour la suppression
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const db = await getDb();
+      if (!db) throw new Error("Base de données non disponible");
       await db.execute("UPDATE clients SET est_supprime = 1 WHERE telephone_id = ?", [id]);
     },
     onSuccess: () => {
@@ -177,24 +210,20 @@ export default function ListeClientsAvecMesures() {
     },
     onError: (error) => {
       console.error('Erreur:', error);
-      alert('Erreur lors de la suppression');
+      alert('Erreur lors de la suppression du client');
     }
   });
 
-  const handleSupprimer = (id: string) => {
-    setDeleteId(id);
-  };
-
+  const handleSupprimer = (id: string) => setDeleteId(id);
   const handleModifier = (client: Client) => {
     setClientEdit(client);
     setVueForm(true);
   };
-
   const handleVoir = (client: ClientAvecMesures) => {
     setSelectedClient(client);
     setShowModal(true);
   };
-
+  
   const handleSort = (column: 'nom_prenom' | 'telephone_id') => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -205,19 +234,31 @@ export default function ListeClientsAvecMesures() {
     setCurrentPage(1);
   };
 
-  // ============================================================
-  // EXPORT EXCEL
-  // ============================================================
-  const exportToExcel = () => {
+  // Exporter Excel
+  const exportToExcel = async () => {
     try {
       setExporting(true);
-      
+
+      const filePath = await save({
+        title: "Exporter la liste des clients",
+        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+        defaultPath: `clients_mesures_${new Date().toISOString().split('T')[0]}.xlsx`
+      });
+
+      if (!filePath) {
+        setExporting(false);
+        return;
+      }
+
       const data = filteredAndSortedData.map(client => {
         const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
         const row: any = {
-          'Nom': client.nom_prenom,
           'Téléphone': client.telephone_id,
-          'Recommandations': client.recommandations || '',
+          'Nom complet': client.nom_prenom,
+          'Adresse': client.adresse || '',
+          'Email': client.email || '',
+          'Observations': client.observations || '',
+          'Date enregistrement': client.date_enregistrement || new Date().toLocaleDateString('fr-FR'),
         };
         for (const nom of tousNomsMesures) {
           row[nom] = mesuresMap.get(nom) || '';
@@ -226,86 +267,133 @@ export default function ListeClientsAvecMesures() {
       });
 
       const ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 30 }, { wch: 25 }, { wch: 40 }, { wch: 15 }, ...tousNomsMesures.map(() => ({ wch: 15 }))];
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Clients avec mesures');
-      
-      XLSX.writeFile(wb, `clients_mesures_${new Date().toISOString().split('T')[0]}.xlsx`);
-      
+
+      const excelBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      await writeFile(filePath, new Uint8Array(excelBuffer));
+
       alert('✅ Export Excel réussi !');
     } catch (error) {
       console.error('Erreur export Excel:', error);
-      alert('❌ Erreur lors de l\'export Excel');
+      alert('❌ Erreur lors de l\'export Excel: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setExporting(false);
     }
   };
 
-  // ============================================================
-  // EXPORT PDF
-  // ============================================================
-  const exportToPDF = () => {
+  // Exporter PDF
+  const exportToPDF = async () => {
     try {
       setExporting(true);
-      
-      const doc = new jsPDF('landscape', 'mm', 'a4');
-      
-      doc.setFontSize(18);
-      doc.text('Liste des clients avec mesures', 14, 15);
-      doc.setFontSize(10);
-      doc.text(`Généré le : ${new Date().toLocaleString('fr-FR')}`, 14, 25);
-      doc.text(`Total : ${filteredAndSortedData.length} client(s)`, 14, 32);
 
-      const head = ['Nom', 'Téléphone', 'Recommandations', ...tousNomsMesures];
-      const body = filteredAndSortedData.map(client => {
+      const filePath = await save({
+        title: "Exporter la liste des clients en PDF",
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        defaultPath: `clients_mesures_${new Date().toISOString().split('T')[0]}.pdf`
+      });
+
+      if (!filePath) {
+        setExporting(false);
+        return;
+      }
+
+      const doc = new jsPDF('landscape', 'mm', 'a4');
+
+      doc.setFillColor(27, 54, 93);
+      doc.rect(0, 0, 297, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.text('LISTE DES CLIENTS AVEC MESURES', 148.5, 20, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Généré le : ${new Date().toLocaleString('fr-FR')}`, 148.5, 32, { align: 'center' });
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.text(`Total clients : ${filteredAndSortedData.length}`, 14, 50);
+      doc.text(`Types de mesures : ${tousNomsMesures.length}`, 14, 57);
+
+      const head = ['N°', 'Téléphone', 'Nom', 'Adresse', 'Email', 'Observations', ...tousNomsMesures];
+      const body = filteredAndSortedData.map((client, idx) => {
         const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
-        const ligne = [client.nom_prenom, client.telephone_id, client.recommandations || ''];
+        const ligne = [
+          idx + 1, 
+          client.telephone_id, 
+          client.nom_prenom, 
+          client.adresse || '', 
+          client.email || '', 
+          (client.observations || '').substring(0, 50)
+        ];
         for (const nom of tousNomsMesures) {
           ligne.push(mesuresMap.get(nom) || '');
         }
         return ligne;
       });
 
-      doc.autoTable({
+      autoTable(doc, {
         head: [head],
         body: body,
-        startY: 40,
+        startY: 65,
         theme: 'striped',
         headStyles: {
-          fillColor: [41, 128, 185],
+          fillColor: [27, 54, 93],
           textColor: 255,
           fontStyle: 'bold',
+          halign: 'center'
         },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-        },
+        styles: { fontSize: 7, cellPadding: 2, cellWidth: 'wrap' },
         columnStyles: {
-          2: { cellWidth: 'auto' }
-        }
+          0: { cellWidth: 12, halign: 'center' },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 30 },
+          5: { cellWidth: 35 },
+        },
+        margin: { left: 10, right: 10 }
       });
 
-      doc.save(`clients_mesures_${new Date().toISOString().split('T')[0]}.pdf`);
-      
+      const pdfBuffer = doc.output('arraybuffer');
+      await writeFile(filePath, new Uint8Array(pdfBuffer));
+
       alert('✅ Export PDF réussi !');
     } catch (error) {
       console.error('Erreur export PDF:', error);
-      alert('❌ Erreur lors de l\'export PDF');
+      alert('❌ Erreur lors de l\'export PDF: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setExporting(false);
     }
   };
 
-  // ============================================================
-  // EXPORT WORD
-  // ============================================================
-  const exportToWord = () => {
+  // Exporter Word
+  const exportToWord = async () => {
     try {
       setExporting(true);
-      
-      const rows = filteredAndSortedData.map(client => {
+
+      const filePath = await save({
+        title: "Exporter la liste des clients en Word",
+        filters: [{ name: 'Word Document', extensions: ['doc'] }],
+        defaultPath: `clients_mesures_${new Date().toISOString().split('T')[0]}.doc`
+      });
+
+      if (!filePath) {
+        setExporting(false);
+        return;
+      }
+
+      const rows = filteredAndSortedData.map((client, idx) => {
         const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
-        const cells = `<td>${client.nom_prenom}</td><td>${client.telephone_id}</td><td>${client.recommandations || ''}</td>${tousNomsMesures.map(nom => `<td>${mesuresMap.get(nom) || ''}</td>`).join('')}`;
-        return `<td>${cells}</tr>`;
+        return `<tr>
+                  <td style="border:1px solid #ddd;padding:8px;text-align:center">${idx + 1}</td>
+                  <td style="border:1px solid #ddd;padding:8px">${client.telephone_id}</td>
+                  <td style="border:1px solid #ddd;padding:8px"><strong>${client.nom_prenom}</strong></td>
+                  <td style="border:1px solid #ddd;padding:8px">${client.adresse || '-'}</td>
+                  <td style="border:1px solid #ddd;padding:8px">${client.email || '-'}</td>
+                  <td style="border:1px solid #ddd;padding:8px">${client.observations || '-'}</td>
+                  ${tousNomsMesures.map(nom => `<td style="border:1px solid #ddd;padding:8px;text-align:center">${mesuresMap.get(nom) || '-'}</td>`).join('')}
+                </tr>`;
       }).join('');
 
       const htmlContent = `<!DOCTYPE html>
@@ -314,450 +402,382 @@ export default function ListeClientsAvecMesures() {
         <meta charset="UTF-8">
         <title>Liste des clients avec mesures</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 40px; }
-          h1 { color: #2980b9; border-bottom: 2px solid #2980b9; padding-bottom: 10px; }
-          .info { margin: 20px 0; color: #666; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Calibri', Arial, sans-serif; margin: 40px; background: white; }
+          .header { text-align: center; margin-bottom: 30px; }
+          h1 { color: #1b365d; border-bottom: 3px solid #1b365d; padding-bottom: 10px; margin-bottom: 20px; }
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #2980b9; color: white; padding: 10px; border: 1px solid #ddd; text-align: left; }
+          th { background-color: #1b365d; color: white; padding: 12px; border: 1px solid #ddd; font-weight: bold; }
           td { padding: 8px; border: 1px solid #ddd; }
           tr:nth-child(even) { background-color: #f9f9f9; }
-          .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+          .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #999; border-top: 1px solid #ddd; padding-top: 20px; }
         </style>
       </head>
       <body>
-        <h1>📋 Liste des clients avec mesures</h1>
-        <div class="info">
-          <p><strong>Date :</strong> ${new Date().toLocaleString('fr-FR')}</p>
-          <p><strong>Total :</strong> ${filteredAndSortedData.length} client(s)</p>
+        <div class="header">
+          <h1>📋 LISTE DES CLIENTS AVEC MESURES</h1>
+          <p>Généré le ${new Date().toLocaleString('fr-FR')}</p>
+          <p><strong>Total clients :</strong> ${filteredAndSortedData.length} | <strong>Types de mesures :</strong> ${tousNomsMesures.length}</p>
         </div>
         <table>
           <thead>
             <tr>
-              <th>Nom</th><th>Téléphone</th><th>Recommandations</th>${tousNomsMesures.map(n => `<th>${n}</th>`).join('')}
+              <th>N°</th><th>Téléphone</th><th>Nom complet</th><th>Adresse</th><th>Email</th><th>Observations</th>
+              ${tousNomsMesures.map(n => `<th>${n}</th>`).join('')}
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
         <div class="footer">
-          <p>Document généré automatiquement par le système de gestion couture</p>
+          <p>Document généré automatiquement par Gestion Couture</p>
+          <p>© ${new Date().getFullYear()} - Tous droits réservés</p>
         </div>
       </body>
       </html>`;
 
-      const blob = new Blob([htmlContent], { type: 'application/msword' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `clients_mesures_${new Date().toISOString().split('T')[0]}.doc`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-      
+      const encoder = new TextEncoder();
+      const data = encoder.encode(htmlContent);
+      await writeFile(filePath, data);
+
       alert('✅ Export Word réussi !');
     } catch (error) {
       console.error('Erreur export Word:', error);
-      alert('❌ Erreur lors de l\'export Word');
+      alert('❌ Erreur lors de l\'export Word: ' + (error instanceof Error ? error.message : 'Erreur inconnue'));
     } finally {
       setExporting(false);
     }
   };
 
-  // ============================================================
-  // IMPRESSION
-  // ============================================================
+  // Impression
   const handlePrint = () => {
-    const rows = filteredAndSortedData.map(client => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert("Veuillez autoriser les popups pour l'impression");
+      return;
+    }
+
+    const rows = filteredAndSortedData.map((client, idx) => {
       const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
-      const cells = `<td>${client.nom_prenom}</td><td>${client.telephone_id}</td><td>${client.recommandations || ''}</td>${tousNomsMesures.map(nom => `<td>${mesuresMap.get(nom) || ''}</td>`).join('')}`;
-      return `<tr>${cells}</tr>`;
+      return `<tr>
+              <td style="border:1px solid #ddd;padding:8px;text-align:center">${idx + 1}</td>
+              <td style="border:1px solid #ddd;padding:8px">${client.telephone_id}</td>
+              <td style="border:1px solid #ddd;padding:8px"><strong>${client.nom_prenom}</strong></td>
+              <td style="border:1px solid #ddd;padding:8px">${client.observations || '-'}</td>
+              ${tousNomsMesures.map(nom => `<td style="border:1px solid #ddd;padding:8px;text-align:center">${mesuresMap.get(nom) || '-'}</td>`).join('')}
+            </tr>`;
     }).join('');
 
-    const printContent = `
+    printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
         <title>Liste des clients avec mesures</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          h1 { color: #2980b9; border-bottom: 2px solid #2980b9; padding-bottom: 10px; }
-          .info { margin: 20px 0; color: #666; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #2980b9; color: white; padding: 10px; border: 1px solid #ddd; text-align: left; }
-          td { padding: 8px; border: 1px solid #ddd; }
-          tr:nth-child(even) { background-color: #f9f9f9; }
-          .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
-          @media print {
-            body { margin: 0; padding: 10px; }
-            .no-print { display: none; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            background: white;
           }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #1b365d;
+          }
+          .header h1 { color: #1b365d; font-size: 24px; margin-bottom: 10px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
+          th { background: #1b365d; color: white; padding: 10px; border: 1px solid #2a4a7a; text-align: center; }
+          td { padding: 8px; border: 1px solid #ddd; }
+          tr:nth-child(even) { background: #f9f9f9; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 10px; color: #999; }
+          @media print { body { padding: 0; margin: 0; } }
         </style>
       </head>
       <body>
-        <h1>📋 Liste des clients avec mesures</h1>
-        <div class="info">
-          <p><strong>Date d'impression :</strong> ${new Date().toLocaleString('fr-FR')}</p>
-          <p><strong>Nombre total :</strong> ${filteredAndSortedData.length} client(s)</p>
+        <div class="header">
+          <h1>📋 LISTE DES CLIENTS AVEC MESURES</h1>
+          <p>Généré le ${new Date().toLocaleString('fr-FR')}</p>
+          <p>Total clients : ${filteredAndSortedData.length} | Types de mesures : ${tousNomsMesures.length}</p>
         </div>
         <table>
           <thead>
             <tr>
-              <th>Nom</th><th>Téléphone</th><th>Recommandations</th>${tousNomsMesures.map(n => `<th>${n}</th>`).join('')}
+              <th>N°</th><th>Téléphone</th><th>Nom complet</th><th>Observations</th>
+              ${tousNomsMesures.map(n => `<th>${n}</th>`).join('')}
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
         <div class="footer">
-          <p>Document généré automatiquement par le système de gestion couture</p>
-          <p>© ${new Date().getFullYear()} - Gestion Couture</p>
+          <p>Document généré automatiquement par Gestion Couture</p>
         </div>
+        <script>window.onload = () => { window.print(); window.close(); };</script>
       </body>
       </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    } else {
-      alert("Veuillez autoriser les pop-ups pour cette application");
-    }
+    `);
+    printWindow.document.close();
   };
+
+  // Affichage du formulaire de vente après création du client
+  if (showVenteForm && venteClientData) {
+    return (
+      <FormulaireVente
+        prefillClient={{
+          telephone_id: venteClientData.id,
+          nom_prenom: venteClientData.nom
+        }}
+        defaultType="commande"
+        onSuccess={() => {
+          setShowVenteForm(false);
+          setVenteClientData(null);
+          refetch();
+        }}
+        onCancel={() => {
+          setShowVenteForm(false);
+          setVenteClientData(null);
+        }}
+      />
+    );
+  }
 
   if (vueForm) {
     return (
-      <FormulaireClient
-        clientEdit={clientEdit || undefined}
-        onBack={() => setVueForm(false)}
-        onSuccess={() => {
-          setVueForm(false);
+      <FormulaireClient 
+        clientEdit={clientEdit || undefined} 
+        onBack={() => setVueForm(false)} 
+        onSuccess={(clientId, clientNom) => { 
+          setVueForm(false); 
           refetch();
-        }}
+          if (clientId && clientNom) {
+            setVenteClientData({ id: clientId, nom: clientNom });
+            setShowVenteForm(true);
+          }
+        }} 
       />
     );
   }
 
   if (isLoading) {
     return (
-      <Card withBorder radius="md" p="lg" pos="relative">
-        <LoadingOverlay visible={true} />
-        <Text>Chargement des clients...</Text>
-      </Card>
+      <Center style={{ height: '50vh' }}>
+        <Card withBorder radius="lg" p="xl">
+          <LoadingOverlay visible={true} />
+          <Stack align="center" gap="md">
+            <IconUsers size={40} stroke={1.5} />
+            <Text>Chargement des clients...</Text>
+          </Stack>
+        </Card>
+      </Center>
     );
   }
 
-  if (error) {
+  if (isError || error) {
     return (
-      <Card withBorder radius="md" p="lg">
-        <Alert icon={<IconAlertCircle size={16} />} color="red" title="Erreur">
-          Impossible de charger les clients
+      <Container size="xl" p="md">
+        <Alert 
+          icon={<IconAlertCircle size={16} />} 
+          color="red" 
+          title="Erreur de chargement" 
+          variant="filled"
+        >
+          <Stack>
+            <Text>Impossible de charger les clients</Text>
+            <Text size="sm">{error instanceof Error ? error.message : 'Erreur inconnue'}</Text>
+            <Button onClick={() => refetch()} variant="white" size="xs" mt="md">
+              Réessayer
+            </Button>
+          </Stack>
         </Alert>
-      </Card>
+      </Container>
     );
   }
 
   return (
     <Box p="md">
-      <Stack gap="lg">
-        {/* HEADER AVEC BOUTON INSTRUCTIONS */}
-        <Card withBorder radius="md" p="lg" bg="#1b365d">
-          <Group justify="space-between">
-            <Stack gap={4}>
-              <Group gap="xs">
-                <IconUsers size={24} color="white" />
-                <Title order={2} c="white">Clients avec mesures</Title>
+      <Container size="full">
+        <Stack gap="lg">
+          {/* Header */}
+          <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
+            <Group justify="space-between" align="center">
+              <Group gap="md">
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconUsers size={30} color="white" />
+                </Avatar>
+                <Box>
+                  <Title order={1} c="white" size="h2">Clients avec mesures</Title>
+                  <Text c="gray.3" size="sm">Gérez les informations des clients et leurs mesures personnalisées</Text>
+                </Box>
               </Group>
-              <Text size="sm" c="gray.3">
-                Gérez les informations des clients et leurs mesures
-              </Text>
-            </Stack>
-            <Group gap="md">
-              <Button
-                variant="light"
-                color="white"
-                leftSection={<IconInfoCircle size={18} />}
-                onClick={() => setInfoModalOpen(true)}
-              >
+              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">
                 Instructions
               </Button>
-              <ThemeIcon size={48} radius="md" color="white" variant="light">
-                <IconUsers size={28} />
-              </ThemeIcon>
             </Group>
-          </Group>
-        </Card>
+          </Card>
 
-        {/* CONTENU PRINCIPAL */}
-        <Card withBorder radius="md" p="lg">
-          <Stack gap="md">
-            {/* EN-TÊTE DU CARD */}
-            <Group justify="space-between" align="flex-end">
-              <div>
-                <Title order={4}>Liste des clients</Title>
-                <Text size="sm" c="dimmed">
-                  {filteredAndSortedData.length} client{filteredAndSortedData.length > 1 ? 's' : ''} enregistré{filteredAndSortedData.length > 1 ? 's' : ''}
-                </Text>
-              </div>
-              <Group>
-                {/* Menu d'export */}
-                <Menu shadow="md" width={200}>
-                  <Menu.Target>
-                    <Button
-                      leftSection={<IconDownload size={16} />}
-                      variant="outline"
-                      loading={exporting}
-                    >
-                      Exporter
-                    </Button>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Label>Choisir le format</Menu.Label>
-                    <Menu.Item
-                      leftSection={<IconFileExcel size={16} color="#00a84f" />}
-                      onClick={exportToExcel}
-                    >
-                      Excel (.xlsx)
-                    </Menu.Item>
-                    <Menu.Item
-                      leftSection={<IconFile size={16} color="#e74c3c" />}
-                      onClick={exportToPDF}
-                    >
-                      PDF (.pdf)
-                    </Menu.Item>
-                    <Menu.Item
-                      leftSection={<IconFileWord size={16} color="#2980b9" />}
-                      onClick={exportToWord}
-                    >
-                      Word (.doc)
-                    </Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-
-                {/* Bouton Impression */}
-                <Button
-                  leftSection={<IconPrinter size={16} />}
-                  onClick={handlePrint}
-                  variant="outline"
-                  color="teal"
-                >
-                  Imprimer
-                </Button>
-
-                <Button
-                  leftSection={<IconPlus size={16} />}
-                  onClick={() => {
-                    setClientEdit(null);
-                    setVueForm(true);
-                  }}
-                  variant="gradient"
-                  gradient={{ from: 'blue', to: 'cyan' }}
-                >
-                  Ajouter un client
-                </Button>
+          {/* Contenu principal */}
+          <Card withBorder radius="lg" shadow="sm">
+            <Stack gap="md">
+              {/* Barre d'actions */}
+              <Group justify="space-between" align="flex-end">
+                <Box>
+                  <Title order={3} size="h4" c="#1b365d">Liste des clients</Title>
+                  <Text size="xs" c="dimmed">
+                    {filteredAndSortedData.length} client{filteredAndSortedData.length > 1 ? 's' : ''} trouvé{filteredAndSortedData.length > 1 ? 's' : ''}
+                  </Text>
+                </Box>
+                <Group>
+                  <Menu shadow="md" width={200}>
+                    <Menu.Target>
+                      <Button leftSection={<IconDownload size={16} />} variant="outline" loading={exporting}>Exporter</Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Label>Format d'export</Menu.Label>
+                      <Menu.Item leftSection={<IconFileExcel size={16} color="#00a84f" />} onClick={exportToExcel}>Excel (.xlsx)</Menu.Item>
+                      <Menu.Item leftSection={<IconFile size={16} color="#e74c3c" />} onClick={exportToPDF}>PDF (.pdf)</Menu.Item>
+                      <Menu.Item leftSection={<IconFileWord size={16} color="#2980b9" />} onClick={exportToWord}>Word (.doc)</Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                  <Button leftSection={<IconPrinter size={16} />} onClick={handlePrint} variant="outline" color="teal">Imprimer</Button>
+                  <Button leftSection={<IconPlus size={16} />} onClick={() => { setClientEdit(null); setVueForm(true); }} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }}>Ajouter un client</Button>
+                </Group>
               </Group>
-            </Group>
 
-            <Divider />
+              <Divider />
 
-            {/* RECHERCHE */}
-            <TextInput
-              placeholder="Rechercher par nom ou téléphone..."
-              leftSection={<IconSearch size={16} />}
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
+              {/* Recherche */}
+              <TextInput
+                placeholder="Rechercher par nom ou téléphone..."
+                leftSection={<IconSearch size={16} />}
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                radius="md"
+                size="md"
+              />
 
-            {/* TABLEAU DES CLIENTS */}
-            {filteredAndSortedData.length === 0 ? (
-              <Alert icon={<IconAlertCircle size={16} />} color="blue" variant="light">
-                Aucun client trouvé. Cliquez sur "Ajouter" pour commencer.
-              </Alert>
-            ) : (
-              <>
-                <ScrollArea style={{ maxHeight: 600 }}>
-                  <Table striped highlightOnHover>
-                    <Table.Thead style={{ backgroundColor: '#1b365d' }}>
-                      <Table.Tr>
-                        <Table.Th
-                          style={{ cursor: 'pointer', color: 'white' }}
-                          onClick={() => handleSort('nom_prenom')}
-                        >
-                          <Group gap={4}>
-                            Nom complet
-                            {sortBy === 'nom_prenom' && (
-                              <Text size="xs" c="yellow">
-                                {sortOrder === 'asc' ? '↑' : '↓'}
-                              </Text>
-                            )}
-                          </Group>
-                        </Table.Th>
-                        <Table.Th
-                          style={{ cursor: 'pointer', color: 'white' }}
-                          onClick={() => handleSort('telephone_id')}
-                        >
-                          <Group gap={4}>
-                            Téléphone
-                            {sortBy === 'telephone_id' && (
-                              <Text size="xs" c="yellow">
-                                {sortOrder === 'asc' ? '↑' : '↓'}
-                              </Text>
-                            )}
-                          </Group>
-                        </Table.Th>
-                        <Table.Th style={{ color: 'white' }}>Recommandations</Table.Th>
-                        {tousNomsMesures.map(nom => (
-                          <Table.Th key={nom} style={{ color: 'white' }}>{nom}</Table.Th>
-                        ))}
-                        <Table.Th style={{ textAlign: 'center', color: 'white' }}>Actions</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {paginatedData.map((client) => {
-                        const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
-                        return (
-                          <Table.Tr key={client.telephone_id}>
-                            <Table.Td fw={500}>{client.nom_prenom}</Table.Td>
-                            <Table.Td>
-                              <Badge color="gray" variant="light" size="sm">
-                                {client.telephone_id}
-                              </Badge>
-                            </Table.Td>
-                            <Table.Td>
-                              <Text size="sm" lineClamp={2}>
-                                {client.recommandations || '-'}
-                              </Text>
-                            </Table.Td>
-                            {tousNomsMesures.map(nom => (
-                              <Table.Td key={nom}>
-                                <Text size="sm">{mesuresMap.get(nom) || '-'}</Text>
+              {/* Tableau avec police réduite */}
+              {filteredAndSortedData.length === 0 ? (
+                <Alert icon={<IconAlertCircle size={16} />} color="blue" variant="light" radius="md">
+                  Aucun client trouvé. Cliquez sur "Ajouter" pour commencer.
+                </Alert>
+              ) : (
+                <>
+                  <ScrollArea style={{ maxHeight: 600 }} offsetScrollbars>
+                    <Table 
+                      striped 
+                      highlightOnHover 
+                      withColumnBorders 
+                      style={{ fontSize: '11px' }}
+                    >
+                      <Table.Thead style={{ backgroundColor: '#1b365d' }}>
+                        <Table.Tr>
+                          <Table.Th style={{ cursor: 'pointer', color: 'white', fontSize: '11px', whiteSpace: 'nowrap', padding: '8px 4px' }} onClick={() => handleSort('nom_prenom')}>
+                            <Group gap={4}>Nom {sortBy === 'nom_prenom' && <Text size="xs" c="yellow">{sortOrder === 'asc' ? '↑' : '↓'}</Text>}</Group>
+                          </Table.Th>
+                          <Table.Th style={{ cursor: 'pointer', color: 'white', fontSize: '11px', whiteSpace: 'nowrap', padding: '8px 4px' }} onClick={() => handleSort('telephone_id')}>
+                            <Group gap={4}>Tél. {sortBy === 'telephone_id' && <Text size="xs" c="yellow">{sortOrder === 'asc' ? '↑' : '↓'}</Text>}</Group>
+                          </Table.Th>
+                          <Table.Th style={{ color: 'white', fontSize: '11px', padding: '8px 4px' }}>Obs.</Table.Th>
+                          {tousNomsMesures.map(nom => (
+                            <Table.Th key={nom} style={{ color: 'white', fontSize: '10px', fontWeight: 500, padding: '8px 4px', whiteSpace: 'nowrap' }}>
+                              {nom.length > 12 ? nom.substring(0, 10) + '...' : nom}
+                            </Table.Th>
+                          ))}
+                          <Table.Th style={{ textAlign: 'center', color: 'white', fontSize: '11px', padding: '8px 4px' }}>Actions</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {paginatedData.map((client) => {
+                          const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur}${m.unite !== 'cm' ? m.unite : ''}`]));
+                          return (
+                            <Table.Tr key={client.telephone_id}>
+                              <Table.Td style={{ fontSize: '11px', padding: '6px 4px', whiteSpace: 'nowrap' }}>
+                                <Text size="xs" fw={500} lineClamp={1}>
+                                  {client.nom_prenom}
+                                </Text>
                               </Table.Td>
-                            ))}
-                            <Table.Td>
-                              <Group gap="xs" justify="center">
-                                <Tooltip label="Voir les mesures">
-                                  <ActionIcon
-                                    variant="subtle"
-                                    color="blue"
-                                    onClick={() => handleVoir(client)}
-                                  >
-                                    <IconEye size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                                <Tooltip label="Modifier">
-                                  <ActionIcon
-                                    variant="subtle"
-                                    color="orange"
-                                    onClick={() => handleModifier(client)}
-                                  >
-                                    <IconEdit size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                                <Tooltip label="Supprimer">
-                                  <ActionIcon
-                                    variant="subtle"
-                                    color="red"
-                                    onClick={() => handleSupprimer(client.telephone_id)}
-                                  >
-                                    <IconTrash size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              </Group>
-                            </Table.Td>
-                          </Table.Tr>
-                        );
-                      })}
-                    </Table.Tbody>
-                  </Table>
-                </ScrollArea>
+                              <Table.Td style={{ fontSize: '11px', padding: '6px 4px', whiteSpace: 'nowrap' }}>
+                                <Badge color="gray" variant="light" size="xs">{client.telephone_id}</Badge>
+                              </Table.Td>
+                              <Table.Td style={{ fontSize: '11px', padding: '6px 4px', maxWidth: '150px' }}>
+                                <Text size="xs" lineClamp={1}>
+                                  {client.observations && client.observations.length > 30 
+                                    ? client.observations.substring(0, 30) + '...' 
+                                    : client.observations || '-'}
+                                </Text>
+                              </Table.Td>
+                              {tousNomsMesures.map(nom => (
+                                <Table.Td key={nom} style={{ fontSize: '11px', padding: '6px 4px', whiteSpace: 'nowrap' }}>
+                                  <Text size="xs" ta="center">{mesuresMap.get(nom) || '-'}</Text>
+                                </Table.Td>
+                              ))}
+                              <Table.Td style={{ padding: '6px 4px' }}>
+                                <Group gap={4} justify="center" wrap="nowrap">
+                                  <Tooltip label="Voir les mesures">
+                                    <ActionIcon variant="subtle" color="blue" size="sm" onClick={() => handleVoir(client)}>
+                                      <IconEye size={14} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Modifier">
+                                    <ActionIcon variant="subtle" color="orange" size="sm" onClick={() => handleModifier(client)}>
+                                      <IconEdit size={14} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Supprimer">
+                                    <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleSupprimer(client.telephone_id)}>
+                                      <IconTrash size={14} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              </Table.Td>
+                            </Table.Tr>
+                          );
+                        })}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
 
-                {/* PAGINATION */}
-                {totalPages > 1 && (
-                  <Group justify="center" mt="md">
-                    <Pagination
-                      value={currentPage}
-                      onChange={setCurrentPage}
-                      total={totalPages}
-                      color="blue"
-                    />
-                  </Group>
-                )}
-              </>
-            )}
-          </Stack>
-        </Card>
+                  {totalPages > 1 && (
+                    <Group justify="center" mt="md">
+                      <Pagination value={currentPage} onChange={setCurrentPage} total={totalPages} color="#1b365d" />
+                    </Group>
+                  )}
+                </>
+              )}
+            </Stack>
+          </Card>
 
-        {/* MODAL DE CONFIRMATION SUPPRESSION */}
-        <Modal
-          opened={deleteId !== null}
-          onClose={() => setDeleteId(null)}
-          title="Confirmation"
-          centered
-        >
-          <Stack>
-            <Text>Êtes-vous sûr de vouloir supprimer ce client ?</Text>
-            <Text size="sm" c="dimmed">Cette action est irréversible.</Text>
-            <Group justify="flex-end" mt="md">
-              <Button variant="light" onClick={() => setDeleteId(null)}>
-                Annuler
-              </Button>
-              <Button
-                color="red"
-                onClick={() => deleteId && deleteMutation.mutate(deleteId)}
-                loading={deleteMutation.isPending}
-              >
-                Supprimer
-              </Button>
-            </Group>
-          </Stack>
-        </Modal>
+          {/* Modals */}
+          <Modal opened={deleteId !== null} onClose={() => setDeleteId(null)} title="Confirmation" centered radius="md">
+            <Stack>
+              <Text>Êtes-vous sûr de vouloir supprimer ce client ?</Text>
+              <Text size="sm" c="dimmed">Cette action est irréversible.</Text>
+              <Group justify="flex-end" mt="md">
+                <Button variant="light" onClick={() => setDeleteId(null)}>Annuler</Button>
+                <Button color="red" onClick={() => deleteId && deleteMutation.mutate(deleteId)} loading={deleteMutation.isPending}>Supprimer</Button>
+              </Group>
+            </Stack>
+          </Modal>
 
-        {/* MODAL DES MESURES */}
-        {showModal && selectedClient && (
-          <ModalMesures
-            client={selectedClient}
-            mesures={selectedClient.mesures}
-            onClose={() => setShowModal(false)}
-          />
-        )}
+          {showModal && selectedClient && (
+            <ModalMesures client={selectedClient} mesures={selectedClient.mesures} onClose={() => setShowModal(false)} />
+          )}
 
-        {/* MODAL INSTRUCTIONS */}
-        <Modal
-          opened={infoModalOpen}
-          onClose={() => setInfoModalOpen(false)}
-          title="📋 Instructions"
-          size="md"
-          centered
-          styles={{
-            header: {
-              backgroundColor: '#1b365d',
-              padding: '16px 20px',
-            },
-            title: {
-              color: 'white',
-              fontWeight: 600,
-            },
-            body: {
-              padding: '20px',
-            },
-          }}
-        >
-          <Stack gap="md">
-            <Text size="sm">1. Renseignez les informations personnelles du client</Text>
-            <Text size="sm">2. Ajoutez les mesures du client dans l'onglet dédié</Text>
-            <Text size="sm">3. Les recommandations sont optionnelles mais utiles pour le suivi</Text>
-            <Text size="sm">4. Exportez la liste au format Excel, PDF ou Word selon vos besoins</Text>
-            <Text size="sm">5. Utilisez la recherche pour filtrer rapidement les clients</Text>
-            <Text size="sm">6. Cliquez sur l'icône 👁️ pour voir les mesures détaillées</Text>
-            <Divider />
-            <Text size="xs" c="dimmed" ta="center">
-              Version 1.0.0 - Gestion Couture
-            </Text>
-          </Stack>
-        </Modal>
-      </Stack>
+          <Modal opened={infoModalOpen} onClose={() => setInfoModalOpen(false)} title="📋 Instructions" size="md" centered radius="md">
+            <Stack gap="md">
+              <Text size="sm">1️⃣ Renseignez les informations personnelles du client</Text>
+              <Text size="sm">2️⃣ Ajoutez les mesures du client dans l'onglet dédié</Text>
+              <Text size="sm">3️⃣ Les observations sont optionnelles mais utiles pour le suivi</Text>
+              <Text size="sm">4️⃣ Exportez la liste au format Excel, PDF ou Word selon vos besoins</Text>
+              <Text size="sm">5️⃣ Utilisez la recherche pour filtrer rapidement les clients</Text>
+              <Text size="sm">6️⃣ Cliquez sur l'icône 👁️ pour voir les mesures détaillées</Text>
+              <Divider />
+              <Text size="xs" c="dimmed" ta="center">Version 1.0.0 - Gestion Couture</Text>
+            </Stack>
+          </Modal>
+        </Stack>
+      </Container>
     </Box>
   );
 }

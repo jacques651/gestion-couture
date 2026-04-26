@@ -1,6 +1,6 @@
-// useFinance.ts (VERSION PRO OPTIMISÉE + JOURNAL)
+// src/hooks/useFinance.ts (VERSION ADAPTÉE À LA NOUVELLE ARCHITECTURE)
 import { useEffect, useState } from "react";
-import { dbInterface, selectSafe } from "../database/db";
+import { getDb } from "../database/db";
 
 export interface LigneJournal {
   date: string;
@@ -42,42 +42,43 @@ export const useFinance = () => {
 
   const fetchAll = async () => {
     setLoading(true);
+    const db = await getDb();
 
     try {
-      // ================= REQUETES BRUTES =================
-      const ventes = await dbInterface.select<any>(`SELECT * FROM ventes`);
+      // ================= REQUÊTES ADAPTÉES =================
+      // Ventes (table unique)
+      const ventes = await db.select<any[]>(`SELECT * FROM ventes ORDER BY date_vente`);
 
-      const paiements = await dbInterface.select<any>(`
-        SELECT p.*, c.nom_prenom as client_nom
-        FROM paiements_commandes p
-        LEFT JOIN commandes cmd ON p.commande_id = cmd.id
-        LEFT JOIN clients c ON cmd.client_id = c.telephone_id
-      `);
+      // Dépenses
+      const depenses = await db.select<any[]>(`SELECT * FROM depenses ORDER BY date_depense`);
 
-      const depenses = await dbInterface.select<any>(`SELECT * FROM depenses`);
-
-      const salaires = await dbInterface.select<any>(`
+      // Salaires
+      const salaires = await db.select<any[]>(`
         SELECT s.*, e.nom_prenom as employe_nom
         FROM salaires s
         LEFT JOIN employes e ON s.employe_id = e.id
+        ORDER BY s.date_paiement
       `);
 
-      // ================= JOURNAL =================
+      // ================= JOURNAL DE CAISSE =================
       const mouvements: LigneJournal[] = [
+        // Entrées (ventes)
         ...ventes.map(v => ({
           date: v.date_vente,
-          description: `Vente - ${v.designation || 'Article'}`,
+          description: `Vente - ${v.designation || 'Article'}${v.taille ? ` (${v.taille})` : ''}`,
           entree: v.total || 0,
           sortie: 0,
           solde: 0
         })),
-        ...paiements.map(p => ({
-          date: p.date_paiement,
-          description: `Paiement - ${p.client_nom || 'Client'}`,
-          entree: p.montant || 0,
+        // Paiements complémentaires (si montant_regle > 0)
+        ...ventes.filter(v => v.montant_regle > 0).map(v => ({
+          date: v.date_vente,
+          description: `Paiement - ${v.client_nom || 'Client'}`,
+          entree: v.montant_regle || 0,
           sortie: 0,
           solde: 0
         })),
+        // Sorties (dépenses)
         ...depenses.map(d => ({
           date: d.date_depense,
           description: `Dépense - ${d.designation || 'Divers'}`,
@@ -85,6 +86,7 @@ export const useFinance = () => {
           sortie: d.montant || 0,
           solde: 0
         })),
+        // Sorties (salaires)
         ...salaires.map(s => ({
           date: s.date_paiement,
           description: `Salaire - ${s.employe_nom || 'Employé'}`,
@@ -94,45 +96,37 @@ export const useFinance = () => {
         }))
       ];
 
+      // Trier par date
       mouvements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+      // Calculer le solde cumulé
       let cumul = 0;
       const journalFinal = mouvements.map(m => {
         cumul += m.entree - m.sortie;
         return { ...m, solde: cumul };
       });
-
       setJournal(journalFinal);
 
-      // ================= STATS OPTIMISÉES =================
-      const commandesAgg = await selectSafe<{ total: number }>(
-        `SELECT SUM(total) as total FROM commandes WHERE est_supprime = 0`
-      );
-
-      const ventesAgg = await selectSafe<{ total: number }>(
-        `SELECT SUM(total) as total FROM ventes`
-      );
-
-      const paiementsAgg = await selectSafe<{ total: number }>(
-        `SELECT SUM(montant) as total FROM paiements_commandes`
-      );
-
-      const depensesAgg = await selectSafe<{ total: number }>(
-        `SELECT SUM(montant) as total FROM depenses`
-      );
-
-      const salairesAgg = await selectSafe<{ total: number }>(
-        `SELECT SUM(montant_net) as total FROM salaires`
-      );
-
-      const ca = (commandesAgg[0]?.total || 0) + (ventesAgg[0]?.total || 0);
-      const encaissements = (paiementsAgg[0]?.total || 0) + (ventesAgg[0]?.total || 0);
-
-      const totalDepenses = depensesAgg[0]?.total || 0;
-      const totalSalaires = salairesAgg[0]?.total || 0;
+      // ================= STATISTIQUES =================
+      // Chiffre d'affaires (total des ventes)
+      const ca = ventes.reduce((sum, v) => sum + (v.total || 0), 0);
+      
+      // Encaissements (montants réglés)
+      const encaissements = ventes.reduce((sum, v) => sum + (v.montant_regle || 0), 0);
+      
+      // Total dépenses
+      const totalDepenses = depenses.reduce((sum, d) => sum + (d.montant || 0), 0);
+      
+      // Total salaires
+      const totalSalaires = salaires.reduce((sum, s) => sum + (s.montant_net || 0), 0);
+      
+      // Dépenses globales
       const depensesGlobales = totalDepenses + totalSalaires;
-
+      
+      // Reste à recouvrer
       const reste = ca - encaissements;
+      
+      // Taux de recouvrement
       const taux = ca > 0 ? (encaissements / ca) * 100 : 0;
 
       setStats({
@@ -148,11 +142,11 @@ export const useFinance = () => {
         tauxRecouvrement: taux
       });
 
-    } catch (e) {
-      console.error("❌ ERREUR FINANCE:", e);
+    } catch (error) {
+      console.error("❌ ERREUR FINANCE:", error);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {

@@ -1,14 +1,16 @@
+// src/App.tsx
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, BrowserRouter, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, BrowserRouter, useNavigate } from 'react-router-dom';
 import { AppShell, Loader, Center, MantineProvider, Button } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from './theme';
 import Navbar from './components/Navbar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import Database from '@tauri-apps/plugin-sql';
+import { initDatabase } from './database/db'; 
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import AssistantIA from './components/AssistantIA';
 
 // ==================== AUTH ====================
 const Login = lazy(() => import('./components/auth/Login'));
@@ -16,18 +18,17 @@ const Login = lazy(() => import('./components/auth/Login'));
 // ==================== DASHBOARD ====================
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
 
-// ==================== GESTION COMMERCIALE ====================
+// ==================== CLIENTS ====================
 const ListeClientsAvecMesures = lazy(() => import('./components/clients/ListeClientsAvecMesures'));
-const ListeCommandes = lazy(() => import('./components/commandes/ListeCommandes'));
-const ListePaiements = lazy(() => import('./components/paiements/ListePaiements'));
-const FacturesReçus = lazy(() => import('./components/factures/FacturesReçus'));
 
-// ==================== STOCK & PRODUITS ====================
-const StockGlobalPage = lazy(() => import('./components/stock/StockGlobalPage'));
+// ==================== STOCK ====================
 const ListeMatieres = lazy(() => import('./components/matieres/ListeMatieres'));
+const ListeGammesTenues = lazy(() => import('./components/tenues/ListeGammesTenues'));
+const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
+
+// ==================== VENTES (UNIFIÉ) ====================
+const FormulaireVente = lazy(() => import('./components/ventes/FormulaireVente'));
 const ListeVentes = lazy(() => import('./components/ventes/ListeVentes'));
-const ListeEntreesStock = lazy(() => import('./components/stock/ListeEntreesStock'));
-const ListeSortiesStock = lazy(() => import('./components/stock/ListeSortiesStock'));
 
 // ==================== FINANCES ====================
 const BilanFinancier = lazy(() => import('./components/finances/BilanFinancier'));
@@ -35,7 +36,6 @@ const JournalCaisse = lazy(() => import('./components/finances/JournalCaisse'));
 const ListeDepenses = lazy(() => import('./components/depenses/ListeDepenses'));
 const GestionSalaires = lazy(() => import('./components/finances/GestionSalaires'));
 const HistoriqueSalaires = lazy(() => import('./components/finances/HistoriqueSalaires'));
-const BulletinSalaire = lazy(() => import('./components/finances/BulletinSalaire'));
 
 // ==================== RESSOURCES HUMAINES ====================
 const ListeEmployes = lazy(() => import('./components/employes/ListeEmployes'));
@@ -50,15 +50,15 @@ const ConfigurationMesures = lazy(() => import('./components/parametres/Configur
 const ParametresAtelier = lazy(() => import('./components/parametres/ParametresAtelier'));
 const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtilisateurs'));
 
-// ==================== AUTRES ====================
-const ListeSortiesTenues = lazy(() => import('./components/tenues/ListeSortiesTenues'));
+// ==================== OUTILS ====================
+const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
+const ConfigurationReseau = lazy(() => import('./components/ConfigurationReseau'));
 
-type PageKey = 
-  | 'dashboard' | 'clients' | 'commandes' | 'paiements' | 'factures'
-  | 'stock_global' | 'matieres' | 'ventes' | 'depenses' | 'salaires'
-  | 'journal_caisse' | 'bilan' | 'utilisateurs' | 'mesures' | 'parametres'
-  | 'employes' | 'prestations_types' | 'prestations_realisees' | 'emprunts' | 'sorties_tenues'
-  | 'historique_salaires';  // ✅
+// ==================== SUPPORT & AIDE ====================
+const SupportTechnique = lazy(() => import('./components/support/SupportTechnique'));
+const ExportSupport = lazy(() => import('./components/support/ExportSupport'));
+const GuideUtilisation = lazy(() => import('./components/support/GuideUtilisation'));
+
 // ==================== COMPOSANTS ====================
 const LoadingFallback = () => (
   <Center style={{ height: '100vh' }}>
@@ -85,32 +85,22 @@ function RouteGuard({ children, roles }: { children: React.ReactNode; roles?: st
   return <>{children}</>;
 }
 
-function BulletinPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  if (!id) return <LoadingFallback />;
-  return <BulletinSalaire employeId={Number(id)} onClose={() => navigate('/salaires')} />;
-}
-
 // ==================== APP AUTHENTIFIÉE ====================
 function AuthenticatedApp() {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
+  // Initialisation de la base de données
   useEffect(() => {
-    const initSqlite = async () => {
+    const init = async () => {
       try {
-        const db = await Database.load("sqlite:gestion-couture.db");
-        await db.execute(`CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL, telephone TEXT, adresse TEXT, date_creation DATETIME DEFAULT CURRENT_TIMESTAMP, est_supprime INTEGER DEFAULT 0);`);
-        await db.execute(`CREATE TABLE IF NOT EXISTS matieres (id INTEGER PRIMARY KEY AUTOINCREMENT, designation TEXT NOT NULL, unite TEXT, est_supprime INTEGER DEFAULT 0);`);
-        await db.execute(`CREATE TABLE IF NOT EXISTS entrees_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, matiere_id INTEGER, quantite REAL, cout_unitaire REAL, date DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(matiere_id) REFERENCES matieres(id));`);
-        await db.execute(`CREATE TABLE IF NOT EXISTS sorties_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, matiere_id INTEGER, quantite REAL, date DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(matiere_id) REFERENCES matieres(id));`);
-        console.log("✅ SQLite Initialisé");
+        await initDatabase();
+        console.log('✅ Base de données initialisée');
       } catch (error) {
-        console.error("❌ Erreur SQLite:", error);
+        console.error('❌ Erreur initialisation base:', error);
       }
     };
-    initSqlite();
+    init();
   }, []);
 
   const handleLogout = () => {
@@ -120,88 +110,204 @@ function AuthenticatedApp() {
     }
   };
 
-  const handleSetPage = (page: PageKey) => {
-  const routeMap: Record<PageKey, string> = {
-    dashboard: '/',
-    clients: '/clients',
-    commandes: '/commandes',
-    paiements: '/paiements',
-    factures: '/factures',
-    stock_global: '/stock',
-    matieres: '/matieres',
-    ventes: '/ventes',
-    depenses: '/depenses',
-    salaires: '/salaires',
-    journal_caisse: '/journal',
-    bilan: '/bilan',
-    utilisateurs: '/utilisateurs',
-    mesures: '/mesures',
-    parametres: '/parametres',
-    employes: '/employes',
-    prestations_types: '/prestations-types',
-    prestations_realisees: '/prestations-realisees',
-    emprunts: '/emprunts',
-    sorties_tenues: '/sorties-tenues',
-    historique_salaires: ''
+  const handleSetPage = (page: string) => {
+    const routeMap: Record<string, string> = {
+      dashboard: '/',
+      clients: '/clients',
+      matieres: '/matieres',
+      gammes_tenues: '/gammes-tenues',
+      mouvements_stock: '/mouvements-stock',
+      nouvelle_vente: '/ventes/nouvelle',
+      ventes: '/ventes',
+      bilan: '/bilan',
+      journal: '/journal',
+      depenses: '/depenses',
+      salaires: '/salaires',
+      HistoriqueSalaires: '/historiques-salaires',
+      employes: '/employes',
+      emprunts: '/emprunts',
+      prestations_realisees: '/prestations-realisees',
+      prestations_types: '/prestations-types',
+      mesures: '/mesures',
+      utilisateurs: '/utilisateurs',
+      parametres: '/parametres',
+      import_clients: '/import-clients',
+      config_reseau: '/config-reseau',
+      support: '/support',
+      export_support: '/export-support',
+      aide: '/aide'
+    };
+    navigate(routeMap[page] || '/');
   };
-  navigate(routeMap[page] || '/');
-};
 
   if (loading) return <LoadingFallback />;
   if (!isAuthenticated) return <Login />;
 
   return (
-    <AppShell padding="md" navbar={{ width: 280, breakpoint: 'sm' }} styles={{ main: { height: '100%', overflow: 'auto', backgroundColor: '#f5f7fa' } }}>
+    <AppShell 
+      padding="md" 
+      navbar={{ width: 280, breakpoint: 'sm' }} 
+      styles={{ main: { height: '100%', overflow: 'auto', backgroundColor: '#f5f7fa' } }}
+    >
       <AppShell.Navbar>
-        <Navbar userRole={user?.role} userName={user?.nom} onLogout={handleLogout} />
+        <Navbar userRole={user?.role} userName={user?.nom} onLogout={handleLogout} onNavigate={handleSetPage} />
       </AppShell.Navbar>
       <AppShell.Main>
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             {/* DASHBOARD */}
-            <Route path="/" element={<RouteGuard roles={['admin', 'gestionnaire']}><Dashboard setPage={handleSetPage} /></RouteGuard>} />
+            <Route path="/" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <Dashboard setPage={handleSetPage} />
+              </RouteGuard>
+            } />
 
-            {/* GESTION COMMERCIALE */}
-            <Route path="/clients" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeClientsAvecMesures /></RouteGuard>} />
-            <Route path="/commandes" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeCommandes /></RouteGuard>} />
-            <Route path="/paiements" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListePaiements /></RouteGuard>} />
-            <Route path="/factures" element={<RouteGuard roles={['admin', 'gestionnaire']}><FacturesReçus /></RouteGuard>} />
+            {/* CLIENTS */}
+            <Route path="/clients" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <ListeClientsAvecMesures />
+              </RouteGuard>
+            } />
 
-            {/* STOCK & PRODUITS */}
-            <Route path="/stock" element={<RouteGuard roles={['admin', 'gestionnaire']}><StockGlobalPage /></RouteGuard>} />
-            <Route path="/matieres" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeMatieres /></RouteGuard>} />
-            <Route path="/ventes" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeVentes /></RouteGuard>} />
-            <Route path="/entrees-stock" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeEntreesStock /></RouteGuard>} />
-            <Route path="/sorties-stock" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeSortiesStock /></RouteGuard>} />
+            {/* STOCK */}
+            <Route path="/matieres" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <ListeMatieres />
+              </RouteGuard>
+            } />
+            <Route path="/gammes-tenues" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <ListeGammesTenues />
+              </RouteGuard>
+            } />
+            <Route path="/mouvements-stock" element={
+              <RouteGuard roles={['admin']}>
+                <MouvementsStock />
+              </RouteGuard>
+            } />
+
+            {/* VENTES (UNIFIÉ) */}
+            <Route path="/ventes/nouvelle" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <FormulaireVente onSuccess={() => navigate('/ventes')} onCancel={() => navigate('/ventes')} />
+              </RouteGuard>
+            } />
+            <Route path="/ventes" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <ListeVentes />
+              </RouteGuard>
+            } />
 
             {/* FINANCES */}
-            <Route path="/bilan" element={<RouteGuard roles={['admin']}><BilanFinancier /></RouteGuard>} />
-            <Route path="/journal" element={<RouteGuard roles={['admin']}><JournalCaisse /></RouteGuard>} />
-            <Route path="/depenses" element={<RouteGuard roles={['admin']}><ListeDepenses /></RouteGuard>} />
-            <Route path="/salaires" element={<RouteGuard roles={['admin']}><GestionSalaires /></RouteGuard>} />
-            <Route path="/historique-salaires" element={<RouteGuard roles={['admin']}><HistoriqueSalaires /></RouteGuard>} />
-            
+            <Route path="/bilan" element={
+              <RouteGuard roles={['admin', 'caissier']}>
+                <BilanFinancier />
+              </RouteGuard>
+            } />
+            <Route path="/journal" element={
+              <RouteGuard roles={['admin', 'caissier']}>
+                <JournalCaisse />
+              </RouteGuard>
+            } />
+            <Route path="/depenses" element={
+              <RouteGuard roles={['admin']}>
+                <ListeDepenses />
+              </RouteGuard>
+            } />
+            <Route path="/salaires" element={
+              <RouteGuard roles={['admin']}>
+                <GestionSalaires />
+              </RouteGuard>
+            } />
+            <Route path="/historiques-salaires" element={
+              <RouteGuard roles={['admin']}>
+                <HistoriqueSalaires />
+              </RouteGuard>
+            } />
+
             {/* RESSOURCES HUMAINES */}
-            <Route path="/employes" element={<RouteGuard roles={['admin']}><ListeEmployes /></RouteGuard>} />
-            <Route path="/emprunts" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeEmprunts /></RouteGuard>} />
-            <Route path="/prestations-realisees" element={<RouteGuard roles={['admin']}><ListePrestationsRealisees /></RouteGuard>} />
+            <Route path="/employes" element={
+              <RouteGuard roles={['admin']}>
+                <ListeEmployes />
+              </RouteGuard>
+            } />
+            <Route path="/emprunts" element={
+              <RouteGuard roles={['admin']}>
+                <ListeEmprunts />
+              </RouteGuard>
+            } />
+            <Route path="/prestations-realisees" element={
+              <RouteGuard roles={['admin']}>
+                <ListePrestationsRealisees />
+              </RouteGuard>
+            } />
 
             {/* RÉFÉRENTIELS */}
-            <Route path="/prestations-types" element={<RouteGuard roles={['admin']}><ListeTypesPrestations /></RouteGuard>} />
-            <Route path="/mesures" element={<RouteGuard roles={['admin']}><ConfigurationMesures /></RouteGuard>} />
+            <Route path="/prestations-types" element={
+              <RouteGuard roles={['admin']}>
+                <ListeTypesPrestations />
+              </RouteGuard>
+            } />
+            <Route path="/mesures" element={
+              <RouteGuard roles={['admin']}>
+                <ConfigurationMesures />
+              </RouteGuard>
+            } />
 
             {/* PARAMÈTRES */}
-            <Route path="/utilisateurs" element={<RouteGuard roles={['admin']}><ListeUtilisateurs /></RouteGuard>} />
-            <Route path="/parametres" element={<RouteGuard roles={['admin']}><ParametresAtelier /></RouteGuard>} />
+            <Route path="/utilisateurs" element={
+              <RouteGuard roles={['admin']}>
+                <ListeUtilisateurs />
+              </RouteGuard>
+            } />
+            <Route path="/parametres" element={
+              <RouteGuard roles={['admin']}>
+                <ParametresAtelier />
+              </RouteGuard>
+            } />
 
-            {/* AUTRES */}
-            <Route path="/sorties-tenues" element={<RouteGuard roles={['admin', 'gestionnaire']}><ListeSortiesTenues onClose={() => navigate('/')} onSuccess={() => {}} /></RouteGuard>} />
-            <Route path="/bulletin/:id" element={<BulletinPage />} />
+            {/* OUTILS */}
+            <Route path="/import-clients" element={
+              <RouteGuard roles={['admin']}>
+                <ImportClientsExcel />
+              </RouteGuard>
+            } />
+            <Route path="/config-reseau" element={
+              <RouteGuard roles={['admin']}>
+                <ConfigurationReseau />
+              </RouteGuard>
+            } />
+
+            {/* SUPPORT & AIDE */}
+            <Route path="/support" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <SupportTechnique onNavigate={handleSetPage} />
+              </RouteGuard>
+            } />
+            <Route path="/export-support" element={
+              <RouteGuard roles={['admin']}>
+                <ExportSupport />
+              </RouteGuard>
+            } />
+            <Route path="/aide" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <GuideUtilisation />
+              </RouteGuard>
+            } />
 
             {/* 404 */}
-            <Route path="*" element={<Center style={{ height: '50vh' }}><div style={{ textAlign: 'center' }}><h2>🔍 404 - Page non trouvée</h2><p>La page que vous recherchez n'existe pas.</p><Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button></div></Center>} />
+            <Route path="*" element={
+              <Center style={{ height: '50vh' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <h2>🔍 404 - Page non trouvée</h2>
+                  <p>La page que vous recherchez n'existe pas.</p>
+                  <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
+                </div>
+              </Center>
+            } />
           </Routes>
         </Suspense>
+        <AssistantIA />
       </AppShell.Main>
     </AppShell>
   );
@@ -209,7 +315,13 @@ function AuthenticatedApp() {
 
 // ==================== QUERY CLIENT ====================
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: { 
+    queries: { 
+      staleTime: 1000 * 60 * 5, 
+      retry: 1, 
+      refetchOnWindowFocus: false 
+    } 
+  },
 });
 
 // ==================== APP PRINCIPALE ====================

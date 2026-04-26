@@ -1,3 +1,4 @@
+// src/components/matieres/ListeMatieres.tsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Stack,
@@ -33,13 +34,19 @@ import {
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
 import FormulaireMatiere from './FormulaireMatiere';
+import { notifications } from '@mantine/notifications';
 
 interface Matiere {
   id: number;
+  code_matiere: string;
   designation: string;
-  categorie: string;
+  categorie_nom: string;  // Nom de la catégorie (via jointure)
+  categorie_id: number | null;  // ID de la catégorie
   unite: string;
+  prix_achat: number;
+  stock_actuel: number;
   seuil_alerte: number;
+  reference_fournisseur?: string;
   est_supprime: number;
 }
 
@@ -58,12 +65,33 @@ const ListeMatieres: React.FC = () => {
     setLoading(true);
     const db = await getDb();
     try {
-      const result = await db.select<Matiere[]>(
-        "SELECT * FROM matieres WHERE est_supprime = 0 ORDER BY designation"
-      );
+      // Requête avec jointure pour récupérer le nom de la catégorie
+      const result = await db.select<any[]>(`
+        SELECT 
+          m.id,
+          m.code_matiere,
+          m.designation,
+          m.categorie_id,
+          c.nom_categorie as categorie_nom,
+          m.unite,
+          m.prix_achat,
+          m.stock_actuel,
+          m.seuil_alerte,
+          m.reference_fournisseur,
+          m.est_supprime
+        FROM matieres m
+        LEFT JOIN categories_matieres c ON m.categorie_id = c.id
+        WHERE m.est_supprime = 0 
+        ORDER BY m.designation
+      `);
       setMatieres(result);
     } catch (err: any) {
       console.error(err);
+      notifications.show({
+        title: 'Erreur',
+        message: 'Erreur lors du chargement des matières',
+        color: 'red',
+      });
     } finally {
       setLoading(false);
     }
@@ -80,25 +108,12 @@ const ListeMatieres: React.FC = () => {
     setCurrentPage(1);
   };
 
-  const getStockMatiere = async (matiereId: number): Promise<number> => {
-    const db = await getDb();
-    const entrees = await db.select<{ total: number }[]>(
-      "SELECT COALESCE(SUM(quantite), 0) as total FROM entrees_stock WHERE matiere_id = ?",
-      [matiereId]
-    );
-    const sorties = await db.select<{ total: number }[]>(
-      "SELECT COALESCE(SUM(quantite), 0) as total FROM sorties_stock WHERE matiere_id = ?",
-      [matiereId]
-    );
-    return (entrees[0]?.total || 0) - (sorties[0]?.total || 0);
-  };
-
-  const categories = [...new Set(matieres.map(m => m.categorie).filter(Boolean))] as string[];
+  const categories = [...new Set(matieres.map(m => m.categorie_nom).filter(Boolean))] as string[];
 
   const matieresFiltrees = matieres.filter(m => {
     const matchRecherche = m.designation.toLowerCase().includes(recherche.toLowerCase()) ||
-      (m.categorie && m.categorie.toLowerCase().includes(recherche.toLowerCase()));
-    const matchCategorie = !filtreCategorie || m.categorie === filtreCategorie;
+      (m.code_matiere && m.code_matiere.toLowerCase().includes(recherche.toLowerCase()));
+    const matchCategorie = !filtreCategorie || m.categorie_nom === filtreCategorie;
     return matchRecherche && matchCategorie;
   });
 
@@ -113,13 +128,28 @@ const ListeMatieres: React.FC = () => {
     ...categories.map(cat => ({ value: cat, label: cat }))
   ];
 
-  // StockCell component
-  const StockCell = ({ matiereId, seuil, unite }: { matiereId: number; seuil: number; unite: string }) => {
-    const [stock, setStock] = useState<number | null>(null);
-    useEffect(() => {
-      getStockMatiere(matiereId).then(setStock);
-    }, [matiereId]);
-    if (stock === null) return <Text size="sm" c="dimmed">...</Text>;
+  const handleDelete = async (id: number, designation: string) => {
+    if (confirm(`Supprimer la matière "${designation}" ?`)) {
+      const db = await getDb();
+      try {
+        await db.execute(`UPDATE matieres SET est_supprime = 1 WHERE id = ?`, [id]);
+        notifications.show({
+          title: 'Succès',
+          message: 'Matière supprimée',
+          color: 'green',
+        });
+        chargerMatieres();
+      } catch (error) {
+        notifications.show({
+          title: 'Erreur',
+          message: 'Erreur lors de la suppression',
+          color: 'red',
+        });
+      }
+    }
+  };
+
+  const StockCell = ({ stock, seuil, unite }: { stock: number; seuil: number; unite: string }) => {
     const enAlerte = stock <= seuil;
     return (
       <Group gap={4}>
@@ -166,10 +196,10 @@ const ListeMatieres: React.FC = () => {
             <Stack gap={4}>
               <Group gap="xs">
                 <IconPackage size={24} color="white" />
-                <Title order={2} c="white">Matières / Catalogue</Title>
+                <Title order={2} c="white">Matières premières</Title>
               </Group>
               <Text size="sm" c="gray.3">
-                Gestion des matières premières
+                Gestion des matières premières (tissus, fournitures, etc.)
               </Text>
             </Stack>
             <Group gap="md">
@@ -192,43 +222,33 @@ const ListeMatieres: React.FC = () => {
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
           <Card withBorder radius="md" p="md">
             <Group justify="space-between" mb="xs">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Total matières
-              </Text>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Total matières</Text>
               <ThemeIcon size={30} radius="md" color="blue" variant="light">
                 <IconPackage size={18} />
               </ThemeIcon>
             </Group>
-            <Text fw={700} size="xl" c="blue">
-              {matieres.length}
-            </Text>
+            <Text fw={700} size="xl" c="blue">{matieres.length}</Text>
           </Card>
 
           <Card withBorder radius="md" p="md" bg="orange.0">
             <Group justify="space-between" mb="xs">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Catégories
-              </Text>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Catégories</Text>
               <ThemeIcon size={30} radius="md" color="orange" variant="light">
                 <IconCategory size={18} />
               </ThemeIcon>
             </Group>
-            <Text fw={700} size="xl" c="orange">
-              {categories.length}
-            </Text>
+            <Text fw={700} size="xl" c="orange">{categories.length}</Text>
           </Card>
 
           <Card withBorder radius="md" p="md" bg="red.0">
             <Group justify="space-between" mb="xs">
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Stock bas
-              </Text>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Alertes stock</Text>
               <ThemeIcon size={30} radius="md" color="red" variant="light">
                 <IconAlertTriangle size={18} />
               </ThemeIcon>
             </Group>
             <Text fw={700} size="xl" c="red">
-              {matieres.filter(m => m.seuil_alerte > 0).length}
+              {matieres.filter(m => m.stock_actuel <= m.seuil_alerte).length}
             </Text>
           </Card>
         </SimpleGrid>
@@ -238,7 +258,7 @@ const ListeMatieres: React.FC = () => {
           <Group justify="space-between" wrap="wrap" gap="sm">
             <Group>
               <TextInput
-                placeholder="Rechercher par désignation ou catégorie..."
+                placeholder="Rechercher par code ou désignation..."
                 leftSection={<IconSearch size={16} />}
                 value={recherche}
                 onChange={(e) => {
@@ -290,39 +310,49 @@ const ListeMatieres: React.FC = () => {
               <Table striped highlightOnHover>
                 <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                   <Table.Tr>
+                    <Table.Th style={{ color: 'white' }}>Code</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Désignation</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Catégorie</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Unité</Table.Th>
+                    <Table.Th style={{ color: 'white' }}>Prix achat</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Stock</Table.Th>
-                    <Table.Th style={{ color: 'white' }}>Seuil alerte</Table.Th>
                     <Table.Th style={{ color: 'white', textAlign: 'center' }}>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {paginatedData.map((m) => (
                     <Table.Tr key={m.id}>
+                      <Table.Td>
+                        <Badge variant="light" color="gray" size="sm">
+                          {m.code_matiere}
+                        </Badge>
+                      </Table.Td>
                       <Table.Td fw={500}>{m.designation}</Table.Td>
                       <Table.Td>
-                        {m.categorie ? (
-                          <Badge color="gray" variant="light" size="sm">
-                            {m.categorie}
+                        {m.categorie_nom ? (
+                          <Badge color="blue" variant="light" size="sm">
+                            {m.categorie_nom}
                           </Badge>
                         ) : (
                           <Text size="sm" c="dimmed">—</Text>
                         )}
                       </Table.Td>
                       <Table.Td>
-                        <Badge color="blue" variant="light" size="sm">
+                        <Badge color="cyan" variant="light" size="sm">
                           {m.unite}
                         </Badge>
                       </Table.Td>
                       <Table.Td>
-                        <StockCell matiereId={m.id} seuil={m.seuil_alerte} unite={m.unite} />
+                        <Text size="sm" fw={500}>
+                          {m.prix_achat?.toLocaleString()} FCFA
+                        </Text>
                       </Table.Td>
                       <Table.Td>
-                        <Badge color="orange" variant="light" size="sm">
-                          {m.seuil_alerte} {m.unite}
-                        </Badge>
+                        <StockCell 
+                          stock={m.stock_actuel} 
+                          seuil={m.seuil_alerte} 
+                          unite={m.unite} 
+                        />
                       </Table.Td>
                       <Table.Td>
                         <Group gap={6} justify="center">
@@ -344,15 +374,7 @@ const ListeMatieres: React.FC = () => {
                               size="sm"
                               variant="subtle"
                               color="red"
-                              onClick={() => {
-                                if (confirm('Supprimer cette matière ?')) {
-                                  const db = getDb();
-                                  db.then(async (dbInstance) => {
-                                    await dbInstance.execute("UPDATE matieres SET est_supprime = 1 WHERE id = ?", [m.id]);
-                                    chargerMatieres();
-                                  });
-                                }
-                              }}
+                              onClick={() => handleDelete(m.id, m.designation)}
                             >
                               <IconTrash size={16} />
                             </ActionIcon>
@@ -364,7 +386,6 @@ const ListeMatieres: React.FC = () => {
                 </Table.Tbody>
               </Table>
 
-              {/* PAGINATION */}
               {totalPages > 1 && (
                 <Group justify="center" p="md">
                   <Pagination
@@ -403,13 +424,13 @@ const ListeMatieres: React.FC = () => {
         >
           <Stack gap="md">
             <Text size="sm">1. Utilisez le bouton "Nouvelle matière" pour ajouter une matière</Text>
-            <Text size="sm">2. La recherche filtre par désignation ou catégorie</Text>
+            <Text size="sm">2. La recherche filtre par code ou désignation</Text>
             <Text size="sm">3. Le filtre par catégorie permet d'affiner l'affichage</Text>
-            <Text size="sm">4. Le stock est calculé automatiquement (entrées - sorties)</Text>
+            <Text size="sm">4. Le stock est mis à jour automatiquement lors des achats/ventes</Text>
             <Text size="sm">5. Une alerte s'affiche quand le stock est inférieur au seuil</Text>
             <Divider />
             <Text size="xs" c="dimmed" ta="center">
-              Version 1.0.0 - Gestion Couture
+              Version 2.0.0 - Architecture simplifiée
             </Text>
           </Stack>
         </Modal>
