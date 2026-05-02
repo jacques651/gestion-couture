@@ -42,7 +42,7 @@ import FormulaireTypePrestation from './FormulaireTypePrestation';
 interface TypePrestation {
   id: number;
   nom: string;
-  valeur_par_defaut: number;
+  prix_par_defaut: number;
   est_active: number;
 }
 
@@ -62,7 +62,7 @@ const ListeTypesPrestations: React.FC = () => {
     setLoading(true);
     const db = await getDb();
     const result = await db.select<TypePrestation[]>(`
-      SELECT id, nom, valeur_par_defaut, est_active
+      SELECT id, nom, prix_par_defaut, est_active
       FROM types_prestations
       WHERE est_active = 1
       ORDER BY nom
@@ -101,7 +101,7 @@ const ListeTypesPrestations: React.FC = () => {
     currentPage * itemsPerPage
   );
 
-  const totalValeur = typesFiltres.reduce((sum, t) => sum + t.valeur_par_defaut, 0);
+  const totalValeur = typesFiltres.reduce((sum, t) => sum + t.prix_par_defaut, 0);
 
   if (loading) {
     return (
@@ -155,8 +155,8 @@ const ListeTypesPrestations: React.FC = () => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                  <IconLayersOff size={30} color="white" />
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(19, 65, 134, 0.2)' }}>
+                  <IconLayersOff size={30} color="black" />
                 </Avatar>
                 <Box>
                   <Title order={1} c="white" size="h2">Types de prestations</Title>
@@ -294,7 +294,7 @@ const ListeTypesPrestations: React.FC = () => {
                         </Table.Td>
                         <Table.Td ta="right">
                           <Badge color="green" variant="light" size="md">
-                            {t.valeur_par_defaut.toLocaleString()} FCFA
+                            {t.prix_par_defaut.toLocaleString()} FCFA
                           </Badge>
                         </Table.Td>
                         <Table.Td>

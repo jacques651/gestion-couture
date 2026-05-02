@@ -1,150 +1,74 @@
-// src/database/db.ts - Version complète avec toutes les exports
-
+// src/database/db.ts
 import Database from "@tauri-apps/plugin-sql";
 import bcrypt from "bcryptjs";
 
 let dbInstance: Database | null = null;
 
-// ================= FONCTIONS DE GÉNÉRATION DE CODES =================
-
-export const getNextClientCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_client: string }[]>(`
-    SELECT code_client FROM clients 
-    WHERE code_client LIKE 'CL-%' 
-    ORDER BY idClient DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'CL-0001';
-  const lastNumber = parseInt(result[0].code_client.split('-')[1]);
-  return `CL-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextProductCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_produit: string }[]>(`
-    SELECT code_produit FROM products 
-    WHERE code_produit LIKE 'PROD-%' 
-    ORDER BY idProduit DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'PROD-0001';
-  const lastNumber = parseInt(result[0].code_produit.split('-')[1]);
-  return `PROD-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextCommandeCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_commande: string }[]>(`
-    SELECT code_commande FROM commandes 
-    WHERE code_commande LIKE 'CMD-%' 
-    ORDER BY idCommande DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'CMD-0001';
-  const lastNumber = parseInt(result[0].code_commande.split('-')[1]);
-  return `CMD-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextFactureCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_facture: string }[]>(`
-    SELECT code_facture FROM factures 
-    WHERE code_facture LIKE 'FAC-%' 
-    ORDER BY idFacture DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'FAC-0001';
-  const lastNumber = parseInt(result[0].code_facture.split('-')[1]);
-  return `FAC-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextVenteCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_vente: string }[]>(`
-    SELECT code_vente FROM ventes 
-    WHERE code_vente LIKE 'VTE-%' 
-    ORDER BY id DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'VTE-0001';
-  const lastNumber = parseInt(result[0].code_vente.split('-')[1]);
-  return `VTE-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextReglementCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_reglement: string }[]>(`
-    SELECT code_reglement FROM reglements 
-    WHERE code_reglement LIKE 'REG-%' 
-    ORDER BY idReglement DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'REG-0001';
-  const lastNumber = parseInt(result[0].code_reglement.split('-')[1]);
-  return `REG-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextDecompteCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_decompte: string }[]>(`
-    SELECT code_decompte FROM decomptes 
-    WHERE code_decompte LIKE 'DCP-%' 
-    ORDER BY idDecompte DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'DCP-0001';
-  const lastNumber = parseInt(result[0].code_decompte.split('-')[1]);
-  return `DCP-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-export const getNextSortieCode = async (): Promise<string> => {
-  const db = await getDb();
-  const result = await db.select<{ code_sortie: string }[]>(`
-    SELECT code_sortie FROM sorties_stock 
-    WHERE code_sortie LIKE 'SOR-%' 
-    ORDER BY id DESC LIMIT 1
-  `);
-
-  if (result.length === 0) return 'SOR-0001';
-  const lastNumber = parseInt(result[0].code_sortie.split('-')[1]);
-  return `SOR-${(lastNumber + 1).toString().padStart(4, '0')}`;
-};
-
-// ================= FONCTION GETDB =================
-
-export const getDb = async (): Promise<Database> => {
-  if (dbInstance) return dbInstance;
-
-  try {
-    const dbName = 'gestion-couture.db';
-    console.log("📁 Base de données:", dbName);
-
-    dbInstance = await Database.load(`sqlite:${dbName}`);
-    await dbInstance.execute(`PRAGMA foreign_keys = ON`);
-    await dbInstance.execute(`PRAGMA journal_mode = WAL`);
-    await initTables(dbInstance);
-
-    console.log("✅ Base de données initialisée");
-  } catch (error) {
-    console.error("❌ ERREUR INITIALISATION DB:", error);
-    throw error;
-  }
-
-  return dbInstance;
-};
-
 // ================= INTERFACES TYPES =================
 
-export interface ConfigurationAtelier {
+export interface Taille {
   id: number;
-  nom_atelier: string;
-  telephone: string;
-  adresse: string;
-  email: string;
-  nif: string;
-  message_facture: string;
-  logo_base64: string;
+  code_taille: string;
+  libelle: string;
+  ordre: number;
+  categorie?: 'adulte' | 'enfant' | 'universel';
+  description?: string;
+  est_actif: number;
+  created_at?: string;
+}
+
+export interface Couleur {
+  id: number;
+  nom_couleur: string;
+  code_hex: string;
+  code_rgb: string;
+  code_cmyk?: string;
+  description?: string;
+  est_actif: number;
+  created_at?: string;
+}
+
+export interface Texture {
+  id: number;
+  nom_texture: string;
+  description: string;
+  densite?: string;
+  composition?: string;
+  est_actif: number;
+  created_at?: string;
+}
+
+export interface TypeMesure {
+  id: number;
+  nom: string;
+  unite: string;
+  ordre_affichage: number;
+  categorie: 'haut' | 'bas' | 'general' | 'accessoire';
+  est_active: number;
+  created_at?: string;
+}
+
+export interface TypePrestation {
+  id: number;
+  code_prestation: string;
+  nom: string;
+  description: string;
+  prix_par_defaut: number;
+  unite: 'piece' | 'heure' | 'metre';
+  est_active: number;
+  created_at?: string;
+}
+
+export interface ModeleTenue {
+  id: number;
+  code_modele: string;
+  designation: string;
+  description: string;
+  image_url: string;
+  categorie: 'homme' | 'femme' | 'enfant' | 'accessoire';
+  est_actif: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CategorieMatiere {
@@ -152,7 +76,79 @@ export interface CategorieMatiere {
   code_categorie: string;
   nom_categorie: string;
   description: string;
+  couleur_associee?: string;
   est_actif: number;
+  created_at?: string;
+}
+
+export interface ConfigurationAtelier {
+  id: number;
+  nom_atelier: string;
+  telephone: string;
+  email: string;
+  adresse: string;
+  ville: string;
+  pays: string;
+  ifu: string;
+  rccm: string;
+  message_facture_defaut: string;
+  logo_base64: string;
+  devise?: string;
+  updated_at?: string;
+}
+
+export interface Client {
+  telephone_id: string;
+  nom_prenom: string;
+  adresse: string;
+  email: string;
+  date_enregistrement: string;
+  observations: string;
+  est_supprime: number;
+}
+
+export interface Article {
+  id: number;
+  code_article: string;
+  modele_id: number;
+  taille_id: number;
+  couleur_id: number;
+  texture_id: number | null;
+  prix_achat: number | null;
+  prix_vente: number;
+  quantite_stock: number;
+  seuil_alerte: number;
+  emplacement: string | null;
+  code_barre: string | null;
+  notes: string | null;
+  est_disponible: number;
+  est_actif: number;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ArticleComplet {
+  code_barre: string;
+  notes: string;
+  id: number;
+  code_article: string;
+  modele: string;
+  modele_id: number;
+  taille: string;
+  taille_id: number;
+  taille_libelle: string;
+  couleur: string;
+  couleur_id: number;
+  texture: string | null;
+  texture_id: number | null;
+  prix_achat: number | null;
+  prix_vente: number;
+  quantite_stock: number;
+  seuil_alerte: number;
+  emplacement: string | null;
+  est_disponible: number;
+  statut_stock: string;
+  created_at: string;
 }
 
 export interface Matiere {
@@ -168,92 +164,52 @@ export interface Matiere {
   reference_fournisseur?: string;
   emplacement?: string;
   est_supprime: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface Taille {
-  id: number;
-  code_taille: string;
-  libelle: string;
-  ordre: number;
-  est_actif: number;
-}
-
-export interface GammeTenue {
-  id: number;
-  code_tenue: string;
-  designation: string;
-  description?: string;
-  prix_base: number;
-  image_url?: string;
-  est_actif: number;
-}
-
-export interface TenueVariante {
-  id: number;
-  tenue_id: number;
-  taille_id: number;
-  code_variante: string;
-  stock_actuel: number;
-  seuil_alerte: number;
-  prix_vente?: number;
-}
-
-interface Vente {
+export interface Vente {
   id: number;
   code_vente: string;
-  type_vente: 'matiere' | 'tenue' | 'prestation';
+  type_vente: 'commande' | 'pret_a_porter' | 'matiere';
   date_vente: string;
   client_id: string | null;
   client_nom: string | null;
-  mode_paiement: string;
+  mode_paiement: 'Espèces' | 'Orange money' | 'Moov money' | 'Telecel money' | 'Wave' | 'Sank Money' | 'Virement bancaire' | null;
   montant_total: number;
   montant_regle: number;
   montant_restant: number;
-  statut: string;
+  statut: 'EN_ATTENTE' | 'PARTIEL' | 'PAYEE';
   observation: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
 export interface VenteDetail {
   id: number;
   vente_id: number;
-  matiere_id?: number;
-  tenue_variante_id?: number;
+  matiere_id: number | null;
+  article_id: number | null;
   designation: string;
   quantite: number;
   prix_unitaire: number;
   total: number;
-  taille_libelle?: string;
-}
-
-export interface Client {
-  id: number;
-  code_client: string;
-  nom: string;
-  prenom: string;
-  telephone: string;
-  email: string;
-  adresse: string;
-  ville: string;
-  est_actif: number;
-  created_at: string;
+  taille_libelle: string | null;
 }
 
 export interface Employe {
   id: number;
   nom_prenom: string;
   telephone: string;
+  personne_a_prevenir: string;
+  lieu_residence: string;
+  date_embauche: string;
   type_remuneration: 'fixe' | 'prestation';
   salaire_base: number;
   est_actif: number;
-}
-
-export interface Salaire {
-  id: number;
-  employe_id: number;
-  montant_net: number;
-  date_paiement: string;
-  annule: number;
+  est_supprime: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Depense {
@@ -261,389 +217,124 @@ export interface Depense {
   designation: string;
   montant: number;
   categorie?: string;
+  responsable?: string;
   date_depense: string;
   observation?: string;
 }
 
-// ==============================
-// CONFIGURATION ATELIER
-// ==============================
+// ================= FONCTIONS DE GÉNÉRATION DE CODES =================
 
-export const getConfigurationAtelier = async (): Promise<ConfigurationAtelier> => {
-  try {
-    const db = await getDb();
-    const res = await db.select<ConfigurationAtelier[]>(
-      "SELECT * FROM configuration_atelier WHERE id = 1"
-    );
-
-    if (res && res.length > 0 && res[0]) {
-      return res[0];
-    }
-
-    const defaultConfig: ConfigurationAtelier = {
-      id: 1,
-      nom_atelier: '',
-      telephone: '',
-      adresse: '',
-      email: '',
-      nif: '',
-      message_facture: '',
-      logo_base64: ''
-    };
-
-    await saveConfigurationAtelier(defaultConfig);
-    return defaultConfig;
-
-  } catch (error) {
-    console.error("Erreur getConfigurationAtelier:", error);
-    return {
-      id: 1,
-      nom_atelier: '',
-      telephone: '',
-      adresse: '',
-      email: '',
-      nif: '',
-      message_facture: '',
-      logo_base64: ''
-    };
-  }
-};
-
-export const saveConfigurationAtelier = async (config: ConfigurationAtelier): Promise<void> => {
+const generateCode = async (table: string, column: string, prefix: string): Promise<string> => {
   const db = await getDb();
-
-  await db.execute(
-    `INSERT OR REPLACE INTO configuration_atelier (
-      id, nom_atelier, telephone, adresse, email, nif, message_facture, logo_base64, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-    [
-      config.id,
-      config.nom_atelier,
-      config.telephone,
-      config.adresse,
-      config.email,
-      config.nif,
-      config.message_facture,
-      config.logo_base64
-    ]
-  );
-};
-
-// ==============================
-// FONCTIONS RÉSEAU
-// ==============================
-
-export const testerConnexionReseau = async (cheminReseau: string): Promise<{ success: boolean; message: string }> => {
-  try {
-    let cleanPath = cheminReseau.replace(/\\/g, '/');
-    cleanPath = cleanPath.replace(/^file:\/\/\//, '');
-    
-    console.log("Test connexion avec:", cleanPath);
-    
-    const testDb = await Database.load(cleanPath);
-    await testDb.execute("SELECT 1");
-    await testDb.close();
-    return { success: true, message: 'Connexion réussie ! La base est accessible.' };
-  } catch (error: any) {
-    console.error("Erreur test connexion:", error);
-    return { 
-      success: false, 
-      message: `Erreur : ${error?.message || 'Base inaccessible. Vérifiez le chemin et les permissions.'}` 
-    };
-  }
-};
-
-export const configurerBaseReseau = async (cheminReseau: string) => {
-  let cleanPath = cheminReseau.replace(/\\/g, '/');
-  cleanPath = cleanPath.replace(/^file:\/\/\//, '');
-  
-  localStorage.setItem('use_network_db', 'true');
-  localStorage.setItem('network_db_path', cleanPath);
-  dbInstance = null;
-  return await getDb();
-};
-
-export const utiliserBaseLocale = async () => {
-  localStorage.setItem('use_network_db', 'false');
-  localStorage.removeItem('network_db_path');
-  dbInstance = null;
-  return await getDb();
-};
-
-// ==============================
-// FONCTIONS CLIENTS
-// ==============================
-
-export const getClients = async (): Promise<Client[]> => {
-  const db = await getDb();
-  return db.select('SELECT * FROM clients WHERE est_actif = 1 ORDER BY nom');
-};
-
-export const createClient = async (client: Omit<Client, 'id' | 'created_at' | 'code_client'>): Promise<number> => {
-  const db = await getDb();
-  const code_client = await getNextClientCode();
-  
-  const result = await db.execute(`
-    INSERT INTO clients (code_client, nom, prenom, telephone, email, adresse, ville, est_actif)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-  `, [code_client, client.nom, client.prenom, client.telephone, client.email, client.adresse, client.ville]);
-  
-  return result.lastInsertId as number;
-};
-
-export const updateClient = async (id: number, client: Partial<Client>): Promise<void> => {
-  const db = await getDb();
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  const allowedFields = ['nom', 'prenom', 'telephone', 'email', 'adresse', 'ville', 'est_actif'];
-  
-  Object.entries(client).forEach(([key, value]) => {
-    if (allowedFields.includes(key) && value !== undefined) {
-      fields.push(`${key} = ?`);
-      values.push(value);
-    }
-  });
-  
-  if (fields.length === 0) return;
-  
-  values.push(id);
-  await db.execute(`UPDATE clients SET ${fields.join(', ')} WHERE id = ?`, values);
-};
-
-export const deleteClient = async (id: number): Promise<void> => {
-  const db = await getDb();
-  await db.execute(`UPDATE clients SET est_actif = 0 WHERE id = ?`, [id]);
-};
-
-// ==============================
-// FONCTIONS MATIÈRES
-// ==============================
-
-export const getMatieres = async (): Promise<Matiere[]> => {
-  const db = await getDb();
-  return db.select(`
-    SELECT m.*, c.nom_categorie as categorie_nom 
-    FROM matieres m
-    LEFT JOIN categories_matieres c ON m.categorie_id = c.id
-    WHERE m.est_supprime = 0
-    ORDER BY m.designation
+  const result = await db.select<{ [key: string]: string }[]>(`
+    SELECT ${column} FROM ${table} 
+    WHERE ${column} LIKE '${prefix}-%' 
+    ORDER BY id DESC LIMIT 1
   `);
+
+  if (result.length === 0) return `${prefix}-0001`;
+  const lastNumber = parseInt(result[0][column].split('-')[1]);
+  return `${prefix}-${(lastNumber + 1).toString().padStart(4, '0')}`;
 };
 
-export const getMatiereById = async (id: number): Promise<Matiere | null> => {
-  const db = await getDb();
-  const result = await db.select<Matiere[]>(`
-    SELECT * FROM matieres WHERE id = ? AND est_supprime = 0
-  `, [id]);
-  return result[0] || null;
+export const getNextClientId = async (): Promise<string> => {
+  return generateCode('clients', 'telephone_id', 'CL');
 };
 
-export const createMatiere = async (matiere: Omit<Matiere, 'id' | 'created_at' | 'updated_at'>): Promise<number> => {
-  const db = await getDb();
-  const result = await db.execute(`
-    INSERT INTO matieres (code_matiere, designation, categorie_id, unite, prix_achat, prix_vente, stock_actuel, seuil_alerte, reference_fournisseur, emplacement, est_supprime)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-  `, [matiere.code_matiere, matiere.designation, matiere.categorie_id, matiere.unite, matiere.prix_achat, matiere.prix_vente, matiere.stock_actuel || 0, matiere.seuil_alerte, matiere.reference_fournisseur, matiere.emplacement]);
-  
-  return result.lastInsertId as number;
+export const getNextArticleCode = async (): Promise<string> => {
+  return generateCode('articles', 'code_article', 'ART');
 };
 
-export const updateMatiere = async (id: number, matiere: Partial<Matiere>): Promise<void> => {
-  const db = await getDb();
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  const allowedFields = ['code_matiere', 'designation', 'categorie_id', 'unite', 'prix_achat', 'prix_vente', 'seuil_alerte', 'reference_fournisseur', 'emplacement'];
-  
-  Object.entries(matiere).forEach(([key, value]) => {
-    if (allowedFields.includes(key) && value !== undefined) {
-      fields.push(`${key} = ?`);
-      values.push(value);
-    }
-  });
-  
-  if (fields.length === 0) return;
-  
-  values.push(id);
-  await db.execute(`UPDATE matieres SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, values);
+export const getNextVenteCode = async (): Promise<string> => {
+  return generateCode('ventes', 'code_vente', 'VTE');
 };
 
-export const deleteMatiere = async (id: number): Promise<void> => {
-  const db = await getDb();
-  await db.execute(`UPDATE matieres SET est_supprime = 1 WHERE id = ?`, [id]);
+export const getNextModeleCode = async (): Promise<string> => {
+  return generateCode('modeles_tenues', 'code_modele', 'MOD');
 };
 
-export const updateStockMatiere = async (id: number, quantite: number, type: 'add' | 'remove'): Promise<void> => {
-  const db = await getDb();
-  const operation = type === 'add' ? '+' : '-';
-  await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel ${operation} ? WHERE id = ?`, [quantite, id]);
+export const getNextCategorieCode = async (): Promise<string> => {
+  return generateCode('categories_matieres', 'code_categorie', 'CAT');
 };
 
-// ==============================
-// FONCTIONS GAMMES TENUES
-// ==============================
-
-export const getGammesTenues = async (): Promise<GammeTenue[]> => {
-  const db = await getDb();
-  return db.select('SELECT * FROM gammes_tenues WHERE est_actif = 1 ORDER BY designation');
+export const getNextPrestationCode = async (): Promise<string> => {
+  return generateCode('types_prestations', 'code_prestation', 'PRS');
 };
 
-export const getGammeTenueById = async (id: number): Promise<GammeTenue | null> => {
-  const db = await getDb();
-  const result = await db.select<GammeTenue[]>(`
-    SELECT * FROM gammes_tenues WHERE id = ? AND est_actif = 1
-  `, [id]);
-  return result[0] || null;
+export const getNextMatiereCode = async (): Promise<string> => {
+  return generateCode('matieres', 'code_matiere', 'MAT');
 };
 
-export const createGammeTenue = async (tenue: Omit<GammeTenue, 'id' | 'created_at' | 'updated_at'>): Promise<number> => {
-  const db = await getDb();
-  const result = await db.execute(`
-    INSERT INTO gammes_tenues (code_tenue, designation, description, prix_base, image_url, est_actif, stock_actuel)
-    VALUES (?, ?, ?, ?, ?, 1, 0)
-  `, [tenue.code_tenue, tenue.designation, tenue.description, tenue.prix_base, tenue.image_url]);
-  
-  return result.lastInsertId as number;
-};
+// ================= FONCTION GETDB =================
 
-export const updateGammeTenue = async (id: number, tenue: Partial<GammeTenue>): Promise<void> => {
-  const db = await getDb();
-  const fields: string[] = [];
-  const values: any[] = [];
-  
-  const allowedFields = ['code_tenue', 'designation', 'description', 'prix_base', 'image_url', 'est_actif'];
-  
-  Object.entries(tenue).forEach(([key, value]) => {
-    if (allowedFields.includes(key) && value !== undefined) {
-      fields.push(`${key} = ?`);
-      values.push(value);
-    }
-  });
-  
-  if (fields.length === 0) return;
-  
-  values.push(id);
-  await db.execute(`UPDATE gammes_tenues SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, values);
-};
-
-export const deleteGammeTenue = async (id: number): Promise<void> => {
-  const db = await getDb();
-  await db.execute(`UPDATE gammes_tenues SET est_actif = 0 WHERE id = ?`, [id]);
-};
-
-// ==============================
-// FONCTIONS VENTES
-// ==============================
-
-export const getVentes = async (): Promise<Vente[]> => {
-  const db = await getDb();
-  return db.select(`
-    SELECT *, (montant_total - montant_regle) as montant_restant
-    FROM ventes ORDER BY date_vente DESC
-  `);
-};
-
-export const getVenteById = async (id: number): Promise<Vente | null> => {
-  const db = await getDb();
-  const result = await db.select<Vente[]>(`
-    SELECT *, (montant_total - montant_regle) as montant_restant
-    FROM ventes WHERE id = ?
-  `, [id]);
-  return result[0] || null;
-};
-
-export const createVente = async (vente: Omit<Vente, 'id' | 'montant_restant'>, details: Omit<VenteDetail, 'id'>[]): Promise<number> => {
-  const db = await getDb();
-
-  await db.execute('BEGIN TRANSACTION');
+export const getDb = async (): Promise<Database> => {
+  if (dbInstance) return dbInstance;
 
   try {
-    const result = await db.execute(`
-      INSERT INTO ventes (
-        code_vente, type_vente, date_vente, client_id, client_nom,
-        mode_paiement, montant_total, montant_regle, statut, observation
-      ) VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      vente.code_vente, vente.type_vente, vente.client_id || null,
-      vente.client_nom || null, vente.mode_paiement, vente.montant_total,
-      vente.montant_regle, vente.statut, vente.observation || null
-    ]);
+    const dbName = 'gestion-couture.db';
+    console.log("📁 Base de données:", dbName);
 
-    const venteId = result.lastInsertId as number;
+    dbInstance = await Database.load(`sqlite:${dbName}`);
+    await dbInstance.execute(`PRAGMA foreign_keys = ON`);
+    await dbInstance.execute(`PRAGMA journal_mode = WAL`);
+    await initDatabase(dbInstance);
 
-    for (const detail of details) {
-      await db.execute(`
-        INSERT INTO vente_details (
-          vente_id, matiere_id, tenue_variante_id, designation,
-          quantite, prix_unitaire, total, taille_libelle
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        venteId, detail.matiere_id || null, detail.tenue_variante_id || null,
-        detail.designation, detail.quantite, detail.prix_unitaire,
-        detail.total, detail.taille_libelle || null
-      ]);
-
-      if (detail.matiere_id) {
-        await db.execute(`
-          UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?
-        `, [detail.quantite, detail.matiere_id]);
-      }
-      if (detail.tenue_variante_id) {
-        await db.execute(`
-          UPDATE tenues_variantes SET stock_actuel = stock_actuel - ? WHERE id = ?
-        `, [detail.quantite, detail.tenue_variante_id]);
-      }
-    }
-
-    await db.execute('COMMIT');
-    return venteId;
-
+    console.log("✅ Base de données initialisée");
   } catch (error) {
-    await db.execute('ROLLBACK');
+    console.error("❌ ERREUR INITIALISATION DB:", error);
     throw error;
   }
+
+  return dbInstance;
 };
 
-export const updateVentePaiement = async (id: number, montant_regle: number): Promise<void> => {
+// ================= RÉFÉRENTIEL - TAILLES =================
+
+export const getTailles = async (categorie?: string): Promise<Taille[]> => {
   const db = await getDb();
+  let query = 'SELECT * FROM tailles WHERE est_actif = 1';
+  const params: any[] = [];
   
-  const vente = await db.select<{ montant_total: number; montant_regle: number }[]>(
-    'SELECT montant_total, montant_regle FROM ventes WHERE id = ?',
+  if (categorie) {
+    query += ' AND categorie = ?';
+    params.push(categorie);
+  }
+  
+  query += ' ORDER BY ordre';
+  return db.select(query, params);
+};
+
+export const getTailleById = async (id: number): Promise<Taille | null> => {
+  const db = await getDb();
+  const result = await db.select<Taille[]>(
+    'SELECT * FROM tailles WHERE id = ? AND est_actif = 1',
     [id]
   );
-  
-  if (vente.length === 0) throw new Error('Vente non trouvée');
-  
-  const nouveauRegle = vente[0].montant_regle + montant_regle;
-  const nouveauStatut = nouveauRegle >= vente[0].montant_total ? 'PAYEE' : 'PARTIEL';
-  
-  await db.execute(`
-    UPDATE ventes SET montant_regle = ?, statut = ? WHERE id = ?
-  `, [nouveauRegle, nouveauStatut, id]);
+  return result[0] || null;
 };
 
-export const annulerVente = async (id: number): Promise<void> => {
+export const getTailleByCode = async (code_taille: string): Promise<Taille | null> => {
   const db = await getDb();
-  await db.execute(`DELETE FROM ventes WHERE id = ?`, [id]);
+  const result = await db.select<Taille[]>(
+    'SELECT * FROM tailles WHERE code_taille = ? AND est_actif = 1',
+    [code_taille]
+  );
+  return result[0] || null;
 };
 
-// ==============================
-// FONCTIONS TAILLES
-// ==============================
-
-export const getTailles = async (): Promise<Taille[]> => {
-  const db = await getDb();
-  return db.select('SELECT * FROM tailles WHERE est_actif = 1 ORDER BY ordre');
-};
-
-export const createTaille = async (taille: Omit<Taille, 'id'>): Promise<number> => {
+export const createTaille = async (taille: Omit<Taille, 'id' | 'created_at'>): Promise<number> => {
   const db = await getDb();
   const result = await db.execute(`
-    INSERT INTO tailles (code_taille, libelle, ordre, est_actif)
-    VALUES (?, ?, ?, 1)
-  `, [taille.code_taille, taille.libelle, taille.ordre]);
-  
+    INSERT INTO tailles (code_taille, libelle, ordre, categorie, description, est_actif)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [
+    taille.code_taille,
+    taille.libelle,
+    taille.ordre || 0,
+    taille.categorie || 'universel',
+    taille.description || null,
+    taille.est_actif ?? 1
+  ]);
   return result.lastInsertId as number;
 };
 
@@ -652,7 +343,7 @@ export const updateTaille = async (id: number, taille: Partial<Taille>): Promise
   const fields: string[] = [];
   const values: any[] = [];
   
-  const allowedFields = ['code_taille', 'libelle', 'ordre', 'est_actif'];
+  const allowedFields = ['code_taille', 'libelle', 'ordre', 'categorie', 'description', 'est_actif'];
   
   Object.entries(taille).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
@@ -669,66 +360,65 @@ export const updateTaille = async (id: number, taille: Partial<Taille>): Promise
 
 export const deleteTaille = async (id: number): Promise<void> => {
   const db = await getDb();
-  await db.execute(`DELETE FROM tailles WHERE id = ?`, [id]);
+  await db.execute(`UPDATE tailles SET est_actif = 0 WHERE id = ?`, [id]);
 };
 
-// ==============================
-// FONCTIONS CATÉGORIES MATIÈRES
-// ==============================
+// ================= RÉFÉRENTIEL - COULEURS =================
 
-export const getCategoriesMatieres = async (): Promise<CategorieMatiere[]> => {
+export const getCouleurs = async (actif: boolean = true): Promise<Couleur[]> => {
   const db = await getDb();
-  return db.select('SELECT * FROM categories_matieres WHERE est_actif = 1');
-};
-
-export const createCategorieMatiere = async (categorie: Omit<CategorieMatiere, 'id' | 'created_at'>): Promise<number> => {
-  const db = await getDb();
-  const result = await db.execute(`
-    INSERT INTO categories_matieres (code_categorie, nom_categorie, description, est_actif)
-    VALUES (?, ?, ?, 1)
-  `, [categorie.code_categorie, categorie.nom_categorie, categorie.description]);
-  
-  return result.lastInsertId as number;
-};
-
-// ==============================
-// FONCTIONS TENUES VARIANTES
-// ==============================
-
-export const getTenuesVariantes = async (tenueId?: number): Promise<any[]> => {
-  const db = await getDb();
-  let query = `
-    SELECT tv.*, t.libelle as taille_libelle, t.code_taille, gt.designation as tenue_designation, gt.prix_base
-    FROM tenues_variantes tv
-    JOIN tailles t ON tv.taille_id = t.id
-    JOIN gammes_tenues gt ON tv.tenue_id = gt.id
-    WHERE gt.est_actif = 1
-  `;
-  if (tenueId) {
-    query += ` AND tv.tenue_id = ${tenueId}`;
-  }
-  query += ` ORDER BY t.ordre`;
+  const query = actif 
+    ? 'SELECT * FROM couleurs WHERE est_actif = 1 ORDER BY nom_couleur'
+    : 'SELECT * FROM couleurs ORDER BY nom_couleur';
   return db.select(query);
 };
 
-export const createTenueVariante = async (variante: Omit<TenueVariante, 'id'>): Promise<number> => {
+export const getCouleurById = async (id: number): Promise<Couleur | null> => {
   const db = await getDb();
-  const result = await db.execute(`
-    INSERT INTO tenues_variantes (tenue_id, taille_id, code_variante, stock_actuel, seuil_alerte, prix_vente)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, [variante.tenue_id, variante.taille_id, variante.code_variante, variante.stock_actuel || 0, variante.seuil_alerte || 0, variante.prix_vente]);
+  const result = await db.select<Couleur[]>(
+    'SELECT * FROM couleurs WHERE id = ?',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const getCouleurByNom = async (nom_couleur: string): Promise<Couleur | null> => {
+  const db = await getDb();
+  const result = await db.select<Couleur[]>(
+    'SELECT * FROM couleurs WHERE nom_couleur = ?',
+    [nom_couleur]
+  );
+  return result[0] || null;
+};
+
+export const createCouleur = async (couleur: Omit<Couleur, 'id' | 'created_at'>): Promise<number> => {
+  const db = await getDb();
   
+  const existing = await getCouleurByNom(couleur.nom_couleur);
+  if (existing) throw new Error(`La couleur "${couleur.nom_couleur}" existe déjà`);
+  
+  const result = await db.execute(`
+    INSERT INTO couleurs (nom_couleur, code_hex, code_rgb, code_cmyk, description, est_actif)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [
+    couleur.nom_couleur,
+    couleur.code_hex || null,
+    couleur.code_rgb || null,
+    couleur.code_cmyk || null,
+    couleur.description || null,
+    couleur.est_actif ?? 1
+  ]);
   return result.lastInsertId as number;
 };
 
-export const updateTenueVariante = async (id: number, variante: Partial<TenueVariante>): Promise<void> => {
+export const updateCouleur = async (id: number, couleur: Partial<Couleur>): Promise<void> => {
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
   
-  const allowedFields = ['stock_actuel', 'seuil_alerte', 'prix_vente'];
+  const allowedFields = ['nom_couleur', 'code_hex', 'code_rgb', 'code_cmyk', 'description', 'est_actif'];
   
-  Object.entries(variante).forEach(([key, value]) => {
+  Object.entries(couleur).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
@@ -738,388 +428,947 @@ export const updateTenueVariante = async (id: number, variante: Partial<TenueVar
   if (fields.length === 0) return;
   
   values.push(id);
-  await db.execute(`UPDATE tenues_variantes SET ${fields.join(', ')} WHERE id = ?`, values);
+  await db.execute(`UPDATE couleurs SET ${fields.join(', ')} WHERE id = ?`, values);
 };
 
-export const deleteTenueVariante = async (id: number): Promise<void> => {
+export const deleteCouleur = async (id: number): Promise<void> => {
   const db = await getDb();
-  await db.execute(`DELETE FROM tenues_variantes WHERE id = ?`, [id]);
-};
-
-// ==============================
-// FONCTIONS SALAIRES
-// ==============================
-
-export const payerSalaire = async ({
-  employe_id,
-  type,
-  montant_net,
-  mode,
-  observation = '',
-  empruntIds = []
-}: {
-  employe_id: number;
-  type: 'fixe' | 'prestation';
-  montant_net: number;
-  mode: string;
-  observation?: string;
-  empruntIds?: number[];
-}) => {
-  const db = await getDb();
-  const emp = await db.select<Array<{ type_remuneration: string; salaire_base: number }>>(
-    "SELECT type_remuneration, salaire_base FROM employes WHERE id = ?",
-    [employe_id]
+  const usage = await db.select<{ count: number }[]>(
+    'SELECT COUNT(*) as count FROM articles WHERE couleur_id = ?',
+    [id]
   );
-  if (!emp.length) throw new Error("Employé introuvable");
-  const typeEmploye = emp[0].type_remuneration;
-  if (!typeEmploye) throw new Error("Type de rémunération non défini");
-  if (type !== typeEmploye) throw new Error(`Paiement invalide: employé en ${typeEmploye}`);
-  if (montant_net <= 0) throw new Error("Montant invalide");
-
-  let retenue = 0;
-  if (empruntIds.length > 0) {
-    const placeholders = empruntIds.map(() => '?').join(',');
-    const emprunts = await db.select<Array<{ id: number; montant: number }>>(
-      `SELECT id, montant FROM emprunts 
-       WHERE id IN (${placeholders}) AND deduit = 0`,
-      empruntIds
-    );
-    retenue = emprunts.reduce((sum, e) => sum + e.montant, 0);
-  }
-
-  const montant_brut = montant_net + retenue;
-
-  if (type === 'fixe') {
-    const salaire = emp[0].salaire_base || 0;
-    const totalDejaPaye = await db.select<Array<{ total: number }>>(
-      `SELECT COALESCE(SUM(montant_net),0) as total 
-       FROM salaires 
-       WHERE employe_id = ? AND annule = 0`,
-      [employe_id]
-    );
-    const deja = totalDejaPaye[0]?.total || 0;
-    if (montant_net + deja > salaire) throw new Error("Dépassement du salaire fixe");
-  }
-
-  const result: any = await db.execute(
-    `INSERT INTO salaires 
-     (employe_id, type, montant_brut, montant_net, montant_emprunts, observation, mode)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [employe_id, type, montant_brut, montant_net, retenue, observation, mode]
-  );
-
-  const salaire_id = result?.lastInsertId;
-
-  if (empruntIds.length > 0 && salaire_id) {
-    const placeholders = empruntIds.map(() => '?').join(',');
-    await db.execute(
-      `UPDATE emprunts 
-       SET deduit = 1, salaire_id = ?, date_deduction = CURRENT_TIMESTAMP
-       WHERE id IN (${placeholders})`,
-      [salaire_id, ...empruntIds]
-    );
-  }
-
-  if (type === 'prestation') {
-    await db.execute(
-      `UPDATE prestations_realisees 
-       SET paye = 1 
-       WHERE employe_id = ? AND (paye = 0 OR paye IS NULL)`,
-      [employe_id]
-    );
-  }
-
-  return { success: true, salaire_id, montant_brut, montant_net, retenue };
-};
-
-export const payerSalaireSecurise = async (employe_id: number) => {
-  const db = await getDb();
-  const emp = await db.select<Array<{ type_remuneration: string; salaire_base: number }>>(
-    "SELECT type_remuneration, salaire_base FROM employes WHERE id = ?",
-    [employe_id]
-  );
-  if (!emp.length) throw new Error("Employé introuvable");
-  const type = emp[0].type_remuneration;
-  if (!type) throw new Error("Type de rémunération non défini");
   
-  let montant_brut = 0;
-  if (type === 'fixe') {
-    montant_brut = emp[0].salaire_base || 0;
-  }
-  if (type === 'prestation') {
-    const prestations = await db.select<Array<{ total: number }>>(
-      `SELECT COALESCE(SUM(total),0) as total 
-       FROM prestations_realisees 
-       WHERE employe_id = ? AND (paye = 0 OR paye IS NULL)`,
-      [employe_id]
-    );
-    montant_brut = prestations[0]?.total || 0;
+  if (usage[0].count > 0) {
+    throw new Error(`Impossible de supprimer cette couleur car elle est utilisée par ${usage[0].count} article(s)`);
   }
   
-  const emprunts = await db.select<Array<{ id: number; montant: number }>>(
-    "SELECT id, montant FROM emprunts WHERE employe_id = ? AND deduit = 0",
-    [employe_id]
-  );
-  const retenue = emprunts.reduce((sum: number, e) => sum + e.montant, 0);
-  const montant_net = Math.max(montant_brut - retenue, 0);
-  
-  return await payerSalaire({
-    employe_id,
-    type: type as 'fixe' | 'prestation',
-    montant_net,
-    mode: 'Espèce',
-    observation: 'Paiement automatique',
-    empruntIds: emprunts.map(e => e.id)
-  });
+  await db.execute(`DELETE FROM couleurs WHERE id = ?`, [id]);
 };
 
-export const getSalairesEmploye = async (employe_id: number) => {
+// ================= RÉFÉRENTIEL - TEXTURES =================
+
+export const getTextures = async (actif: boolean = true): Promise<Texture[]> => {
   const db = await getDb();
-  return db.select<Array<any>>(
-    `SELECT * FROM salaires
-     WHERE employe_id = ? AND annule = 0
-     ORDER BY date_paiement DESC`,
-    [employe_id]
-  );
+  const query = actif 
+    ? 'SELECT * FROM textures WHERE est_actif = 1 ORDER BY nom_texture'
+    : 'SELECT * FROM textures ORDER BY nom_texture';
+  return db.select(query);
 };
 
-export const annulerPaiementSalaire = async (salaireId: number) => {
+export const getTextureById = async (id: number): Promise<Texture | null> => {
   const db = await getDb();
-  const emprunts = await db.select<Array<{ id: number }>>(
-    `SELECT id FROM emprunts WHERE salaire_id = ?`,
-    [salaireId]
+  const result = await db.select<Texture[]>(
+    'SELECT * FROM textures WHERE id = ?',
+    [id]
   );
-  const sal = await db.select<Array<{ employe_id: number; type: string }>>(
-    `SELECT employe_id, type FROM salaires WHERE id = ?`,
-    [salaireId]
-  );
-
-  await db.execute(`DELETE FROM salaires WHERE id = ?`, [salaireId]);
-
-  if (emprunts.length > 0) {
-    const ids = emprunts.map(e => e.id);
-    const placeholders = ids.map(() => '?').join(',');
-    await db.execute(
-      `UPDATE emprunts 
-       SET deduit = 0, salaire_id = NULL, date_deduction = NULL
-       WHERE id IN (${placeholders})`,
-      ids
-    );
-  }
-
-  if (sal.length && sal[0].type === 'prestation') {
-    await db.execute(
-      `UPDATE prestations_realisees 
-       SET paye = 0 
-       WHERE employe_id = ?`,
-      [sal[0].employe_id]
-    );
-  }
-
-  return { success: true };
+  return result[0] || null;
 };
 
-// ==============================
-// FONCTIONS DÉPENSES
-// ==============================
-
-export const getDepenses = async (): Promise<Depense[]> => {
-  const db = await getDb();
-  return db.select('SELECT * FROM depenses ORDER BY date_depense DESC');
-};
-
-export const createDepense = async (depense: Omit<Depense, 'id'>): Promise<number> => {
+export const createTexture = async (texture: Omit<Texture, 'id' | 'created_at'>): Promise<number> => {
   const db = await getDb();
   const result = await db.execute(`
-    INSERT INTO depenses (designation, montant, categorie, date_depense, observation)
-    VALUES (?, ?, ?, datetime('now'), ?)
-  `, [depense.designation, depense.montant, depense.categorie || null, depense.observation || null]);
+    INSERT INTO textures (nom_texture, description, densite, composition, est_actif)
+    VALUES (?, ?, ?, ?, ?)
+  `, [
+    texture.nom_texture,
+    texture.description || null,
+    texture.densite || null,
+    texture.composition || null,
+    texture.est_actif ?? 1
+  ]);
+  return result.lastInsertId as number;
+};
+
+export const updateTexture = async (id: number, texture: Partial<Texture>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = ['nom_texture', 'description', 'densite', 'composition', 'est_actif'];
+  
+  Object.entries(texture).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+  
+  if (fields.length === 0) return;
+  
+  values.push(id);
+  await db.execute(`UPDATE textures SET ${fields.join(', ')} WHERE id = ?`, values);
+};
+
+export const deleteTexture = async (id: number): Promise<void> => {
+  const db = await getDb();
+  await db.execute(`UPDATE textures SET est_actif = 0 WHERE id = ?`, [id]);
+};
+
+// ================= RÉFÉRENTIEL - TYPES DE MESURES =================
+
+export const getTypesMesures = async (categorie?: string): Promise<TypeMesure[]> => {
+  const db = await getDb();
+  let query = 'SELECT * FROM types_mesures WHERE est_active = 1';
+  const params: any[] = [];
+  
+  if (categorie) {
+    query += ' AND categorie = ?';
+    params.push(categorie);
+  }
+  
+  query += ' ORDER BY ordre_affichage';
+  return db.select(query, params);
+};
+
+export const getTypeMesureById = async (id: number): Promise<TypeMesure | null> => {
+  const db = await getDb();
+  const result = await db.select<TypeMesure[]>(
+    'SELECT * FROM types_mesures WHERE id = ? AND est_active = 1',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const createTypeMesure = async (typeMesure: Omit<TypeMesure, 'id' | 'created_at'>): Promise<number> => {
+  const db = await getDb();
+  const result = await db.execute(`
+    INSERT INTO types_mesures (nom, unite, ordre_affichage, categorie, est_active)
+    VALUES (?, ?, ?, ?, ?)
+  `, [
+    typeMesure.nom,
+    typeMesure.unite,
+    typeMesure.ordre_affichage || 0,
+    typeMesure.categorie,
+    typeMesure.est_active ?? 1
+  ]);
+  return result.lastInsertId as number;
+};
+
+export const updateTypeMesure = async (id: number, typeMesure: Partial<TypeMesure>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = ['nom', 'unite', 'ordre_affichage', 'categorie', 'est_active'];
+  
+  Object.entries(typeMesure).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+  
+  if (fields.length === 0) return;
+  
+  values.push(id);
+  await db.execute(`UPDATE types_mesures SET ${fields.join(', ')} WHERE id = ?`, values);
+};
+
+export const deleteTypeMesure = async (id: number): Promise<void> => {
+  const db = await getDb();
+  await db.execute(`UPDATE types_mesures SET est_active = 0 WHERE id = ?`, [id]);
+};
+
+// ================= RÉFÉRENTIEL - TYPES DE PRESTATIONS =================
+
+export const getTypesPrestations = async (actif: boolean = true): Promise<TypePrestation[]> => {
+  const db = await getDb();
+  const query = actif 
+    ? 'SELECT * FROM types_prestations WHERE est_active = 1 ORDER BY nom'
+    : 'SELECT * FROM types_prestations ORDER BY nom';
+  return db.select(query);
+};
+
+export const getTypePrestationById = async (id: number): Promise<TypePrestation | null> => {
+  const db = await getDb();
+  const result = await db.select<TypePrestation[]>(
+    'SELECT * FROM types_prestations WHERE id = ?',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const createTypePrestation = async (typePrestation: Omit<TypePrestation, 'id' | 'created_at' | 'code_prestation'>): Promise<number> => {
+  const db = await getDb();
+  const code_prestation = await getNextPrestationCode();
+  
+  const result = await db.execute(`
+    INSERT INTO types_prestations (code_prestation, nom, description, prix_par_defaut, unite, est_active)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [
+    code_prestation,
+    typePrestation.nom,
+    typePrestation.description || null,
+    typePrestation.prix_par_defaut,
+    typePrestation.unite,
+    typePrestation.est_active ?? 1
+  ]);
+  return result.lastInsertId as number;
+};
+
+export const updateTypePrestation = async (id: number, typePrestation: Partial<TypePrestation>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = ['nom', 'description', 'prix_par_defaut', 'unite', 'est_active'];
+  
+  Object.entries(typePrestation).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+  
+  if (fields.length === 0) return;
+  
+  values.push(id);
+  await db.execute(`UPDATE types_prestations SET ${fields.join(', ')} WHERE id = ?`, values);
+};
+
+export const deleteTypePrestation = async (id: number): Promise<void> => {
+  const db = await getDb();
+  const usage = await db.select<{ count: number }[]>(
+    'SELECT COUNT(*) as count FROM prestations_realisees WHERE type_prestation_id = ?',
+    [id]
+  );
+  
+  if (usage[0].count > 0) {
+    throw new Error(`Impossible de supprimer ce type de prestation car il est utilisé par ${usage[0].count} prestation(s)`);
+  }
+  
+  await db.execute(`DELETE FROM types_prestations WHERE id = ?`, [id]);
+};
+
+// ================= RÉFÉRENTIEL - MODÈLES DE TENUES =================
+
+export const getModelesTenues = async (actif: boolean = true, categorie?: string): Promise<ModeleTenue[]> => {
+  const db = await getDb();
+  let query = 'SELECT * FROM modeles_tenues WHERE 1=1';
+  const params: any[] = [];
+  
+  if (actif) {
+    query += ' AND est_actif = 1';
+  }
+  if (categorie) {
+    query += ' AND categorie = ?';
+    params.push(categorie);
+  }
+  
+  query += ' ORDER BY designation';
+  return db.select(query, params);
+};
+
+export const getModeleTenueById = async (id: number): Promise<ModeleTenue | null> => {
+  const db = await getDb();
+  const result = await db.select<ModeleTenue[]>(
+    'SELECT * FROM modeles_tenues WHERE id = ?',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const getModeleTenueByCode = async (code_modele: string): Promise<ModeleTenue | null> => {
+  const db = await getDb();
+  const result = await db.select<ModeleTenue[]>(
+    'SELECT * FROM modeles_tenues WHERE code_modele = ?',
+    [code_modele]
+  );
+  return result[0] || null;
+};
+
+export const createModeleTenue = async (modele: Omit<ModeleTenue, 'id' | 'created_at' | 'updated_at' | 'code_modele'>): Promise<number> => {
+  const db = await getDb();
+  const code_modele = await getNextModeleCode();
+  
+  const result = await db.execute(`
+    INSERT INTO modeles_tenues (
+      code_modele, designation, description, image_url, categorie, est_actif
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `, [
+    code_modele,
+    modele.designation,
+    modele.description || null,
+    modele.image_url || null,
+    modele.categorie,
+    modele.est_actif ?? 1
+  ]);
+  return result.lastInsertId as number;
+};
+
+export const updateModeleTenue = async (id: number, modele: Partial<ModeleTenue>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = ['designation', 'description', 'image_url', 'categorie', 'est_actif'];
+  
+  Object.entries(modele).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+  
+  if (fields.length === 0) return;
+  
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(id);
+  await db.execute(`UPDATE modeles_tenues SET ${fields.join(', ')} WHERE id = ?`, values);
+};
+
+export const deleteModeleTenue = async (id: number): Promise<void> => {
+  const db = await getDb();
+  const articlesCount = await db.select<{ count: number }[]>(
+    'SELECT COUNT(*) as count FROM articles WHERE modele_id = ?',
+    [id]
+  );
+  
+  if (articlesCount[0].count > 0) {
+    throw new Error(`Impossible de supprimer ce modèle car il est utilisé par ${articlesCount[0].count} article(s)`);
+  }
+  
+  await db.execute(`UPDATE modeles_tenues SET est_actif = 0 WHERE id = ?`, [id]);
+};
+
+// ================= RÉFÉRENTIEL - CATÉGORIES DE MATIÈRES =================
+
+export const getCategoriesMatieres = async (actif: boolean = true): Promise<CategorieMatiere[]> => {
+  const db = await getDb();
+  const query = actif 
+    ? 'SELECT * FROM categories_matieres WHERE est_actif = 1 ORDER BY nom_categorie'
+    : 'SELECT * FROM categories_matieres ORDER BY nom_categorie';
+  return db.select(query);
+};
+
+export const getCategorieMatiereById = async (id: number): Promise<CategorieMatiere | null> => {
+  const db = await getDb();
+  const result = await db.select<CategorieMatiere[]>(
+    'SELECT * FROM categories_matieres WHERE id = ?',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const createCategorieMatiere = async (categorie: Omit<CategorieMatiere, 'id' | 'created_at' | 'code_categorie'>): Promise<number> => {
+  const db = await getDb();
+  const code_categorie = await getNextCategorieCode();
+  
+  const result = await db.execute(`
+    INSERT INTO categories_matieres (code_categorie, nom_categorie, description, couleur_associee, est_actif)
+    VALUES (?, ?, ?, ?, ?)
+  `, [
+    code_categorie,
+    categorie.nom_categorie,
+    categorie.description || null,
+    categorie.couleur_associee || null,
+    categorie.est_actif ?? 1
+  ]);
+  return result.lastInsertId as number;
+};
+
+export const updateCategorieMatiere = async (id: number, categorie: Partial<CategorieMatiere>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = ['nom_categorie', 'description', 'couleur_associee', 'est_actif'];
+  
+  Object.entries(categorie).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+  
+  if (fields.length === 0) return;
+  
+  values.push(id);
+  await db.execute(`UPDATE categories_matieres SET ${fields.join(', ')} WHERE id = ?`, values);
+};
+
+export const deleteCategorieMatiere = async (id: number): Promise<void> => {
+  const db = await getDb();
+  const matieresCount = await db.select<{ count: number }[]>(
+    'SELECT COUNT(*) as count FROM matieres WHERE categorie_id = ?',
+    [id]
+  );
+  
+  if (matieresCount[0].count > 0) {
+    throw new Error(`Impossible de supprimer cette catégorie car elle contient ${matieresCount[0].count} matière(s)`);
+  }
+  
+  await db.execute(`DELETE FROM categories_matieres WHERE id = ?`, [id]);
+};
+
+// ================= RÉFÉRENTIEL - ATELIER/CONFIGURATION =================
+
+export const getConfigurationAtelier = async (): Promise<ConfigurationAtelier> => {
+  const db = await getDb();
+  const result = await db.select<ConfigurationAtelier[]>(
+    'SELECT * FROM atelier WHERE id = 1'
+  );
+  
+  if (result.length === 0) {
+    const defaultConfig: ConfigurationAtelier = {
+      id: 1,
+      nom_atelier: 'Mon Atelier de Couture',
+      telephone: '',
+      email: '',
+      adresse: '',
+      ville: '',
+      pays: '',
+      ifu: '',
+      rccm: '',
+      message_facture_defaut: '',
+      logo_base64: '',
+      devise: 'XOF'
+    };
+    await saveConfigurationAtelier(defaultConfig);
+    return defaultConfig;
+  }
+  
+  return result[0];
+};
+
+export const saveConfigurationAtelier = async (config: Partial<ConfigurationAtelier>): Promise<void> => {
+  const db = await getDb();
+  
+  await db.execute(`
+    INSERT OR REPLACE INTO atelier (id, nom_atelier, telephone, email, adresse, ville, pays, ifu, rccm, message_facture_defaut, logo_base64, devise, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `, [
+    config.nom_atelier || '',
+    config.telephone || '',
+    config.email || '',
+    config.adresse || '',
+    config.ville || '',
+    config.pays || '',
+    config.ifu || '',
+    config.rccm || '',
+    config.message_facture_defaut || '',
+    config.logo_base64 || '',
+    config.devise || 'XOF'
+  ]);
+};
+
+// ================= TABLES PRINCIPALES - ARTICLES =================
+
+export const getArticles = async (filters?: {
+  modele_id?: number;
+  taille_id?: number;
+  couleur_id?: number;
+  texture_id?: number;
+  est_disponible?: boolean;
+}): Promise<ArticleComplet[]> => {
+  const db = await getDb();
+  let query = `SELECT * FROM v_articles_complet WHERE 1=1`;
+  const params: any[] = [];
+
+  if (filters?.modele_id) { query += ` AND modele_id = ?`; params.push(filters.modele_id); }
+  if (filters?.taille_id) { query += ` AND taille_id = ?`; params.push(filters.taille_id); }
+  if (filters?.couleur_id) { query += ` AND couleur_id = ?`; params.push(filters.couleur_id); }
+  if (filters?.texture_id) { query += ` AND texture_id = ?`; params.push(filters.texture_id); }
+  if (filters?.est_disponible !== undefined) { query += ` AND est_disponible = ?`; params.push(filters.est_disponible ? 1 : 0); }
+
+  query += ` ORDER BY modele, taille, couleur`;
+  return db.select(query, params);
+};
+
+export const getArticleById = async (id: number): Promise<ArticleComplet | null> => {
+  const db = await getDb();
+  const result = await db.select<ArticleComplet[]>(
+    'SELECT * FROM v_articles_complet WHERE id = ?',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const getArticleByCode = async (code_article: string): Promise<ArticleComplet | null> => {
+  const db = await getDb();
+  const result = await db.select<ArticleComplet[]>(
+    'SELECT * FROM v_articles_complet WHERE code_article = ?',
+    [code_article]
+  );
+  return result[0] || null;
+};
+
+export const createArticle = async (
+  article: Omit<Article, 'id' | 'created_at' | 'updated_at' | 'code_article'>
+): Promise<number> => {
+  const db = await getDb();
+  const code_article = await getNextArticleCode();
+  
+  const result = await db.execute(`
+    INSERT INTO articles (
+      code_article, modele_id, taille_id, couleur_id, texture_id,
+      prix_achat, prix_vente, quantite_stock, seuil_alerte,
+      emplacement, code_barre, notes, est_disponible, est_actif
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    code_article, article.modele_id, article.taille_id, article.couleur_id,
+    article.texture_id || null, article.prix_achat || null, article.prix_vente,
+    article.quantite_stock || 0, article.seuil_alerte || 5,
+    article.emplacement || null, article.code_barre || null,
+    article.notes || null, article.est_disponible ?? 1, article.est_actif ?? 1
+  ]);
   
   return result.lastInsertId as number;
 };
 
-export const deleteDepense = async (id: number): Promise<void> => {
+export const updateArticle = async (id: number, article: Partial<Article>): Promise<void> => {
   const db = await getDb();
-  await db.execute(`DELETE FROM depenses WHERE id = ?`, [id]);
-};
-
-// ==============================
-// FONCTIONS RECU
-// ==============================
-
-export const getRecuData = async (venteId: number) => {
-  const db = await getDb();
-  const vente = await db.select<Array<{ 
-    id: number; 
-    total: number; 
-    client_nom: string; 
-    client_id: number; 
-    date_vente: string;
-    montant_regle: number;  // ← Ajout de cette colonne
-  }>>(
-    `SELECT id, total, client_nom, client_id, date_vente, montant_regle FROM ventes WHERE id = ?`,
-    [venteId]
-  );
+  const fields: string[] = [];
+  const values: any[] = [];
   
-  return {
-    commande: vente[0] || null,
-    paiements: [],
-    totalPaye: vente[0]?.montant_regle || 0,
-    reste: (vente[0]?.total || 0) - (vente[0]?.montant_regle || 0)
-  };
-};
-
-// ==============================
-// FONCTIONS RESET
-// ==============================
-
-export const resetAllData = async () => {
-  const db = await getDb();
-  const tables = [
-    'ventes', 'vente_details', 'clients', 'matieres', 'gammes_tenues',
-    'tailles', 'tenues_variantes', 'categories_matieres', 'depenses',
-    'employes', 'salaires', 'emprunts', 'prestations_realisees'
+  const allowedFields = [
+    'modele_id', 'taille_id', 'couleur_id', 'texture_id', 'prix_achat',
+    'prix_vente', 'quantite_stock', 'seuil_alerte', 'emplacement',
+    'code_barre', 'notes', 'est_disponible', 'est_actif'
   ];
-
-  try {
-    await db.execute('PRAGMA foreign_keys = OFF');
-    for (const table of tables) {
-      try {
-        await db.execute(`DELETE FROM ${table}`);
-        await db.execute(`DELETE FROM sqlite_sequence WHERE name=?`, [table]);
-      } catch (err) {
-        console.log(`Table ${table} non trouvée ou vide`);
-      }
+  
+  Object.entries(article).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
     }
-    console.log("✅ Reset terminé");
-  } catch (error) {
-    console.error("❌ Reset échoué:", error);
-    throw error;
-  } finally {
-    await db.execute('PRAGMA foreign_keys = ON');
-  }
+  });
+  
+  if (fields.length === 0) return;
+  
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(id);
+  await db.execute(`UPDATE articles SET ${fields.join(', ')} WHERE id = ?`, values);
 };
 
-// ==============================
-// FONCTIONS SEED
-// ==============================
-
-export const seedData = async () => {
+export const deleteArticle = async (id: number): Promise<void> => {
   const db = await getDb();
-  await db.execute(`INSERT OR IGNORE INTO configuration_atelier (id, nom_atelier, telephone, adresse) VALUES (1,'KO-SOFT Couture','70 00 00 00','Ouagadougou')`);
+  await db.execute(`UPDATE articles SET est_actif = 0 WHERE id = ?`, [id]);
 };
 
-// ==============================
-// INTERFACE DB
-// ==============================
+export const updateStockArticle = async (id: number, quantite: number, type: 'add' | 'remove'): Promise<void> => {
+  const db = await getDb();
+  const operation = type === 'add' ? '+' : '-';
+  await db.execute(
+    `UPDATE articles SET quantite_stock = quantite_stock ${operation} ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [Math.abs(quantite), id]
+  );
+};
 
-export const dbInterface = {
-  async select<T>(query: string, params: any[] = []): Promise<T[]> {
-    const db = await getDb();
-    try {
-      const res = await db.select(query, params);
-      return Array.isArray(res) ? (res as T[]) : [];
-    } catch (e) {
-      console.error('❌ SELECT ERROR:', e);
-      return [];
+// ================= TABLES PRINCIPALES - MATIÈRES =================
+
+export const getMatieres = async (): Promise<Matiere[]> => {
+  const db = await getDb();
+  return db.select(`
+    SELECT m.*, c.nom_categorie as categorie_nom 
+    FROM matieres m
+    LEFT JOIN categories_matieres c ON m.categorie_id = c.id
+    WHERE m.est_supprime = 0
+    ORDER BY m.designation
+  `);
+};
+
+export const getMatiereById = async (id: number): Promise<Matiere | null> => {
+  const db = await getDb();
+  const result = await db.select<Matiere[]>(
+    'SELECT * FROM matieres WHERE id = ? AND est_supprime = 0',
+    [id]
+  );
+  return result[0] || null;
+};
+
+export const createMatiere = async (matiere: Omit<Matiere, 'id' | 'created_at' | 'updated_at'>): Promise<number> => {
+  const db = await getDb();
+  const code_matiere = await getNextMatiereCode();
+  
+  const result = await db.execute(`
+    INSERT INTO matieres (
+      code_matiere, designation, categorie_id, unite, prix_achat,
+      prix_vente, stock_actuel, seuil_alerte, reference_fournisseur,
+      emplacement, est_supprime
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+  `, [
+    code_matiere, matiere.designation, matiere.categorie_id,
+    matiere.unite, matiere.prix_achat, matiere.prix_vente,
+    matiere.stock_actuel || 0, matiere.seuil_alerte || 0,
+    matiere.reference_fournisseur || null, matiere.emplacement || null
+  ]);
+  
+  return result.lastInsertId as number;
+};
+
+export const updateMatiere = async (id: number, matiere: Partial<Matiere>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = [
+    'designation', 'categorie_id', 'unite', 'prix_achat',
+    'prix_vente', 'seuil_alerte', 'reference_fournisseur', 'emplacement'
+  ];
+  
+  Object.entries(matiere).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
     }
-  },
-  async execute(query: string, params: any[] = []) {
-    const db = await getDb();
-    try {
-      return await db.execute(query, params);
-    } catch (e) {
-      console.error('❌ EXECUTE ERROR:', e);
-      throw e;
+  });
+  
+  if (fields.length === 0) return;
+  
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(id);
+  await db.execute(`UPDATE matieres SET ${fields.join(', ')} WHERE id = ?`, values);
+};
+
+export const deleteMatiere = async (id: number): Promise<void> => {
+  const db = await getDb();
+  await db.execute(`UPDATE matieres SET est_supprime = 1 WHERE id = ?`, [id]);
+};
+
+export const updateStockMatiere = async (id: number, quantite: number, type: 'add' | 'remove'): Promise<void> => {
+  const db = await getDb();
+  const operation = type === 'add' ? '+' : '-';
+  await db.execute(
+    `UPDATE matieres SET stock_actuel = stock_actuel ${operation} ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [Math.abs(quantite), id]
+  );
+};
+
+// ================= TABLES PRINCIPALES - CLIENTS =================
+
+export const getClients = async (): Promise<Client[]> => {
+  const db = await getDb();
+  return db.select('SELECT * FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom');
+};
+
+export const getClientById = async (telephone_id: string): Promise<Client | null> => {
+  const db = await getDb();
+  const result = await db.select<Client[]>(
+    'SELECT * FROM clients WHERE telephone_id = ? AND est_supprime = 0',
+    [telephone_id]
+  );
+  return result[0] || null;
+};
+
+export const createClient = async (client: Omit<Client, 'telephone_id' | 'date_enregistrement' | 'est_supprime'>): Promise<string> => {
+  const db = await getDb();
+  const telephone_id = await getNextClientId();
+  
+  await db.execute(`
+    INSERT INTO clients (telephone_id, nom_prenom, adresse, email, observations, est_supprime)
+    VALUES (?, ?, ?, ?, ?, 0)
+  `, [telephone_id, client.nom_prenom, client.adresse || null, client.email || null, client.observations || null]);
+  
+  return telephone_id;
+};
+
+export const updateClient = async (telephone_id: string, client: Partial<Client>): Promise<void> => {
+  const db = await getDb();
+  const fields: string[] = [];
+  const values: any[] = [];
+  
+  const allowedFields = ['nom_prenom', 'adresse', 'email', 'observations'];
+  
+  Object.entries(client).forEach(([key, value]) => {
+    if (allowedFields.includes(key) && value !== undefined) {
+      fields.push(`${key} = ?`);
+      values.push(value);
     }
-  },
-  async getFirst<T>(query: string, params: any[] = []): Promise<T | null> {
-    const db = await getDb();
-    try {
-      const res = await db.select(query, params);
-      return Array.isArray(res) && res.length > 0 ? (res[0] as T) : null;
-    } catch (e) {
-      console.error('❌ GET FIRST ERROR:', e);
-      return null;
+  });
+  
+  if (fields.length === 0) return;
+  
+  values.push(telephone_id);
+  await db.execute(`UPDATE clients SET ${fields.join(', ')} WHERE telephone_id = ?`, values);
+};
+
+export const deleteClient = async (telephone_id: string): Promise<void> => {
+  const db = await getDb();
+  await db.execute(`UPDATE clients SET est_supprime = 1 WHERE telephone_id = ?`, [telephone_id]);
+};
+
+// ================= TABLES PRINCIPALES - VENTES =================
+
+export const getVentes = async (): Promise<Vente[]> => {
+  const db = await getDb();
+  return db.select(`
+    SELECT *, (montant_total - montant_regle) as montant_restant
+    FROM ventes 
+    ORDER BY date_vente DESC
+  `);
+};
+
+export const getVenteById = async (id: number): Promise<Vente | null> => {
+  const db = await getDb();
+  const result = await db.select<Vente[]>(`
+    SELECT *, (montant_total - montant_regle) as montant_restant
+    FROM ventes WHERE id = ?
+  `, [id]);
+  return result[0] || null;
+};
+
+export const getVenteDetails = async (venteId: number): Promise<VenteDetail[]> => {
+  const db = await getDb();
+  return db.select(`SELECT * FROM vente_details WHERE vente_id = ?`, [venteId]);
+};
+
+export const getVenteWithDetails = async (id: number): Promise<any> => {
+  const db = await getDb();
+  const vente = await db.select<any[]>(`SELECT * FROM ventes WHERE id = ?`, [id]);
+  const details = await db.select<any[]>(`
+    SELECT vd.*, 
+      CASE 
+        WHEN vd.article_id IS NOT NULL THEN 'article'
+        WHEN vd.matiere_id IS NOT NULL THEN 'matiere'
+        ELSE 'prestation'
+      END as type_ligne
+    FROM vente_details vd WHERE vd.vente_id = ?
+  `, [id]);
+  return { ...vente[0], details };
+};
+
+export const createVenteComplete = async (
+  vente: Omit<Vente, 'id' | 'created_at' | 'updated_at' | 'montant_restant'>,
+  details: Omit<VenteDetail, 'id'>[]
+): Promise<number> => {
+  const db = await getDb();
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    const result = await db.execute(`
+      INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom,
+        mode_paiement, montant_total, montant_regle, statut, observation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [vente.code_vente, vente.type_vente, vente.date_vente, vente.client_id,
+        vente.client_nom, vente.mode_paiement, vente.montant_total,
+        vente.montant_regle || 0, vente.statut, vente.observation]);
+    
+    const venteId = result.lastInsertId as number;
+    for (const detail of details) {
+      await db.execute(`
+        INSERT INTO vente_details (vente_id, matiere_id, article_id, designation,
+          quantite, prix_unitaire, total, taille_libelle)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [venteId, detail.matiere_id || null, detail.article_id || null,
+          detail.designation, detail.quantite, detail.prix_unitaire,
+          detail.total, detail.taille_libelle || null]);
     }
+    await db.execute('COMMIT');
+    return venteId;
+  } catch (error) {
+    await db.execute('ROLLBACK');
+    throw error;
   }
 };
 
-export const selectSafe = async <T>(q: string, p: any[] = []) => dbInterface.select<T>(q, p);
-export const executeSafe = async (q: string, p: any[] = []) => dbInterface.execute(q, p);
+export const updateVenteComplete = async (
+  id: number, 
+  data: {
+    client_id?: string | null;
+    client_nom?: string;
+    date_vente?: string;
+    observation?: string;
+    type_vente?: string;
+    montant_total?: number;
+    montant_regle?: number;
+    details?: Array<{
+      id?: number;
+      designation: string;
+      quantite: number;
+      prix_unitaire: number;
+      total: number;
+      article_id?: number;
+      matiere_id?: number;
+      taille_libelle?: string;
+    }>;
+  }
+): Promise<void> => {
+  const db = await getDb();
+  await db.execute('BEGIN TRANSACTION');
+  try {
+    await db.execute(`
+      UPDATE ventes 
+      SET client_id = ?, client_nom = ?, date_vente = ?, observation = ?, 
+          type_vente = ?, montant_total = ?, montant_regle = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [data.client_id || null, data.client_nom || null, data.date_vente, 
+        data.observation || null, data.type_vente || 'commande',
+        data.montant_total || 0, data.montant_regle || 0, id]);
+    
+    await db.execute(`DELETE FROM vente_details WHERE vente_id = ?`, [id]);
+    
+    for (const detail of data.details || []) {
+      await db.execute(`
+        INSERT INTO vente_details (vente_id, article_id, matiere_id, designation, quantite, prix_unitaire, total, taille_libelle)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [id, detail.article_id || null, detail.matiere_id || null, detail.designation, 
+          detail.quantite, detail.prix_unitaire, detail.total, detail.taille_libelle || null]);
+    }
+    await db.execute('COMMIT');
+  } catch (error) {
+    await db.execute('ROLLBACK');
+    throw error;
+  }
+};
 
-// ==============================
-// INIT TABLES
-// ==============================
-const initTables = async (db: Database) => {
+export const updateVentePaiement = async (id: number, montant: number, mode?: string): Promise<void> => {
+  const db = await getDb();
+  const vente = await getVenteById(id);
+  if (!vente) throw new Error('Vente non trouvée');
+  
+  const nouveauRegle = vente.montant_regle + montant;
+  const nouveauStatut = nouveauRegle >= vente.montant_total ? 'PAYEE' : 'PARTIEL';
+  
+  await db.execute(`
+    UPDATE ventes 
+    SET montant_regle = ?, statut = ?, mode_paiement = COALESCE(?, mode_paiement), updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `, [nouveauRegle, nouveauStatut, mode, id]);
+};
+
+export const annulerVente = async (id: number): Promise<void> => {
+  const db = await getDb();
+  await db.execute(`UPDATE ventes SET statut = 'ANNULEE', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [id]);
+};
+
+// ================= INITIALISATION DE LA BASE =================
+
+const initDatabase = async (db: Database) => {
   await db.execute(`PRAGMA foreign_keys = ON`);
 
-  // Utilisateurs
-  await db.execute(`CREATE TABLE IF NOT EXISTS utilisateurs (
+  // 1. Types de mesures
+  await db.execute(`CREATE TABLE IF NOT EXISTS types_mesures (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom TEXT NOT NULL,
-    login TEXT NOT NULL UNIQUE,
-    mot_de_passe_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('admin','caissier','couturier')),
-    est_actif INTEGER NOT NULL DEFAULT 1,
+    unite TEXT NOT NULL,
+    ordre_affichage INTEGER DEFAULT 0,
+    categorie TEXT CHECK(categorie IN ('haut', 'bas', 'general', 'accessoire')),
+    est_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  // Configuration atelier
-  await db.execute(`CREATE TABLE IF NOT EXISTS configuration_atelier (
-    id INTEGER PRIMARY KEY,
-    nom_atelier TEXT DEFAULT '',
-    telephone TEXT DEFAULT '',
-    adresse TEXT DEFAULT '',
-    email TEXT DEFAULT '',
-    nif TEXT DEFAULT '',
-    message_facture TEXT DEFAULT '',
-    logo_base64 TEXT DEFAULT '',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-// Clients
-  await db.execute(`CREATE TABLE IF NOT EXISTS clients (
-    telephone_id TEXT PRIMARY KEY,
-    nom_prenom TEXT NOT NULL,
-    adresse TEXT, 
-    email TEXT,
-    date_enregistrement DATETIME DEFAULT CURRENT_TIMESTAMP,
-    observations TEXT, 
-    est_supprime INTEGER DEFAULT 0
-  )`);
-
-  // Types mesures
-  await db.execute(`CREATE TABLE IF NOT EXISTS types_mesures (
+  // 2. Tailles
+  await db.execute(`CREATE TABLE IF NOT EXISTS tailles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT, 
-    unite TEXT, 
-    ordre_affichage INTEGER, 
-    categorie TEXT, 
-    est_active INTEGER DEFAULT 1
-  )`);
-
-  await db.execute(`CREATE TABLE IF NOT EXISTS mesures_clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id TEXT, 
-    type_mesure_id INTEGER, 
-    valeur REAL, 
-    date_mesure DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES clients(telephone_id),
-    FOREIGN KEY (type_mesure_id) REFERENCES types_mesures(id)
-  )`);
-
-  // Catégories de matières
-  await db.execute(`CREATE TABLE IF NOT EXISTS categories_matieres (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code_categorie TEXT UNIQUE NOT NULL,
-    nom_categorie TEXT NOT NULL,
+    code_taille TEXT UNIQUE NOT NULL,
+    libelle TEXT NOT NULL,
+    ordre INTEGER DEFAULT 0,
+    categorie TEXT CHECK(categorie IN ('adulte', 'enfant', 'universel')) DEFAULT 'universel',
     description TEXT,
     est_actif INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  // Matières
+  // 3. Couleurs
+  await db.execute(`CREATE TABLE IF NOT EXISTS couleurs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom_couleur TEXT UNIQUE NOT NULL,
+    code_hex TEXT,
+    code_rgb TEXT,
+    code_cmyk TEXT,
+    description TEXT,
+    est_actif INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 4. Textures
+  await db.execute(`CREATE TABLE IF NOT EXISTS textures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom_texture TEXT UNIQUE NOT NULL,
+    description TEXT,
+    densite TEXT,
+    composition TEXT,
+    est_actif INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 5. Types de prestations
+  await db.execute(`CREATE TABLE IF NOT EXISTS types_prestations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code_prestation TEXT UNIQUE NOT NULL,
+    nom TEXT NOT NULL,
+    description TEXT,
+    prix_par_defaut REAL NOT NULL DEFAULT 0,
+    unite TEXT CHECK(unite IN ('piece', 'heure', 'metre')) DEFAULT 'piece',
+    est_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 6. Configuration atelier
+  await db.execute(`CREATE TABLE IF NOT EXISTS atelier (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    nom_atelier TEXT NOT NULL,
+    telephone TEXT,
+    email TEXT,
+    adresse TEXT,
+    ville TEXT,
+    pays TEXT,
+    ifu TEXT,
+    rccm TEXT,
+    message_facture_defaut TEXT,
+    logo_base64 TEXT,
+    devise TEXT DEFAULT 'XOF',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 7. Catégories de matières
+  await db.execute(`CREATE TABLE IF NOT EXISTS categories_matieres (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code_categorie TEXT UNIQUE NOT NULL,
+    nom_categorie TEXT NOT NULL,
+    description TEXT,
+    couleur_associee TEXT,
+    est_actif INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 8. Modèles de tenues
+  await db.execute(`CREATE TABLE IF NOT EXISTS modeles_tenues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code_modele TEXT UNIQUE NOT NULL,
+    designation TEXT NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    categorie TEXT CHECK(categorie IN ('homme', 'femme', 'enfant', 'accessoire')) DEFAULT 'femme',
+    est_actif INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  )`);
+
+  // 9. Utilisateurs
+  await db.execute(`CREATE TABLE IF NOT EXISTS utilisateurs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL,
+    login TEXT NOT NULL UNIQUE,
+    mot_de_passe_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('admin', 'caissier', 'couturier')),
+    est_actif INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 10. Clients
+  await db.execute(`CREATE TABLE IF NOT EXISTS clients (
+    telephone_id TEXT PRIMARY KEY,
+    nom_prenom TEXT NOT NULL,
+    adresse TEXT,
+    email TEXT,
+    date_enregistrement DATETIME DEFAULT CURRENT_TIMESTAMP,
+    observations TEXT,
+    est_supprime INTEGER DEFAULT 0
+  )`);
+
+  // 11. Mesures clients
+  await db.execute(`CREATE TABLE IF NOT EXISTS mesures_clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id TEXT NOT NULL,
+    type_mesure_id INTEGER NOT NULL,
+    valeur REAL NOT NULL,
+    date_mesure DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES clients(telephone_id),
+    FOREIGN KEY (type_mesure_id) REFERENCES types_mesures(id)
+  )`);
+
+  // 12. Matières
   await db.execute(`CREATE TABLE IF NOT EXISTS matieres (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code_matiere TEXT UNIQUE NOT NULL,
@@ -1138,69 +1387,79 @@ const initTables = async (db: Database) => {
     FOREIGN KEY (categorie_id) REFERENCES categories_matieres(id)
   )`);
 
-  // Tailles
-  await db.execute (`CREATE TABLE IF NOT EXISTS tailles (
+  // 13. Articles
+  await db.execute(`CREATE TABLE IF NOT EXISTS articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code_taille TEXT UNIQUE NOT NULL,
-    libelle TEXT NOT NULL,
-    ordre INTEGER DEFAULT 0,
-    est_actif INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-
-  // Gammes tenues
-  await db.execute(`CREATE TABLE IF NOT EXISTS gammes_tenues (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code_tenue TEXT UNIQUE NOT NULL,
-    designation TEXT NOT NULL,
-    description TEXT,
-    prix_base REAL NOT NULL,
-    image_url TEXT,
-    est_actif INTEGER DEFAULT 1,
-    stock_actuel INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME
-  )`);
-
-  // Variantes tenues
-  await db.execute (`CREATE TABLE IF NOT EXISTS tenues_variantes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tenue_id INTEGER NOT NULL,
+    code_article TEXT UNIQUE NOT NULL,
+    modele_id INTEGER NOT NULL,
     taille_id INTEGER NOT NULL,
-    code_variante TEXT UNIQUE NOT NULL,
-    stock_actuel INTEGER DEFAULT 0,
-    seuil_alerte INTEGER DEFAULT 0,
-    prix_vente REAL,
-    FOREIGN KEY (tenue_id) REFERENCES gammes_tenues(id),
+    couleur_id INTEGER NOT NULL,
+    texture_id INTEGER,
+    prix_achat REAL,
+    prix_vente REAL NOT NULL,
+    quantite_stock INTEGER DEFAULT 0,
+    seuil_alerte INTEGER DEFAULT 5,
+    emplacement TEXT,
+    code_barre TEXT,
+    notes TEXT,
+    est_disponible INTEGER DEFAULT 1,
+    est_actif INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME,
+    FOREIGN KEY (modele_id) REFERENCES modeles_tenues(id),
     FOREIGN KEY (taille_id) REFERENCES tailles(id),
-    UNIQUE(tenue_id, taille_id)
+    FOREIGN KEY (couleur_id) REFERENCES couleurs(id),
+    FOREIGN KEY (texture_id) REFERENCES textures(id),
+    UNIQUE(modele_id, taille_id, couleur_id, texture_id)
   )`);
 
-  // Ventes
+  // 14. Vue articles complets
+  await db.execute(`CREATE VIEW IF NOT EXISTS v_articles_complet AS
+    SELECT 
+        a.id, a.code_article,
+        m.designation AS modele, m.id AS modele_id,
+        t.code_taille AS taille, t.id AS taille_id, t.libelle AS taille_libelle,
+        c.nom_couleur AS couleur, c.id AS couleur_id,
+        tx.nom_texture AS texture, tx.id AS texture_id,
+        a.prix_achat, a.prix_vente, a.quantite_stock, a.seuil_alerte,
+        a.emplacement, a.est_disponible, a.code_barre, a.notes,
+        CASE 
+            WHEN a.quantite_stock <= 0 THEN 'Rupture'
+            WHEN a.quantite_stock <= a.seuil_alerte THEN 'Alerte stock'
+            ELSE 'Disponible'
+        END AS statut_stock,
+        a.created_at
+    FROM articles a
+    LEFT JOIN modeles_tenues m ON a.modele_id = m.id
+    LEFT JOIN tailles t ON a.taille_id = t.id
+    LEFT JOIN couleurs c ON a.couleur_id = c.id
+    LEFT JOIN textures tx ON a.texture_id = tx.id
+    WHERE a.est_actif = 1`);
+
+  // 15. Ventes
   await db.execute(`CREATE TABLE IF NOT EXISTS ventes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code_vente TEXT UNIQUE NOT NULL,
-    type_vente TEXT NOT NULL CHECK(type_vente IN ('matiere', 'tenue', 'prestation')),
+    type_vente TEXT NOT NULL CHECK(type_vente IN ('commande', 'pret_a_porter', 'matiere')),
     date_vente DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     client_id TEXT,
     client_nom TEXT,
     mode_paiement TEXT CHECK(mode_paiement IN ('Espèces', 'Orange money', 'Moov money', 'Telecel money', 'Wave', 'Sank Money', 'Virement bancaire')),
     montant_total REAL NOT NULL,
     montant_regle REAL DEFAULT 0,
-    statut TEXT DEFAULT 'COMPLETEE',
+    statut TEXT DEFAULT 'EN_ATTENTE',
     observation TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME,
     FOREIGN KEY (client_id) REFERENCES clients(telephone_id)
   )`);
 
-  // Détails ventes
+  // 16. Détails ventes
   await db.execute(`CREATE TABLE IF NOT EXISTS vente_details (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vente_id INTEGER NOT NULL,
     matiere_id INTEGER,
-    tenue_variante_id INTEGER,
+    article_id INTEGER,
     designation TEXT NOT NULL,
     quantite REAL NOT NULL,
     prix_unitaire REAL NOT NULL,
@@ -1208,10 +1467,10 @@ const initTables = async (db: Database) => {
     taille_libelle TEXT,
     FOREIGN KEY (vente_id) REFERENCES ventes(id) ON DELETE CASCADE,
     FOREIGN KEY (matiere_id) REFERENCES matieres(id),
-    FOREIGN KEY (tenue_variante_id) REFERENCES tenues_variantes(id)
+    FOREIGN KEY (article_id) REFERENCES articles(id)
   )`);
 
-  // Employes
+  // 17. Employés
   await db.execute(`CREATE TABLE IF NOT EXISTS employes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nom_prenom TEXT NOT NULL, 
@@ -1227,15 +1486,7 @@ const initTables = async (db: Database) => {
     updated_at TEXT
   )`);
 
-  // Prestations
-  await db.execute(`CREATE TABLE IF NOT EXISTS types_prestations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT NOT NULL, 
-    valeur_par_defaut REAL NOT NULL DEFAULT 0,
-    est_active INTEGER NOT NULL DEFAULT 1, 
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  
+  // 18. Prestations réalisées
   await db.execute(`CREATE TABLE IF NOT EXISTS prestations_realisees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employe_id INTEGER NOT NULL, 
@@ -1247,10 +1498,11 @@ const initTables = async (db: Database) => {
     total REAL NOT NULL,
     paye INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (employe_id) REFERENCES employes(id)
+    FOREIGN KEY (employe_id) REFERENCES employes(id),
+    FOREIGN KEY (type_prestation_id) REFERENCES types_prestations(id)
   )`);
 
-  // Emprunts
+  // 19. Emprunts
   await db.execute(`CREATE TABLE IF NOT EXISTS emprunts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employe_id INTEGER NOT NULL, 
@@ -1264,7 +1516,7 @@ const initTables = async (db: Database) => {
     FOREIGN KEY (employe_id) REFERENCES employes(id)
   )`);
 
-  // Salaires
+  // 20. Salaires
   await db.execute(`CREATE TABLE IF NOT EXISTS salaires (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employe_id INTEGER NOT NULL,
@@ -1282,24 +1534,23 @@ const initTables = async (db: Database) => {
     FOREIGN KEY (employe_id) REFERENCES employes(id)
   )`);
 
-  // Dépenses
+  // 21. Dépenses
   await db.execute(`CREATE TABLE IF NOT EXISTS depenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     categorie TEXT, 
     designation TEXT, 
     montant REAL,
     responsable TEXT, 
-    date_depense DATETIME, 
+    date_depense DATETIME DEFAULT CURRENT_TIMESTAMP, 
     observation TEXT
   )`);
 
-
-  // Entrées stock
+  // 22. Entrées stock
   await db.execute(`CREATE TABLE IF NOT EXISTS entrees_stock (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code_entree TEXT UNIQUE NOT NULL,
     matiere_id INTEGER,
-    tenue_variante_id INTEGER,
+    article_id INTEGER,
     quantite REAL NOT NULL,
     cout_unitaire REAL NOT NULL,
     fournisseur TEXT,
@@ -1308,197 +1559,329 @@ const initTables = async (db: Database) => {
     date_entree DATETIME DEFAULT CURRENT_TIMESTAMP,
     observation TEXT,
     FOREIGN KEY (matiere_id) REFERENCES matieres(id),
-    FOREIGN KEY (tenue_variante_id) REFERENCES tenues_variantes(id)
+    FOREIGN KEY (article_id) REFERENCES articles(id)
   )`);
 
-  // Sorties stock
+  // 23. Sorties stock
   await db.execute(`CREATE TABLE IF NOT EXISTS sorties_stock (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code_sortie TEXT UNIQUE NOT NULL,
     matiere_id INTEGER,
-    tenue_variante_id INTEGER,
-    commande_id INTEGER,
+    article_id INTEGER,
     quantite REAL NOT NULL,
     cout_unitaire REAL NOT NULL,
     motif TEXT,
     date_sortie DATETIME DEFAULT CURRENT_TIMESTAMP,
     observation TEXT,
     FOREIGN KEY (matiere_id) REFERENCES matieres(id),
-    FOREIGN KEY (tenue_variante_id) REFERENCES tenues_variantes(id),
-    FOREIGN KEY (commande_id) REFERENCES commandes(id)
+    FOREIGN KEY (article_id) REFERENCES articles(id)
   )`);
 
-  // Logs
+  // 24. Journal des logs
   await db.execute(`CREATE TABLE IF NOT EXISTS journal_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date_action DATETIME, 
+    date_action DATETIME DEFAULT CURRENT_TIMESTAMP, 
     utilisateur TEXT, 
     action TEXT,
     table_cible TEXT, 
     id_ligne INTEGER
   )`);
 
-  // ================= DONNÉES PAR DÉFAUT =================
+  // Index
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_modele ON articles(modele_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_taille ON articles(taille_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_couleur ON articles(couleur_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_disponible ON articles(est_disponible)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_ventes_client ON ventes(client_id)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_ventes_date ON ventes(date_vente)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_ventes_code ON ventes(code_vente)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_matieres_code ON matieres(code_matiere)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_code ON articles(code_article)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_modeles_code ON modeles_tenues(code_modele)`);
 
-  const existing = await db.select<Array<{ id: number }>>(`SELECT * FROM configuration_atelier WHERE id = 1`);
-  if (!existing || existing.length === 0) {
-    await db.execute(`
-      INSERT INTO configuration_atelier (id, nom_atelier, telephone, adresse, email, nif, message_facture, logo_base64)
-      VALUES (1, 'Mon Atelier de Couture', '', '', '', '', '', '')
-    `);
-  }
-
-  const taillesExist = await db.select<Array<{ id: number }>>(`SELECT * FROM tailles LIMIT 1`);
-  if (!taillesExist || taillesExist.length === 0) {
-    await db.execute(`
-      INSERT INTO tailles (code_taille, libelle, ordre) VALUES
-      ('XS', 'Extra Small', 1),
-      ('S', 'Small', 2),
-      ('M', 'Medium', 3),
-      ('L', 'Large', 4),
-      ('XL', 'Extra Large', 5),
-      ('XXL', 'Double Extra Large', 6),
-      ('XXXL', 'Triple Extra Large', 7),
-      ('2XL', '2X Large', 8),
-      ('3XL', '3X Large', 9)
-    `);
-    console.log("✅ Tailles par défaut créées");
-  }
-
-  const categoriesExist = await db.select<Array<{ id: number }>>(`SELECT * FROM categories_matieres LIMIT 1`);
-  if (!categoriesExist || categoriesExist.length === 0) {
-    await db.execute(`
-      INSERT INTO categories_matieres (code_categorie, nom_categorie, description) VALUES
-      ('TISSU', 'Tissus', 'Tissus pour confection'),
-      ('DOUBLURE', 'Doublures', 'Doublures et doublons'),
-      ('FOURNITURE', 'Fournitures', 'Boutons, fermetures, élastiques'),
-      ('FIL', 'Fils', 'Fils de couture'),
-      ('OUTIL', 'Outils', 'Outils de couture')
-    `);
-    console.log("✅ Catégories de matières par défaut créées");
-  }
-
-  const adminHash = bcrypt.hashSync("admin123", 10);
-  const adminExists = await db.select<{ count: number }[]>(
-    "SELECT COUNT(*) as count FROM utilisateurs WHERE login = 'admin'"
-  );
-
-  if (adminExists[0].count === 0) {
-    await db.execute(
-      `INSERT INTO utilisateurs (nom, login, mot_de_passe_hash, role, est_actif) 
-       VALUES (?, ?, ?, ?, 1)`,
-      ["Administrateur", "admin", adminHash, "admin"]
-    );
-    console.log("✅ Compte admin créé (login: admin, mot de passe: admin123)");
-  }
-
+  // Données par défaut
+  await seedDefaultData(db);
+  
   console.log("✅ Toutes les tables sont initialisées");
 };
 
-// ==============================
-// INIT DATABASE
-// ==============================
+const seedDefaultData = async (db: Database) => {
+  // Tailles par défaut
+  const taillesCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM tailles");
+  if (taillesCount[0].count === 0) {
+    const tailles = [
+      { code: 'XS', libelle: 'Extra Small', ordre: 1, categorie: 'adulte' },
+      { code: 'S', libelle: 'Small', ordre: 2, categorie: 'adulte' },
+      { code: 'M', libelle: 'Medium', ordre: 3, categorie: 'adulte' },
+      { code: 'L', libelle: 'Large', ordre: 4, categorie: 'adulte' },
+      { code: 'XL', libelle: 'Extra Large', ordre: 5, categorie: 'adulte' },
+      { code: 'XXL', libelle: 'Double Extra Large', ordre: 6, categorie: 'adulte' },
+      { code: 'XXXL', libelle: 'Triple Extra Large', ordre: 7, categorie: 'adulte' },
+      { code: '2T', libelle: '2 ans', ordre: 1, categorie: 'enfant' },
+      { code: '3T', libelle: '3 ans', ordre: 2, categorie: 'enfant' },
+      { code: '4T', libelle: '4 ans', ordre: 3, categorie: 'enfant' },
+      { code: '5T', libelle: '5 ans', ordre: 4, categorie: 'enfant' },
+      { code: '6T', libelle: '6 ans', ordre: 5, categorie: 'enfant' }
+    ];
+    for (const t of tailles) {
+      await db.execute(`INSERT INTO tailles (code_taille, libelle, ordre, categorie, est_actif) VALUES (?, ?, ?, ?, 1)`, [t.code, t.libelle, t.ordre, t.categorie]);
+    }
+    console.log("✅ Tailles par défaut créées");
+  }
 
-export const initDatabase = async (): Promise<void> => {
-  try {
-    await getDb();
-    console.log('✅ Base de données initialisée avec succès');
-  } catch (error) {
-    console.error('❌ Erreur initialisation:', error);
-    throw error;
+  // Couleurs par défaut
+  const couleursCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM couleurs");
+  if (couleursCount[0].count === 0) {
+    const couleurs = [
+      { nom: 'Noir', hex: '#000000', rgb: '(0,0,0)' },
+      { nom: 'Blanc', hex: '#FFFFFF', rgb: '(255,255,255)' },
+      { nom: 'Rouge', hex: '#FF0000', rgb: '(255,0,0)' },
+      { nom: 'Bleu', hex: '#0000FF', rgb: '(0,0,255)' },
+      { nom: 'Vert', hex: '#00FF00', rgb: '(0,255,0)' },
+      { nom: 'Jaune', hex: '#FFFF00', rgb: '(255,255,0)' },
+      { nom: 'Marron', hex: '#8B4513', rgb: '(139,69,19)' },
+      { nom: 'Gris', hex: '#808080', rgb: '(128,128,128)' },
+      { nom: 'Beige', hex: '#F5F5DC', rgb: '(245,245,220)' },
+      { nom: 'Bordeaux', hex: '#800000', rgb: '(128,0,0)' },
+      { nom: 'Rose', hex: '#FFC0CB', rgb: '(255,192,203)' },
+      { nom: 'Orange', hex: '#FFA500', rgb: '(255,165,0)' },
+      { nom: 'Violet', hex: '#800080', rgb: '(128,0,128)' },
+      { nom: 'Turquoise', hex: '#40E0D0', rgb: '(64,224,208)' }
+    ];
+    for (const c of couleurs) {
+      await db.execute(`INSERT INTO couleurs (nom_couleur, code_hex, code_rgb, est_actif) VALUES (?, ?, ?, 1)`, [c.nom, c.hex, c.rgb]);
+    }
+    console.log("✅ Couleurs par défaut créées");
+  }
+
+  // Types de mesures par défaut
+  const mesuresCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM types_mesures");
+  if (mesuresCount[0].count === 0) {
+    const mesures = [
+      { nom: 'Tour de poitrine', unite: 'cm', ordre: 1, categorie: 'haut' },
+      { nom: 'Tour de taille', unite: 'cm', ordre: 2, categorie: 'haut' },
+      { nom: 'Tour de hanches', unite: 'cm', ordre: 3, categorie: 'bas' },
+      { nom: 'Longueur totale', unite: 'cm', ordre: 4, categorie: 'general' },
+      { nom: 'Longueur manche', unite: 'cm', ordre: 5, categorie: 'haut' },
+      { nom: 'Tour de cou', unite: 'cm', ordre: 6, categorie: 'haut' },
+      { nom: 'Largeur épaule', unite: 'cm', ordre: 7, categorie: 'haut' },
+      { nom: 'Longueur jambe', unite: 'cm', ordre: 8, categorie: 'bas' },
+      { nom: 'Tour de cuisse', unite: 'cm', ordre: 9, categorie: 'bas' },
+      { nom: 'Tour de bras', unite: 'cm', ordre: 10, categorie: 'haut' }
+    ];
+    for (const m of mesures) {
+      await db.execute(`INSERT INTO types_mesures (nom, unite, ordre_affichage, categorie, est_active) VALUES (?, ?, ?, ?, 1)`, [m.nom, m.unite, m.ordre, m.categorie]);
+    }
+    console.log("✅ Types de mesures par défaut créés");
+  }
+
+  // Catégories de matières par défaut
+  const categoriesCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM categories_matieres");
+  if (categoriesCount[0].count === 0) {
+    const categories = [
+      { code: 'TISSU', nom: 'Tissus', desc: 'Tissus pour confection', couleur: '#4CAF50' },
+      { code: 'DOUBLURE', nom: 'Doublures', desc: 'Doublures et doublons', couleur: '#2196F3' },
+      { code: 'FOURNITURE', nom: 'Fournitures', desc: 'Boutons, fermetures, élastiques', couleur: '#FF9800' },
+      { code: 'FIL', nom: 'Fils', desc: 'Fils de couture', couleur: '#9C27B0' },
+      { code: 'OUTIL', nom: 'Outils', desc: 'Outils de couture', couleur: '#607D8B' }
+    ];
+    for (const cat of categories) {
+      await db.execute(`INSERT INTO categories_matieres (code_categorie, nom_categorie, description, couleur_associee, est_actif) VALUES (?, ?, ?, ?, 1)`, [cat.code, cat.nom, cat.desc, cat.couleur]);
+    }
+    console.log("✅ Catégories de matières par défaut créées");
+  }
+
+  // Types de prestations par défaut
+  const prestationsCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM types_prestations");
+  if (prestationsCount[0].count === 0) {
+    const prestations = [
+      { nom: 'Confection simple - Robe', duree: 180, prix: 5000, unite: 'piece' },
+      { nom: 'Confection simple - Chemise', duree: 120, prix: 4000, unite: 'piece' },
+      { nom: 'Confection simple - Pantalon', duree: 150, prix: 4500, unite: 'piece' },
+      { nom: 'Confection complexe - Boubou', duree: 240, prix: 10000, unite: 'piece' },
+      { nom: 'Retouche - Ourlet', duree: 20, prix: 1000, unite: 'piece' },
+      { nom: 'Réparation - Fermeture éclair', duree: 30, prix: 2000, unite: 'piece' }
+    ];
+    for (const p of prestations) {
+      const code = await getNextPrestationCode();
+      await db.execute(`INSERT INTO types_prestations (code_prestation, nom, prix_par_defaut, unite, est_active) VALUES (?, ?, ?, ?, 1)`, [code, p.nom, p.prix, p.unite]);
+    }
+    console.log("✅ Types de prestations par défaut créés");
+  }
+
+  // Configuration atelier par défaut
+  const atelierCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM atelier");
+  if (atelierCount[0].count === 0) {
+    await db.execute(`INSERT INTO atelier (id, nom_atelier, telephone, adresse, email, ifu, rccm, message_facture_defaut, logo_base64, devise) VALUES (1, 'Mon Atelier de Couture', '', '', '', '', '', '', '', 'XOF')`);
+    console.log("✅ Configuration atelier par défaut créée");
+  }
+
+  // Admin par défaut
+  const adminHash = bcrypt.hashSync("admin123", 10);
+  const adminExists = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM utilisateurs WHERE login = 'admin'");
+  if (adminExists[0].count === 0) {
+    await db.execute(`INSERT INTO utilisateurs (nom, login, mot_de_passe_hash, role, est_actif) VALUES (?, ?, ?, ?, 1)`, ["Administrateur", "admin", adminHash, "admin"]);
+    console.log("✅ Compte admin créé (login: admin, mot de passe: admin123)");
   }
 };
 
-// ================= EXPORT DEFAULT =================
+// ================= FONCTIONS SUPPLÉMENTAIRES =================
+
+export const configurerBaseReseau = async (cheminReseau: string) => {
+  let cleanPath = cheminReseau.replace(/\\/g, '/');
+  cleanPath = cleanPath.replace(/^file:\/\/\//, '');
+  localStorage.setItem('use_network_db', 'true');
+  localStorage.setItem('network_db_path', cleanPath);
+  dbInstance = null;
+  return await getDb();
+};
+
+export const utiliserBaseLocale = async () => {
+  localStorage.setItem('use_network_db', 'false');
+  localStorage.removeItem('network_db_path');
+  dbInstance = null;
+  return await getDb();
+};
+
+export const testerConnexionReseau = async (cheminReseau: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    let cleanPath = cheminReseau.replace(/\\/g, '/');
+    cleanPath = cleanPath.replace(/^file:\/\/\//, '');
+    const testDb = await Database.load(cleanPath);
+    await testDb.execute("SELECT 1");
+    await testDb.close();
+    return { success: true, message: 'Connexion réussie ! La base est accessible.' };
+  } catch (error: any) {
+    return { success: false, message: `Erreur : ${error?.message || 'Base inaccessible.'}` };
+  }
+};
+
+export const executeSafe = async (query: string, params: any[] = []) => {
+  const db = await getDb();
+  try { return await db.execute(query, params); } catch (e) { console.error('❌ EXECUTE ERROR:', e); throw e; }
+};
+
+export const selectSafe = async <T>(query: string, params: any[] = []): Promise<T[]> => {
+  const db = await getDb();
+  try { const res = await db.select(query, params); return Array.isArray(res) ? (res as T[]) : []; } catch (e) { console.error('❌ SELECT ERROR:', e); return []; }
+};
+
+export const payerSalaire = async ({
+  employe_id, type, montant_net, mode, observation = '', empruntIds = []
+}: {
+  employe_id: number; type: 'fixe' | 'prestation'; montant_net: number; mode: string; observation?: string; empruntIds?: number[];
+}) => {
+  const db = await getDb();
+  const emp = await db.select<Array<{ type_remuneration: string; salaire_base: number }>>("SELECT type_remuneration, salaire_base FROM employes WHERE id = ?", [employe_id]);
+  if (!emp.length) throw new Error("Employé introuvable");
+  const typeEmploye = emp[0].type_remuneration;
+  if (!typeEmploye) throw new Error("Type de rémunération non défini");
+  if (type !== typeEmploye) throw new Error(`Paiement invalide: employé en ${typeEmploye}`);
+  if (montant_net <= 0) throw new Error("Montant invalide");
+
+  let retenue = 0;
+  if (empruntIds.length > 0) {
+    const placeholders = empruntIds.map(() => '?').join(',');
+    const emprunts = await db.select<Array<{ id: number; montant: number }>>(`SELECT id, montant FROM emprunts WHERE id IN (${placeholders}) AND deduit = 0`, empruntIds);
+    retenue = emprunts.reduce((sum, e) => sum + e.montant, 0);
+  }
+
+  const montant_brut = montant_net + retenue;
+
+  if (type === 'fixe') {
+    const salaire = emp[0].salaire_base || 0;
+    const totalDejaPaye = await db.select<Array<{ total: number }>>(`SELECT COALESCE(SUM(montant_net),0) as total FROM salaires WHERE employe_id = ? AND annule = 0`, [employe_id]);
+    const deja = totalDejaPaye[0]?.total || 0;
+    if (montant_net + deja > salaire) throw new Error("Dépassement du salaire fixe");
+  }
+
+  const result: any = await db.execute(`INSERT INTO salaires (employe_id, type, montant_brut, montant_net, montant_emprunts, observation, mode, date_paiement) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`, [employe_id, type, montant_brut, montant_net, retenue, observation, mode]);
+  const salaire_id = result?.lastInsertId;
+
+  if (empruntIds.length > 0 && salaire_id) {
+    const placeholders = empruntIds.map(() => '?').join(',');
+    await db.execute(`UPDATE emprunts SET deduit = 1, salaire_id = ?, date_deduction = datetime('now') WHERE id IN (${placeholders})`, [salaire_id, ...empruntIds]);
+  }
+
+  if (type === 'prestation') {
+    await db.execute(`UPDATE prestations_realisees SET paye = 1 WHERE employe_id = ? AND (paye = 0 OR paye IS NULL)`, [employe_id]);
+  }
+
+  return { success: true, salaire_id, montant_brut, montant_net, retenue };
+};
+
+export const payerSalaireSecurise = async (employe_id: number) => {
+  const db = await getDb();
+  const emp = await db.select<Array<{ type_remuneration: string; salaire_base: number }>>("SELECT type_remuneration, salaire_base FROM employes WHERE id = ?", [employe_id]);
+  if (!emp.length) throw new Error("Employé introuvable");
+  const type = emp[0].type_remuneration;
+  if (!type) throw new Error("Type de rémunération non défini");
+  
+  let montant_brut = 0;
+  if (type === 'fixe') montant_brut = emp[0].salaire_base || 0;
+  if (type === 'prestation') {
+    const prestations = await db.select<Array<{ total: number }>>(`SELECT COALESCE(SUM(total),0) as total FROM prestations_realisees WHERE employe_id = ? AND (paye = 0 OR paye IS NULL)`, [employe_id]);
+    montant_brut = prestations[0]?.total || 0;
+  }
+  
+  const emprunts = await db.select<Array<{ id: number; montant: number }>>("SELECT id, montant FROM emprunts WHERE employe_id = ? AND deduit = 0", [employe_id]);
+  const retenue = emprunts.reduce((sum: number, e) => sum + e.montant, 0);
+  const montant_net = Math.max(montant_brut - retenue, 0);
+  
+  return await payerSalaire({ employe_id, type: type as 'fixe' | 'prestation', montant_net, mode: 'Espèce', observation: 'Paiement automatique', empruntIds: emprunts.map(e => e.id) });
+};
+
+export const annulerPaiementSalaire = async (salaireId: number) => {
+  const db = await getDb();
+  const emprunts = await db.select<Array<{ id: number }>>(`SELECT id FROM emprunts WHERE salaire_id = ?`, [salaireId]);
+  const sal = await db.select<Array<{ employe_id: number; type: string }>>(`SELECT employe_id, type FROM salaires WHERE id = ?`, [salaireId]);
+
+  await db.execute(`DELETE FROM salaires WHERE id = ?`, [salaireId]);
+
+  if (emprunts.length > 0) {
+    const ids = emprunts.map(e => e.id);
+    const placeholders = ids.map(() => '?').join(',');
+    await db.execute(`UPDATE emprunts SET deduit = 0, salaire_id = NULL, date_deduction = NULL WHERE id IN (${placeholders})`, ids);
+  }
+
+  if (sal.length && sal[0].type === 'prestation') {
+    await db.execute(`UPDATE prestations_realisees SET paye = 0 WHERE employe_id = ?`, [sal[0].employe_id]);
+  }
+
+  return { success: true };
+};
+
+export const resetAllData = async () => {
+  const db = await getDb();
+  const tables = ['vente_details', 'ventes', 'clients', 'matieres', 'articles', 'modeles_tenues', 'tailles', 'couleurs', 'textures', 'categories_matieres', 'depenses', 'employes', 'salaires', 'emprunts', 'prestations_realisees', 'types_prestations', 'entrees_stock', 'sorties_stock'];
+  try {
+    await db.execute('PRAGMA foreign_keys = OFF');
+    for (const table of tables) {
+      try { await db.execute(`DELETE FROM ${table}`); await db.execute(`DELETE FROM sqlite_sequence WHERE name=?`, [table]); } catch (err) { console.log(`Table ${table} non trouvée ou vide`); }
+    }
+    console.log("✅ Reset terminé");
+  } catch (error) { console.error("❌ Reset échoué:", error); throw error; } finally { await db.execute('PRAGMA foreign_keys = ON'); }
+};
+
+// ================= EXPORT PAR DÉFAUT =================
 
 export default {
-  // Initialisation
   getDb,
-  initDatabase,
-  
-  // Configuration
-  getConfigurationAtelier,
-  saveConfigurationAtelier,
-  
-  // Codes
-  getNextClientCode,
-  getNextProductCode,
-  getNextCommandeCode,
-  getNextFactureCode,
-  getNextVenteCode,
-  getNextReglementCode,
-  getNextDecompteCode,
-  getNextSortieCode,
-  
-  // Clients
-  getClients,
-  createClient,
-  updateClient,
-  deleteClient,
-  
-  // Matières
-  getMatieres,
-  getMatiereById,
-  createMatiere,
-  updateMatiere,
-  deleteMatiere,
-  updateStockMatiere,
-  
-  // Gammes tenues
-  getGammesTenues,
-  getGammeTenueById,
-  createGammeTenue,
-  updateGammeTenue,
-  deleteGammeTenue,
-  
-  // Ventes
-  getVentes,
-  getVenteById,
-  createVente,
-  updateVentePaiement,
-  annulerVente,
-  
-  // Tailles
-  getTailles,
-  createTaille,
-  updateTaille,
-  deleteTaille,
-  
-  // Catégories matières
-  getCategoriesMatieres,
-  createCategorieMatiere,
-  
-  // Variantes tenues
-  getTenuesVariantes,
-  createTenueVariante,
-  updateTenueVariante,
-  deleteTenueVariante,
-  
-  // Salaires
-  payerSalaire,
-  payerSalaireSecurise,
-  getSalairesEmploye,
-  annulerPaiementSalaire,
-  
-  // Dépenses
-  getDepenses,
-  createDepense,
-  deleteDepense,
-  
-  // Recu
-  getRecuData,
-  
-  // Utilitaires
-  resetAllData,
-  seedData,
-  
-  // Réseau
-  testerConnexionReseau,
-  configurerBaseReseau,
-  utiliserBaseLocale,
-  
-  // Interface DB
-  dbInterface,
-  selectSafe,
-  executeSafe
+  getTailles, getTailleById, getTailleByCode, createTaille, updateTaille, deleteTaille,
+  getCouleurs, getCouleurById, getCouleurByNom, createCouleur, updateCouleur, deleteCouleur,
+  getTextures, getTextureById, createTexture, updateTexture, deleteTexture,
+  getTypesMesures, getTypeMesureById, createTypeMesure, updateTypeMesure, deleteTypeMesure,
+  getTypesPrestations, getTypePrestationById, createTypePrestation, updateTypePrestation, deleteTypePrestation,
+  getModelesTenues, getModeleTenueById, getModeleTenueByCode, createModeleTenue, updateModeleTenue, deleteModeleTenue,
+  getCategoriesMatieres, getCategorieMatiereById, createCategorieMatiere, updateCategorieMatiere, deleteCategorieMatiere,
+  getConfigurationAtelier, saveConfigurationAtelier,
+  getArticles, getArticleById, getArticleByCode, createArticle, updateArticle, deleteArticle, updateStockArticle,
+  getMatieres, getMatiereById, createMatiere, updateMatiere, deleteMatiere, updateStockMatiere,
+  getClients, getClientById, createClient, updateClient, deleteClient,
+  getVentes, getVenteById, getVenteDetails, getVenteWithDetails, createVenteComplete, updateVenteComplete, updateVentePaiement, annulerVente,
+  getNextClientId, getNextArticleCode, getNextVenteCode, getNextModeleCode, getNextCategorieCode, getNextPrestationCode, getNextMatiereCode,
+  configurerBaseReseau, utiliserBaseLocale, testerConnexionReseau,
+  executeSafe, selectSafe,
+  payerSalaire, payerSalaireSecurise, annulerPaiementSalaire,
+  resetAllData
 };

@@ -1,4 +1,4 @@
-// src/components/factures/ModalFacture.tsx
+// components/ventes/ModalFacture.tsx
 import { useRef, useState, useEffect } from 'react';
 import {
   Modal,
@@ -17,16 +17,18 @@ import {
   Center,
   NumberInput,
   Select,
+  Badge,
 } from '@mantine/core';
 import {
   IconPrinter,
   IconX,
   IconBuildingStore,
-  IconMail,
-  IconMapPin,
   IconPhone,
   IconUser,
   IconCash,
+  IconShoppingBag,
+  IconPackage,
+  IconTools,
 } from '@tabler/icons-react';
 import { getDb, ConfigurationAtelier } from '../../database/db';
 
@@ -34,48 +36,88 @@ interface LigneFacture {
   designation: string;
   quantite: number;
   prix_unitaire: number;
+  total: number;
+  type: 'article' | 'matiere' | 'prestation';
 }
 
-interface ClientFacture {
-  nom_prenom: string;
-  telephone_id: string;
-  email?: string;
-  adresse?: string;
-}
-
-interface CommandeFacture {
+interface VenteFacture {
   id?: number;
-  client: ClientFacture;
-  lignes: LigneFacture[];
-  numero?: string;
+  code_vente?: string;
+  type_vente?: 'commande' | 'pret_a_porter' | 'matiere';
+  date_vente?: string;
+  client_id?: string;
+  client_nom?: string;
+  mode_paiement?: string;
+  montant_total?: number;
+  montant_regle?: number;
+  montant_restant?: number;
+  statut?: string;
+  observation?: string;
+  lignes?: LigneFacture[];
+  total_general?: number;
   avance?: number;
   reste?: number;
-  total_general?: number;
+  numero?: string;
   date_commande?: string;
 }
 
 interface ModalFactureProps {
-  commande: CommandeFacture;
+  vente: VenteFacture;
   onClose: () => void;
   onConfirmPaiement?: (montant: number, mode: string) => void;
+  onRefresh?: () => void;
 }
 
-const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfirmPaiement }) => {
+const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPaiement, onRefresh }) => {
   const printRef = useRef<HTMLDivElement>(null);
   const [atelier, setAtelier] = useState<ConfigurationAtelier | null>(null);
   const [loading, setLoading] = useState(true);
-  const [montantPaiement, setMontantPaiement] = useState(commande.total_general || 0);
+  const [montantPaiement, setMontantPaiement] = useState(0);
   const [modePaiement, setModePaiement] = useState('Espèces');
   const [showPaiementModal, setShowPaiementModal] = useState(false);
+  const [lignes, setLignes] = useState<LigneFacture[]>(vente.lignes || []);
+
+  const total = vente?.total_general ?? vente?.montant_total ?? 0;
+  const regle = vente?.avance ?? vente?.montant_regle ?? 0;
+  const reste = vente?.reste ?? vente?.montant_restant ?? (total - regle);
+  const codeVente = vente?.numero ?? vente?.code_vente ?? 'N/A';
+  const dateVente = vente?.date_commande ?? vente?.date_vente ?? new Date().toISOString();
+
+  useEffect(() => {
+    setMontantPaiement(reste);
+  }, [reste]);
 
   useEffect(() => {
     const load = async () => {
       try {
         const db = await getDb();
         const conf = await db.select<ConfigurationAtelier[]>(`
-          SELECT * FROM configuration_atelier WHERE id = 1
+          SELECT * FROM atelier WHERE id = 1
         `);
         setAtelier(conf[0] || null);
+        
+        if ((!lignes || lignes.length === 0) && vente.id) {
+          const details = await db.select<any[]>(
+            `SELECT vd.*, 
+              CASE 
+                WHEN vd.article_id IS NOT NULL THEN 'article'
+                WHEN vd.matiere_id IS NOT NULL THEN 'matiere'
+                ELSE 'prestation'
+              END as type_ligne
+             FROM vente_details vd
+             WHERE vd.vente_id = ?`,
+            [vente.id]
+          );
+          
+          const lignesFormatted = details.map(d => ({
+            designation: d.designation || 'Sans désignation',
+            quantite: d.quantite || 0,
+            prix_unitaire: d.prix_unitaire || 0,
+            total: d.total || 0,
+            type: d.type_ligne as LigneFacture['type']
+          }));
+          setLignes(lignesFormatted);
+        }
       } catch (e) {
         console.error("Erreur chargement atelier", e);
       } finally {
@@ -83,10 +125,7 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
       }
     };
     load();
-  }, []);
-
-  const total = commande.total_general ?? commande.lignes.reduce((s, l) => s + l.quantite * l.prix_unitaire, 0);
-  const reste = total - (commande.avance || 0);
+  }, [vente.id]);
 
   const handlePrint = () => {
     const printContent = printRef.current;
@@ -118,7 +157,7 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Facture ${commande.numero || commande.id}</title>
+        <title>Facture ${codeVente}</title>
         ${stylesHTML}
         <style>
           body { font-family: Arial, Helvetica, sans-serif; padding: 20px; margin: 0; background: white; }
@@ -141,38 +180,96 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
     };
   };
 
-  const handleConfirmerPaiement = () => {
+  const handleConfirmerPaiement = async () => {
     if (onConfirmPaiement) {
-      onConfirmPaiement(montantPaiement, modePaiement);
+      await onConfirmPaiement(montantPaiement, modePaiement);
+      setShowPaiementModal(false);
+      if (onRefresh) onRefresh();
+      onClose();
     }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'article': return <IconShoppingBag size={14} />;
+      case 'matiere': return <IconPackage size={14} />;
+      case 'prestation': return <IconTools size={14} />;
+      default: return null;
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'article': return 'Tenue';
+      case 'matiere': return 'Matière';
+      case 'prestation': return 'Prestation';
+      default: return type;
+    }
+  };
+
+  const nombreEnUnites = (n: number): string => {
+    const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+    if (n === 0) return '';
+    if (n < 10) return unites[n];
+    return n.toString();
+  };
+
+  const nombreEnDizaines = (n: number): string => {
+    const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
+    if (n < 10) return nombreEnUnites(n);
+    if (n < 20) {
+      if (n === 11) return 'onze';
+      if (n === 12) return 'douze';
+      if (n === 13) return 'treize';
+      if (n === 14) return 'quatorze';
+      if (n === 15) return 'quinze';
+      if (n === 16) return 'seize';
+      return dizaines[1] + (n > 10 ? '-' + nombreEnUnites(n - 10) : '');
+    }
+    const d = Math.floor(n / 10);
+    const u = n % 10;
+    if (d === 7 || d === 9) {
+      return dizaines[d - 1] + (u > 0 ? '-' + nombreEnUnites(u) : '');
+    }
+    return dizaines[d] + (u > 0 ? '-' + nombreEnUnites(u) : '');
   };
 
   const nombreEnLettres = (montant: number): string => {
     if (montant === 0) return 'zéro';
-    const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
-    const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
-    if (montant < 10) return unites[montant];
-    if (montant < 20) {
-      if (montant === 11) return 'onze';
-      if (montant === 12) return 'douze';
-      return `${dizaines[1]}${montant > 10 ? '-' + unites[montant - 10] : ''}`;
+    
+    const milliards = Math.floor(montant / 1000000000);
+    const millions = Math.floor((montant % 1000000000) / 1000000);
+    const milliers = Math.floor((montant % 1000000) / 1000);
+    const resteMontant = montant % 1000;
+    
+    let result = '';
+    
+    if (milliards > 0) {
+      result += (milliards === 1 ? 'un milliard ' : nombreEnDizaines(milliards) + ' milliards ');
     }
-    const d = Math.floor(montant / 10);
-    const u = montant % 10;
-    if (d === 7 || d === 9) return `${dizaines[d - 1]}${u > 0 ? '-' + unites[u] : ''}`;
-    return `${dizaines[d]}${u > 0 ? '-' + unites[u] : ''}`;
+    if (millions > 0) {
+      result += (millions === 1 ? 'un million ' : nombreEnDizaines(millions) + ' millions ');
+    }
+    if (milliers > 0) {
+      if (milliers === 1) result += 'mille ';
+      else result += nombreEnDizaines(milliers) + ' mille ';
+    }
+    if (resteMontant > 0) {
+      result += nombreEnDizaines(resteMontant);
+    }
+    
+    return result.trim();
   };
 
   const montantEnLettres = (montant: number): string => {
-    const mille = Math.floor(montant / 1000);
-    const reste = montant % 1000;
-    let result = '';
-    if (mille > 0) {
-      if (mille === 1) result += 'mille ';
-      else result += `${nombreEnLettres(mille)} mille `;
+    const safeMontant = montant || 0;
+    const francs = Math.floor(safeMontant);
+    const centimes = Math.round((safeMontant - francs) * 100);
+    let result = nombreEnLettres(francs) + ' franc' + (francs > 1 ? 's' : '');
+    if (centimes > 0) {
+      result += ` ${centimes} centime${centimes > 1 ? 's' : ''}`;
     }
-    if (reste > 0) result += nombreEnLettres(reste);
-    return result.trim() || 'zéro';
+    return result;
   };
 
   if (loading) {
@@ -190,7 +287,7 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
         onClose={onClose}
         size="xl"
         centered
-        title={`Facture N° : ${commande.numero || `FAC-${Date.now()}`}`}
+        title={`Facture N° : ${codeVente}`}
         radius="md"
         styles={{
           header: { backgroundColor: '#1b365d', padding: '16px 24px' },
@@ -224,7 +321,7 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
                     <Text size="xs" c="dimmed">{atelier?.adresse || "Ouagadougou, Burkina Faso"}</Text>
                     <Text size="xs" c="dimmed">Tel: {atelier?.telephone || "70 00 00 00"}</Text>
                     {atelier?.email && <Text size="xs" c="dimmed">Email: {atelier.email}</Text>}
-                    {atelier?.nif && <Text size="xs" c="dimmed">NIF: {atelier.nif}</Text>}
+                    {atelier?.ifu && <Text size="xs" c="dimmed">IFU: {atelier.ifu}</Text>}
                   </Stack>
                 </Box>
                 {atelier?.logo_base64 && (
@@ -239,11 +336,11 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
               <SimpleGrid cols={{ base: 2 }} spacing="md">
                 <Box>
                   <Text size="sm" fw={600}>Date de la Facture</Text>
-                  <Text size="sm">{commande.date_commande ? new Date(commande.date_commande).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</Text>
+                  <Text size="sm">{new Date(dateVente).toLocaleDateString('fr-FR')}</Text>
                 </Box>
                 <Box ta="right">
                   <Text size="sm" fw={600}>Facture N° :</Text>
-                  <Text size="sm" fw={700} c="#1b365d">{commande.numero || `FAC-${Date.now()}`}</Text>
+                  <Text size="sm" fw={700} c="#1b365d">{codeVente}</Text>
                 </Box>
               </SimpleGrid>
 
@@ -253,10 +350,8 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
                 <Text fw={700} size="sm" mb="xs" tt="uppercase">INFORMATIONS DU CLIENT</Text>
                 <Paper p="xs" radius="md" withBorder style={{ backgroundColor: '#f8f9fa' }}>
                   <Group gap="lg" wrap="wrap">
-                    <Group gap={4}><IconUser size={14} color="#1b365d" /><Text size="sm" c="dimmed">Nom :</Text><Text fw={600} size="sm">{commande.client.nom_prenom}</Text></Group>
-                    <Group gap={4}><IconPhone size={14} color="#1b365d" /><Text size="sm" c="dimmed">Tél :</Text><Text fw={600} size="sm">{commande.client.telephone_id}</Text></Group>
-                    {commande.client.email && <Group gap={4}><IconMail size={14} color="#1b365d" /><Text size="sm" c="dimmed">Email :</Text><Text fw={500} size="sm">{commande.client.email}</Text></Group>}
-                    {commande.client.adresse && <Group gap={4}><IconMapPin size={14} color="#1b365d" /><Text size="sm" c="dimmed">Adresse :</Text><Text fw={500} size="sm">{commande.client.adresse}</Text></Group>}
+                    <Group gap={4}><IconUser size={14} color="#1b365d" /><Text size="sm" c="dimmed">Nom :</Text><Text fw={600} size="sm">{vente.client_nom || 'Client non renseigné'}</Text></Group>
+                    {vente.client_id && <Group gap={4}><IconPhone size={14} color="#1b365d" /><Text size="sm" c="dimmed">Tél :</Text><Text fw={600} size="sm">{vente.client_id}</Text></Group>}
                   </Group>
                 </Paper>
               </Box>
@@ -274,32 +369,57 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {commande.lignes.map((l, i) => (
-                    <Table.Tr key={i}>
-                      <Table.Td ta="center">{i + 1}</Table.Td>
-                      <Table.Td>{l.designation}</Table.Td>
-                      <Table.Td ta="center">{l.quantite}</Table.Td>
-                      <Table.Td ta="right">{l.prix_unitaire.toLocaleString()} FCFA</Table.Td>
-                      <Table.Td ta="right" fw={600}>{(l.quantite * l.prix_unitaire).toLocaleString()} FCFA</Table.Td>
+                  {lignes && lignes.length > 0 ? (
+                    lignes.map((l, i) => (
+                      <Table.Tr key={i}>
+                        <Table.Td ta="center">{i + 1}</Table.Td>
+                        <Table.Td>
+                          <Group gap={4}>
+                            {getTypeIcon(l.type)}
+                            <Text size="sm">{l.designation || 'Sans désignation'}</Text>
+                            <Badge size="xs" variant="light" color="gray">
+                              {getTypeLabel(l.type)}
+                            </Badge>
+                          </Group>
+                        </Table.Td>
+                        <Table.Td ta="center">{l.quantite || 0}</Table.Td>
+                        <Table.Td ta="right">{(l.prix_unitaire || 0).toLocaleString()} FCFA</Table.Td>
+                        <Table.Td ta="right" fw={600}>{(l.total || 0).toLocaleString()} FCFA</Table.Td>
+                      </Table.Tr>
+                    ))
+                  ) : (
+                    <Table.Tr>
+                      <Table.Td colSpan={5} ta="center" py={20}>
+                        <Text c="dimmed">Aucun détail disponible</Text>
+                      </Table.Td>
                     </Table.Tr>
-                  ))}
+                  )}
                 </Table.Tbody>
               </Table>
 
               <Box mt="xl">
                 <SimpleGrid cols={{ base: 2 }} spacing="md">
                   <Box>
-                    {commande.avance !== undefined && commande.avance > 0 && (
+                    {regle > 0 && (
                       <>
-                        <Text size="sm" c="dimmed">Avance</Text>
-                        <Text fw={600} c="green">{commande.avance.toLocaleString()} FCFA</Text>
+                        <Text size="sm" c="dimmed">Montant déjà réglé</Text>
+                        <Text fw={600} c="green">{(regle || 0).toLocaleString()} FCFA</Text>
                       </>
                     )}
                   </Box>
                   <Box ta="right">
                     <Text size="sm" c="dimmed">Montant total</Text>
-                    <Text fw={800} size="xl" c="#1b365d">{total.toLocaleString()} FCFA</Text>
-                    {reste > 0 && <Text size="sm" c="red">Reste à payer : {reste.toLocaleString()} FCFA</Text>}
+                    <Text fw={800} size="xl" c="#1b365d">{(total || 0).toLocaleString()} FCFA</Text>
+                    {(reste || 0) > 0 && (
+                      <Badge color="orange" size="sm" mt={4}>
+                        Reste à payer : {(reste || 0).toLocaleString()} FCFA
+                      </Badge>
+                    )}
+                    {vente.statut === 'PAYEE' && (
+                      <Badge color="green" size="sm" mt={4}>
+                        Entièrement payée
+                      </Badge>
+                    )}
                   </Box>
                 </SimpleGrid>
               </Box>
@@ -307,20 +427,21 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
               <Paper p="md" mt="xl" style={{ backgroundColor: '#f8f9fa', borderRadius: 8 }}>
                 <Text size="sm">
                   Arrêté la présente facture à la somme de : <strong>
-                    {montantEnLettres(total)} ({total.toLocaleString()}) Francs CFA
+                    {montantEnLettres(total || 0)} ({(total || 0).toLocaleString()}) Francs CFA
                   </strong>
                 </Text>
               </Paper>
 
               <SimpleGrid cols={{ base: 2 }} spacing="md" mt="xl">
+                <Box></Box>
                 <Box ta="right">
                   <Text size="sm" fw={600}>Signature et cachet</Text>
                   <Box mt={20} style={{ borderTop: '1px solid #000', width: 150, marginLeft: 'auto' }} />
                 </Box>
               </SimpleGrid>
 
-              {atelier?.message_facture && (
-                <Text size="xs" c="dimmed" ta="center" mt="xl" fs="italic">{atelier.message_facture}</Text>
+              {atelier?.message_facture_defaut && (
+                <Text size="xs" c="dimmed" ta="center" mt="xl" fs="italic">{atelier.message_facture_defaut}</Text>
               )}
             </Paper>
           </Stack>
@@ -330,24 +451,27 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
         <Group justify="flex-end" p="md" className="no-print">
           <Button variant="light" onClick={onClose} leftSection={<IconX size={16} />}>Fermer</Button>
           <Button onClick={handlePrint} variant="outline" color="teal" leftSection={<IconPrinter size={16} />}>Imprimer</Button>
-          <Button onClick={() => setShowPaiementModal(true)} variant="gradient" gradient={{ from: 'green', to: 'teal' }} leftSection={<IconCash size={16} />}>
-            Procéder au paiement
-          </Button>
+          {vente.statut !== 'PAYEE' && (reste || 0) > 0 && (
+            <Button onClick={() => setShowPaiementModal(true)} variant="gradient" gradient={{ from: 'green', to: 'teal' }} leftSection={<IconCash size={16} />}>
+              Procéder au paiement
+            </Button>
+          )}
         </Group>
       </Modal>
 
       {/* Modal de paiement */}
       <Modal opened={showPaiementModal} onClose={() => setShowPaiementModal(false)} title="💰 Paiement de la facture" size="md" centered radius="lg">
         <Stack gap="md">
-          <Text size="sm">Montant total à payer : <strong>{total.toLocaleString()} FCFA</strong></Text>
-          {reste > 0 && <Text size="sm" c="orange">Reste à payer : <strong>{reste.toLocaleString()} FCFA</strong></Text>}
+          <Text size="sm">Montant total : <strong>{(total || 0).toLocaleString()} FCFA</strong></Text>
+          <Text size="sm" c="green">Déjà réglé : <strong>{(regle || 0).toLocaleString()} FCFA</strong></Text>
+          <Text size="sm" c="orange">Reste à payer : <strong>{(reste || 0).toLocaleString()} FCFA</strong></Text>
           
           <NumberInput 
             label="Montant du paiement" 
             value={montantPaiement} 
             onChange={(val) => setMontantPaiement(Number(val) || 0)} 
             min={0} 
-            max={total} 
+            max={reste || 0} 
             step={1000} 
             required 
           />
@@ -358,7 +482,10 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ commande, onClose, onConfir
               { value: 'Espèces', label: '💵 Espèces' },
               { value: 'Orange money', label: '📱 Orange Money' },
               { value: 'Moov money', label: '📱 Moov Money' },
-              { value: 'Wave', label: '🌊 Wave' }
+              { value: 'Telecel money', label: '📱 Telecel Money' },
+              { value: 'Wave', label: '🌊 Wave' },
+              { value: 'Sank Money', label: '💰 Sank Money' },
+              { value: 'Virement bancaire', label: '🏦 Virement bancaire' }
             ]} 
             value={modePaiement} 
             onChange={(val) => setModePaiement(val || 'Espèces')} 

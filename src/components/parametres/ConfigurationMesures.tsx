@@ -179,8 +179,8 @@ const ConfigurationMesures: React.FC = () => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                  <IconRulerMeasure size={30} color="white" />
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(19, 65, 134, 0.2)' }}>
+                  <IconRulerMeasure size={30} color="black" />
                 </Avatar>
                 <Box>
                   <Title order={1} c="white" size="h2">Configuration des mesures</Title>

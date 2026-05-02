@@ -153,7 +153,7 @@ const ExportSupport: React.FC = () => {
           <Group justify="space-between" align="center">
             <Group gap="md">
               <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                <IconDatabase size={30} color="white" />
+                <IconDatabase size={30} color="black" />
               </Avatar>
               <Box>
                 <Title order={1} c="white" size="h2">Export pour support technique</Title>

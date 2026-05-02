@@ -57,10 +57,10 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
   ];
 
   const categoriesOptions = [
-    { value: 'Général', label: '📏 Général' },
-    { value: 'Haut', label: '👕 Haut du corps' },
-    { value: 'Bas', label: '👖 Bas du corps' },
-    { value: 'Spécifique', label: '✨ Spécifique' },
+    { value: 'general', label: '📏 Général' },
+    { value: 'haut', label: '👕 Haut du corps' },
+    { value: 'bas', label: '👖 Bas du corps' },
+    { value: 'accessoire', label: '✨ Accessoire' },
   ];
 
   useEffect(() => {

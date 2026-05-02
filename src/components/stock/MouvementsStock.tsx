@@ -35,13 +35,15 @@ import { notifications } from '@mantine/notifications';
 interface MouvementStock {
   id: number;
   type_mouvement: 'entree' | 'sortie';
+  code_mouvement: string;
   matiere_id: number | null;
-  tenue_id: number | null;
+  article_id: number | null;
   designation: string;
   quantite: number;
   cout_unitaire: number;
   date_mouvement: string;
-  motif: string;
+  motif: string | null;
+  observation: string | null;
 }
 
 const MouvementsStock: React.FC = () => {
@@ -57,14 +59,42 @@ const MouvementsStock: React.FC = () => {
     const db = await getDb();
     try {
       const result = await db.select<MouvementStock[]>(`
-        SELECT 
-          m.*,
-          COALESCE(mat.designation, tenue.designation) as designation
-        FROM mouvements_stock m
-        LEFT JOIN matieres mat ON m.matiere_id = mat.id
-        LEFT JOIN gammes_tenues tenue ON m.tenue_id = tenue.id
-        ORDER BY m.date_mouvement DESC
-      `);
+      SELECT 
+        e.id,
+        'entree' as type_mouvement,
+        e.code_entree as code_mouvement,
+        e.matiere_id,
+        e.article_id,
+        COALESCE(mat.designation, art.code_article) as designation,
+        e.quantite,
+        e.cout_unitaire,
+        e.date_entree as date_mouvement,
+        NULL as motif,
+        e.observation
+      FROM entrees_stock e
+      LEFT JOIN matieres mat ON e.matiere_id = mat.id
+      LEFT JOIN articles art ON e.article_id = art.id
+      
+      UNION ALL
+      
+      SELECT 
+        s.id,
+        'sortie' as type_mouvement,
+        s.code_sortie as code_mouvement,
+        s.matiere_id,
+        s.article_id,
+        COALESCE(mat2.designation, art2.code_article) as designation,
+        s.quantite,
+        s.cout_unitaire,
+        s.date_sortie as date_mouvement,
+        s.motif,
+        s.observation
+      FROM sorties_stock s
+      LEFT JOIN matieres mat2 ON s.matiere_id = mat2.id
+      LEFT JOIN articles art2 ON s.article_id = art2.id
+      
+      ORDER BY date_mouvement DESC
+    `);
       setMouvements(result || []);
     } catch (error) {
       console.error(error);
@@ -73,7 +103,6 @@ const MouvementsStock: React.FC = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     chargerMouvements();
   }, []);
@@ -88,6 +117,10 @@ const MouvementsStock: React.FC = () => {
     return new Date(date).toLocaleDateString('fr-FR');
   };
 
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(price);
+  };
+
   const getTypeBadge = (type: string) => {
     if (type === 'entree') {
       return <Badge color="green" variant="light" leftSection={<IconArrowUp size={12} />}>Entrée</Badge>;
@@ -96,7 +129,8 @@ const MouvementsStock: React.FC = () => {
   };
 
   const mouvementsFiltres = mouvements.filter(m =>
-    m.designation?.toLowerCase().includes(recherche.toLowerCase())
+    m.designation?.toLowerCase().includes(recherche.toLowerCase()) ||
+    m.code_mouvement?.toLowerCase().includes(recherche.toLowerCase())
   );
 
   const totalPages = Math.ceil(mouvementsFiltres.length / itemsPerPage);
@@ -175,7 +209,7 @@ const MouvementsStock: React.FC = () => {
         <Card withBorder radius="md" p="md">
           <Group justify="space-between">
             <TextInput
-              placeholder="Rechercher par produit..."
+              placeholder="Rechercher par produit ou code..."
               leftSection={<IconSearch size={16} />}
               value={recherche}
               onChange={(e) => {
@@ -183,7 +217,7 @@ const MouvementsStock: React.FC = () => {
                 setCurrentPage(1);
               }}
               size="sm"
-              style={{ width: 300 }}
+              style={{ width: 350 }}
             />
             <Group>
               <Tooltip label="Actualiser">
@@ -207,20 +241,25 @@ const MouvementsStock: React.FC = () => {
                 <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                   <Table.Tr>
                     <Table.Th style={{ color: 'white', width: 110 }}>Date</Table.Th>
+                    <Table.Th style={{ color: 'white', width: 120 }}>Code</Table.Th>
                     <Table.Th style={{ color: 'white', width: 90 }}>Type</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Produit</Table.Th>
-                    <Table.Th style={{ color: 'white', textAlign: 'right' }}>Quantité</Table.Th>
+                    <Table.Th style={{ color: 'white', textAlign: 'right', width: 100 }}>Quantité</Table.Th>
+                    <Table.Th style={{ color: 'white', textAlign: 'right', width: 120 }}>Coût unitaire</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Motif</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {paginatedData.map((m) => (
-                    <Table.Tr key={m.id}>
+                    <Table.Tr key={`${m.type_mouvement}-${m.id}`}>
                       <Table.Td>
                         <Group gap={4} wrap="nowrap">
                           <IconCalendar size={12} />
                           <Text size="sm">{formatDate(m.date_mouvement)}</Text>
                         </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" ff="monospace">{m.code_mouvement}</Text>
                       </Table.Td>
                       <Table.Td>{getTypeBadge(m.type_mouvement)}</Table.Td>
                       <Table.Td fw={500}>{m.designation || '-'}</Table.Td>
@@ -229,8 +268,11 @@ const MouvementsStock: React.FC = () => {
                           {m.quantite}
                         </Badge>
                       </Table.Td>
+                      <Table.Td ta="right">
+                        <Text size="sm">{m.cout_unitaire ? formatPrice(m.cout_unitaire) : '-'}</Text>
+                      </Table.Td>
                       <Table.Td>
-                        <Text size="sm" c="dimmed">{m.motif || '-'}</Text>
+                        <Text size="sm" c="dimmed">{m.motif || m.observation || '-'}</Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}
@@ -266,12 +308,12 @@ const MouvementsStock: React.FC = () => {
           }}
         >
           <Stack gap="md">
-            <Text size="sm">1. Les mouvements de stock sont automatiquement enregistrés</Text>
-            <Text size="sm">2. Une entrée correspond à un achat de matière première</Text>
-            <Text size="sm">3. Une sortie correspond à une vente ou une utilisation</Text>
-            <Text size="sm">4. La recherche filtre par produit</Text>
+            <Text size="sm">1. Les entrées correspondent aux achats de matières ou articles</Text>
+            <Text size="sm">2. Les sorties correspondent aux ventes ou utilisations</Text>
+            <Text size="sm">3. Chaque mouvement a un code unique (ENT-xxxx ou SOR-xxxx)</Text>
+            <Text size="sm">4. La recherche filtre par produit ou code</Text>
             <Divider />
-            <Text size="xs" c="dimmed" ta="center">Version 2.0.0 - Architecture simplifiée</Text>
+            <Text size="xs" c="dimmed" ta="center">Version 2.0.0</Text>
           </Stack>
         </Modal>
       </Stack>

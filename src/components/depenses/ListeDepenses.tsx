@@ -178,11 +178,11 @@ const ListeDepenses: React.FC = () => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                  <IconReceipt size={30} color="white" />
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(19, 65, 134, 0.2)' }}>
+                  <IconReceipt size={30} color="black" />
                 </Avatar>
                 <Box>
-                  <Title order={1} c="white" size="h2">Dépenses</Title>
+                  <Title order={1} c="white" size="h2">Gestion des dépenses</Title>
                   <Text c="gray.3" size="sm" mt={4}>
                     Gestion des dépenses de l'atelier
                   </Text>

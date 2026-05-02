@@ -323,10 +323,10 @@ const ListePrestationsRealisees: React.FC = () => {
             <Group justify="space-between" align="center">
               <Group gap="md">
                 <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                  <IconClipboardList size={30} color="white" />
+                  <IconClipboardList size={30} color="black" />
                 </Avatar>
                 <Box>
-                  <Title order={1} c="white" size="h2">Prestations réalisées</Title>
+                  <Title order={1} c="white" size="h2">Gestion des prestations des employés</Title>
                   <Text c="gray.3" size="sm" mt={4}>
                     Suivi des prestations effectuées par les employés
                   </Text>

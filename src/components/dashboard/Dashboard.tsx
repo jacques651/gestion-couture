@@ -1,63 +1,23 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Stack,
-  Card,
-  Title,
-  Text,
-  Group,
-  SimpleGrid,
-  ThemeIcon,
-  Table,
-  Badge,
-  ScrollArea,
-  LoadingOverlay,
-  Divider,
-  Grid,
-  Button,
-  Modal,
-  Box,
-  Container,
-  Avatar,
-  Center,
-  Paper,
-  Progress,
-  RingProgress,
+  Stack, Card, Title, Text, Group, SimpleGrid, ThemeIcon, Table, Badge,
+  ScrollArea, LoadingOverlay, Divider, Grid, Button, Modal, Box,
+  Container, Avatar, Center, Paper, RingProgress,
 } from '@mantine/core';
 import {
-  IconUsers,
-  IconShoppingBag,
-  IconReceipt,
-  IconMoneybag,
-  IconChartBar,
-  IconTrendingUp,
-  IconBuildingStore,
-  IconPackage,
-  IconFileInvoice,
-  IconCheck,
-  IconCurrencyFrank,
-  IconInfoCircle,
-  IconDashboard,
-  IconCash,
-  IconAlertCircle,
-  IconArrowUpRight,
-  IconArrowDownRight,
-  IconCreditCard,
+  IconUsers, IconShoppingBag, IconReceipt, IconChartBar, IconTrendingUp,
+  IconBuildingStore, IconPackage, IconFileInvoice, IconCheck,
+  IconCurrencyFrank, IconInfoCircle, IconCash, IconAlertCircle, 
+  IconShirt,
 } from '@tabler/icons-react';
-import { useFinance } from '../../hooks/useFinance';
 import { getDb } from '../../database/db';
+import { notifications } from '@mantine/notifications';
 
 type PageKey =
-  | 'dashboard'
-  | 'clients'
-  | 'commandes'
-  | 'paiements'
-  | 'depenses'
-  | 'salaires'
-  | 'journal_caisse'
-  | 'stock_global'
-  | 'matieres'
-  | 'ventes'
-  | 'factures';
+  | 'dashboard' | 'clients' | 'ventes' | 'depenses' | 'salaires'
+  | 'journal_caisse' | 'stock_global' | 'matieres' | 'articles' | 'modeles'
+  | 'factures-recus' | 'mouvements_stock';
 
 interface DashboardProps {
   setPage: (page: PageKey) => void;
@@ -65,200 +25,112 @@ interface DashboardProps {
 
 const formatCurrency = (v?: number) => `${(v || 0).toLocaleString('fr-FR')} FCFA`;
 
-const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
-  const { stats, journal, loading } = useFinance();
-  const [stock, setStock] = useState<any[]>([]);
-  const [stockTotal, setStockTotal] = useState(0);
+const Dashboard: React.FC<DashboardProps> = ({ }) => {
+  const [loading, setLoading] = useState(true);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const loadStock = async () => {
+  const [stats, setStats] = useState({
+    chiffreAffaires: 0, encaissements: 0, depenses: 0,
+    resteARecouvrer: 0, beneficeTresorerie: 0,
+  });
+  const [stockAlertes, setStockAlertes] = useState<any[]>([]);
+  const [stockTotal, setStockTotal] = useState(0);
+  const [journal, setJournal] = useState<any[]>([]);
+
+  useEffect(() => { loadAllData(); }, []);
+
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
       const db = await getDb();
-      const res = await db.select<any[]>(`
-        SELECT 
-          m.designation,
-          COALESCE(SUM(e.quantite),0) - COALESCE(SUM(s.quantite),0) as stock,
-          CASE 
-            WHEN SUM(e.quantite) > 0 
-            THEN SUM(e.quantite * e.cout_unitaire) / SUM(e.quantite)
-            ELSE 0
-          END as cout_moyen
-        FROM matieres m
-        LEFT JOIN entrees_stock e ON e.matiere_id = m.id
-        LEFT JOIN sorties_stock s ON s.matiere_id = m.id
-        WHERE m.est_supprime = 0
-        GROUP BY m.id
-      `);
-      setStock(res || []);
-      const total = (res || []).reduce(
-        (sum, m) => sum + (m.stock * m.cout_moyen),
-        0
-      );
-      setStockTotal(total);
-    };
-    loadStock();
-  }, []);
 
-  const tauxRecouvrement = stats.chiffreAffaires > 0
-    ? (stats.encaissements / stats.chiffreAffaires) * 100
-    : 0;
+      const ca = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_total), 0) as total FROM ventes`);
+      const chiffreAffaires = ca[0]?.total || 0;
+
+      const enc = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_regle), 0) as total FROM ventes`);
+      const encaissements = enc[0]?.total || 0;
+
+      const dep = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant), 0) as total FROM depenses`);
+      const depenses = dep[0]?.total || 0;
+
+      const reste = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_total - montant_regle), 0) as total FROM ventes WHERE statut != 'PAYEE'`);
+      const resteARecouvrer = reste[0]?.total || 0;
+
+      setStats({ chiffreAffaires, encaissements, depenses, resteARecouvrer, beneficeTresorerie: encaissements - depenses });
+
+      const matieresAlertes = await db.select<any[]>(`SELECT m.designation, m.stock_actuel as stock, m.seuil_alerte, m.unite, 'matiere' as type FROM matieres m WHERE m.est_supprime = 0 AND m.stock_actuel <= m.seuil_alerte ORDER BY m.stock_actuel ASC`);
+      const articlesAlertes = await db.select<any[]>(`SELECT a.code_article as designation, a.quantite_stock as stock, a.seuil_alerte, '' as unite, 'article' as type FROM articles a WHERE a.est_actif = 1 AND a.quantite_stock <= a.seuil_alerte ORDER BY a.quantite_stock ASC`);
+      setStockAlertes([...matieresAlertes, ...articlesAlertes].sort((a, b) => a.stock - b.stock));
+
+      const sm = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(stock_actuel * prix_achat), 0) as total FROM matieres WHERE est_supprime = 0`);
+      const sa = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(quantite_stock * COALESCE(prix_achat, prix_vente)), 0) as total FROM articles WHERE est_actif = 1`);
+      setStockTotal((sm[0]?.total || 0) + (sa[0]?.total || 0));
+
+      const j = await db.select<any[]>(`SELECT date_vente as date, code_vente as description, montant_total as entree, 0 as sortie FROM ventes UNION ALL SELECT date_depense as date, designation as description, 0 as entree, montant as sortie FROM depenses ORDER BY date DESC LIMIT 10`);
+      setJournal(j || []);
+    } catch (err) {
+      notifications.show({ title: 'Erreur', message: 'Erreur de chargement', color: 'red' });
+    } finally { setLoading(false); }
+  };
+
+  const tauxRecouvrement = stats.chiffreAffaires > 0 ? (stats.encaissements / stats.chiffreAffaires) * 100 : 0;
   const beneficeReel = stats.beneficeTresorerie - stockTotal;
-  const stockRupture = stock.filter(m => m.stock <= 0).length;
-  const stockAlerte = stock.filter(m => m.stock > 0 && m.stock <= 5).length;
 
   const quickLinks = [
-    { label: 'Clients', action: () => setPage('clients'), icon: <IconUsers size={20} />, color: 'blue', description: 'Gestion des clients', bg: '#e8f4fd' },
-    { label: 'Commandes', action: () => setPage('commandes'), icon: <IconShoppingBag size={20} />, color: 'violet', description: 'Gestion des commandes', bg: '#f3e5f5' },
-    { label: 'Paiements', action: () => setPage('paiements'), icon: <IconCreditCard size={20} />, color: 'green', description: 'Enregistrer les paiements', bg: '#e8f5e9' },
-    { label: 'Factures', action: () => setPage('factures'), icon: <IconFileInvoice size={20} />, color: 'orange', description: 'Gestion des factures', bg: '#fff3e0' },
-    { label: 'Stock', action: () => setPage('stock_global'), icon: <IconPackage size={20} />, color: 'teal', description: 'Gestion du stock', bg: '#e0f7fa' },
-    { label: 'Ventes', action: () => setPage('ventes'), icon: <IconBuildingStore size={20} />, color: 'pink', description: 'Historique des ventes', bg: '#fce4ec' },
-    { label: 'Dépenses', action: () => setPage('depenses'), icon: <IconReceipt size={20} />, color: 'red', description: 'Gestion des dépenses', bg: '#ffebee' },
-    { label: 'Salaires', action: () => setPage('salaires'), icon: <IconCurrencyFrank size={20} />, color: 'indigo', description: 'Gestion des salaires', bg: '#e8eaf6' },
+    { label: 'Ventes', action: () => navigate('/ventes'), icon: <IconBuildingStore size={20} />, color: 'pink', description: 'Gestion des ventes', bg: '#fce4ec' },
+    { label: 'Clients', action: () => navigate('/clients'), icon: <IconUsers size={20} />, color: 'blue', description: 'Gestion des clients', bg: '#e8f4fd' },
+    { label: 'Articles', action: () => navigate('/articles'), icon: <IconShoppingBag size={20} />, color: 'violet', description: 'Inventaire des tenues', bg: '#f3e5f5' },
+    { label: 'Matières', action: () => navigate('/matieres'), icon: <IconPackage size={20} />, color: 'teal', description: 'Matières premières', bg: '#e0f7fa' },
+    { label: 'Dépenses', action: () => navigate('/depenses'), icon: <IconReceipt size={20} />, color: 'red', description: 'Gestion des dépenses', bg: '#ffebee' },
+    { label: 'Salaires', action: () => navigate('/salaires'), icon: <IconCurrencyFrank size={20} />, color: 'indigo', description: 'Gestion des salaires', bg: '#e8eaf6' },
+    { label: 'Factures & Reçus', action: () => navigate('/factures-recus'), icon: <IconFileInvoice size={20} />, color: 'orange', description: 'Documents', bg: '#fff3e0' },
+    { label: 'Modèles', action: () => navigate('/modeles-tenues'), icon: <IconShirt size={20} />, color: 'green', description: 'Modèles de tenues', bg: '#e8f5e9' },
   ];
 
   if (loading) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <Card withBorder radius="lg" p="xl">
-          <LoadingOverlay visible={true} />
-          <Stack align="center" gap="md">
-            <IconDashboard size={40} stroke={1.5} />
-            <Text>Chargement du tableau de bord...</Text>
-          </Stack>
-        </Card>
-      </Center>
-    );
+    return <Center style={{ height: '50vh' }}><LoadingOverlay visible /><Text>Chargement...</Text></Center>;
   }
 
   return (
     <Box p="md">
       <Container size="full">
         <Stack gap="lg">
-          {/* Header amélioré */}
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
-            <Group justify="space-between" align="center">
+            <Group justify="space-between">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                  <IconChartBar size={30} color="white" />
-                </Avatar>
-                <Box>
-                  <Title order={1} c="white" size="h2">Tableau de bord</Title>
-                  <Text c="gray.3" size="sm" mt={4}>
-                    Vue d'ensemble de l'activité de gestion couture
-                  </Text>
-                  <Group gap="xs" mt={8}>
-                    <Badge size="sm" variant="white" color="blue">
-                      {new Date().toLocaleDateString('fr-FR')}
-                    </Badge>
-                    <Badge size="sm" variant="white" color="green">
-                      Synthèse en temps réel
-                    </Badge>
-                  </Group>
-                </Box>
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><IconChartBar size={30} color="white" /></Avatar>
+                <Box><Title order={1} c="white" size="h2">Tableau de bord</Title><Text c="gray.3" size="sm">Vue d'ensemble de l'activité</Text></Box>
               </Group>
-              <Button
-                variant="light"
-                color="white"
-                leftSection={<IconInfoCircle size={18} />}
-                onClick={() => setInfoModalOpen(true)}
-                radius="md"
-              >
-                Instructions
-              </Button>
+              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">Instructions</Button>
             </Group>
           </Card>
 
-          {/* KPI Cards modernisées */}
           <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#e8f4fd' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Chiffre d'affaires</Text>
-                <ThemeIcon size="lg" radius="md" color="blue" variant="light">
-                  <IconTrendingUp size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={800} size="xl" c="blue">{formatCurrency(stats.chiffreAffaires)}</Text>
-              <Progress value={100} size="sm" radius="xl" color="blue" mt={8} />
-              <Text size="xs" c="dimmed" mt={4}>Objectif atteint</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#e8f5e9' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Encaissements</Text>
-                <ThemeIcon size="lg" radius="md" color="green" variant="light">
-                  <IconCash size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={800} size="xl" c="green">{formatCurrency(stats.encaissements)}</Text>
-              <Progress value={Math.min((stats.encaissements / (stats.chiffreAffaires || 1)) * 100, 100)} size="sm" radius="xl" color="green" mt={8} />
-              <Text size="xs" c="dimmed" mt={4}>{Math.round(tauxRecouvrement)}% du CA</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#ffebee' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Dépenses</Text>
-                <ThemeIcon size="lg" radius="md" color="red" variant="light">
-                  <IconReceipt size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={800} size="xl" c="red">{formatCurrency(stats.depenses)}</Text>
-              <Progress value={Math.min((stats.depenses / (stats.encaissements || 1)) * 100, 100)} size="sm" radius="xl" color="red" mt={8} />
-              <Text size="xs" c="dimmed" mt={4}>Taux de dépenses</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#e0f7fa' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Valeur du stock</Text>
-                <ThemeIcon size="lg" radius="md" color="teal" variant="light">
-                  <IconPackage size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={800} size="xl" c="teal">{formatCurrency(stockTotal)}</Text>
-              <Progress value={100} size="sm" radius="xl" color="teal" mt={8} />
-              <Text size="xs" c="dimmed" mt={4}>En inventaire</Text>
-            </Paper>
+            {[
+              { label: "Chiffre d'affaires", value: stats.chiffreAffaires, color: 'blue', icon: <IconTrendingUp size={18} />, bg: '#e8f4fd' },
+              { label: 'Encaissements', value: stats.encaissements, color: 'green', icon: <IconCash size={18} />, bg: '#e8f5e9', extra: `${Math.round(tauxRecouvrement)}% du CA` },
+              { label: 'Dépenses', value: stats.depenses, color: 'red', icon: <IconReceipt size={18} />, bg: '#ffebee' },
+              { label: 'Valeur du stock', value: stockTotal, color: 'teal', icon: <IconPackage size={18} />, bg: '#e0f7fa' },
+            ].map((c, i) => (
+              <Paper key={i} p="md" radius="lg" withBorder bg={c.bg}>
+                <Group justify="space-between" mb="xs"><Text size="xs" c="dimmed" tt="uppercase" fw={600}>{c.label}</Text><ThemeIcon size="lg" radius="md" color={c.color} variant="light">{c.icon}</ThemeIcon></Group>
+                <Text fw={800} size="xl" c={c.color}>{formatCurrency(c.value)}</Text>
+                {c.extra && <Text size="xs" c="dimmed">{c.extra}</Text>}
+              </Paper>
+            ))}
           </SimpleGrid>
 
-          {/* Liens rapides améliorés */}
           <Card withBorder radius="lg" shadow="sm" p="xl">
-            <Group mb="md">
-              <ThemeIcon size="md" radius="md" color="blue" variant="light">
-                <IconDashboard size={16} />
-              </ThemeIcon>
-              <Title order={3} size="h4">🔗 Accès rapides</Title>
-            </Group>
+            <Title order={3} size="h4" mb="md">🔗 Accès rapides</Title>
             <Divider mb="md" />
-            <Grid >
-              {quickLinks.map((link, index) => (
-                <Grid.Col key={index} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
-                  <Paper
-                    withBorder
-                    radius="lg"
-                    p="sm"
-                    style={{ 
-                      cursor: 'pointer', 
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      backgroundColor: link.bg,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-3px)';
-                      e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    onClick={link.action}
-                  >
+            <Grid>
+              {quickLinks.map((link, i) => (
+                <Grid.Col key={i} span={{ base: 12, sm: 6, md: 3 }}>
+                  <Paper withBorder radius="lg" p="sm" bg={link.bg} style={{ cursor: 'pointer' }} onClick={link.action}>
                     <Group gap="md" wrap="nowrap">
-                      <ThemeIcon color={link.color} variant="light" size={45} radius="md">
-                        {link.icon}
-                      </ThemeIcon>
-                      <Stack gap={2} style={{ flex: 1 }}>
-                        <Text fw={600} size="sm">{link.label}</Text>
-                        <Text size="xs" c="dimmed" lineClamp={1}>{link.description}</Text>
-                      </Stack>
+                      <ThemeIcon color={link.color} variant="light" size={40} radius="md">{link.icon}</ThemeIcon>
+                      <Stack gap={2}><Text fw={600} size="sm">{link.label}</Text><Text size="xs" c="dimmed">{link.description}</Text></Stack>
                     </Group>
                   </Paper>
                 </Grid.Col>
@@ -266,62 +138,20 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
             </Grid>
           </Card>
 
-          {/* Statistiques financières et alertes stock */}
-          <Grid >
+          <Grid>
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder radius="lg" shadow="sm" p="xl" h="100%">
-                <Group mb="md">
-                  <ThemeIcon size="md" radius="md" color="green" variant="light">
-                    <IconMoneybag size={16} />
-                  </ThemeIcon>
-                  <Title order={3} size="h4">💰 Situation financière</Title>
-                  <Badge color={stats.resteARecouvrer > 0 ? "yellow" : "green"} variant="filled" ml="auto">
-                    {stats.resteARecouvrer > 0 ? "⚠️ Attention" : "✅ Saine"}
-                  </Badge>
-                </Group>
+                <Title order={3} size="h4" mb="md">💰 Situation financière</Title>
                 <Divider mb="md" />
                 <Stack gap="md">
-                  <Group justify="space-between">
-                    <Group gap="xs">
-                      <IconTrendingUp size={16} color="green" />
-                      <Text size="sm">Bénéfice trésorerie</Text>
-                    </Group>
-                    <Text fw={700} size="lg" c={stats.beneficeTresorerie >= 0 ? "green" : "red"}>
-                      {formatCurrency(stats.beneficeTresorerie)}
-                    </Text>
-                  </Group>
-                  <Group justify="space-between">
-                    <Group gap="xs">
-                      <IconPackage size={16} color="teal" />
-                      <Text size="sm">Bénéfice réel</Text>
-                    </Group>
-                    <Text fw={700} size="lg" c={beneficeReel >= 0 ? "green" : "red"}>
-                      {formatCurrency(beneficeReel)}
-                    </Text>
-                  </Group>
-                  <Group justify="space-between">
-                    <Group gap="xs">
-                      <IconAlertCircle size={16} color="orange" />
-                      <Text size="sm">Reste à recouvrer</Text>
-                    </Group>
-                    <Text fw={700} size="lg" c="orange">{formatCurrency(stats.resteARecouvrer)}</Text>
-                  </Group>
-                  <Group justify="space-between">
-                    <Group gap="xs">
-                      <IconCreditCard size={16} color="blue" />
-                      <Text size="sm">Taux de recouvrement</Text>
-                    </Group>
-                    <Text fw={700} size="lg" c="blue">{tauxRecouvrement.toFixed(1)}%</Text>
-                  </Group>
-                  <RingProgress
-                    size={100}
-                    thickness={8}
-                    sections={[{ value: tauxRecouvrement, color: tauxRecouvrement > 70 ? 'green' : 'orange' }]}
-                    label={
-                      <Text ta="center" fw={700} size="sm">{Math.round(tauxRecouvrement)}%</Text>
-                    }
-                    mx="auto"
-                  />
+                  {[
+                    { label: 'Bénéfice trésorerie', value: stats.beneficeTresorerie, color: stats.beneficeTresorerie >= 0 ? 'green' : 'red' },
+                    { label: 'Bénéfice réel (après stock)', value: beneficeReel, color: beneficeReel >= 0 ? 'green' : 'red' },
+                    { label: 'Reste à recouvrer', value: stats.resteARecouvrer, color: 'orange' },
+                  ].map((l, i) => (
+                    <Group key={i} justify="space-between"><Text size="sm">{l.label}</Text><Text fw={700} c={l.color}>{formatCurrency(l.value)}</Text></Group>
+                  ))}
+                  <RingProgress size={100} thickness={8} sections={[{ value: Math.min(tauxRecouvrement, 100), color: tauxRecouvrement > 70 ? 'green' : 'orange' }]} label={<Text ta="center" fw={700} size="sm">{Math.round(tauxRecouvrement)}%</Text>} mx="auto" />
                 </Stack>
               </Card>
             </Grid.Col>
@@ -329,154 +159,77 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder radius="lg" shadow="sm" p="xl" h="100%">
                 <Group mb="md">
-                  <ThemeIcon size="md" radius="md" color="red" variant="light">
-                    <IconAlertCircle size={16} />
-                  </ThemeIcon>
+                  <ThemeIcon size="md" radius="md" color="red" variant="light"><IconAlertCircle size={16} /></ThemeIcon>
                   <Title order={3} size="h4">⚠️ Alertes stock</Title>
-                  <Badge color={stockRupture > 0 ? "red" : "green"} variant="filled" ml="auto">
-                    {stockRupture > 0 ? `🔴 ${stockRupture} rupture(s)` : "✅ Stock OK"}
-                  </Badge>
+                  <Badge color={stockAlertes.length > 0 ? 'red' : 'green'} variant="filled" ml="auto">{stockAlertes.length > 0 ? `🔴 ${stockAlertes.length}` : '✅ OK'}</Badge>
                 </Group>
                 <Divider mb="md" />
-                <ScrollArea h={280}>
-                  <Stack gap="xs">
-                    {stock.filter(m => m.stock <= 5).length === 0 ? (
-                      <Group gap="xs" justify="center" py={40}>
-                        <IconCheck size={24} color="green" />
-                        <Text size="sm" c="green" fw={500}>Tous les stocks sont suffisants</Text>
-                      </Group>
-                    ) : (
-                      stock
-                        .filter(m => m.stock <= 5)
-                        .slice(0, 8)
-                        .map((m, i) => (
-                          <Paper key={i} p="sm" radius="md" withBorder>
-                            <Group justify="space-between">
-                              <Text size="sm" fw={500}>{m.designation}</Text>
-                              <Badge color={m.stock <= 0 ? "red" : "orange"} variant="light" size="lg">
-                                Stock: {Math.floor(m.stock)}
-                              </Badge>
-                            </Group>
-                            {m.stock <= 0 && (
-                              <Text size="xs" c="red" mt={4}>⚠️ Rupture de stock imminente</Text>
-                            )}
-                          </Paper>
-                        ))
-                    )}
-                  </Stack>
+                <ScrollArea h={300}>
+                  {stockAlertes.length === 0 ? (
+                    <Center py={40}><IconCheck size={24} color="green" /><Text size="sm" c="green" ml="xs">Stocks suffisants</Text></Center>
+                  ) : (
+                    stockAlertes.slice(0, 10).map((item, i) => (
+                      <Paper key={i} p="md" radius="md" withBorder mb="sm" style={{ borderLeft: `4px solid ${item.stock <= 0 ? '#e03131' : '#f08c00'}`, cursor: 'pointer' }}>
+                        <Group justify="space-between" mb={6}>
+                          <Group gap={8}>
+                            <Badge size="sm" variant="filled" color={item.type === 'matiere' ? 'blue' : 'violet'}>{item.type === 'matiere' ? '🧵' : '👕'}</Badge>
+                            <Text size="sm" fw={600}>{item.designation}</Text>
+                          </Group>
+                          <Badge color={item.stock <= 0 ? 'red' : 'orange'} variant="filled" size="sm">{item.stock <= 0 ? '🔴 Rupture' : '⚠️ Alerte'}</Badge>
+                        </Group>
+                        <Group justify="space-between" mb={4}>
+                          <Text size="xs">Stock: <Text component="span" fw={700} c={item.stock <= 0 ? 'red' : 'orange'}>{item.stock}</Text></Text>
+                          <Text size="xs">Seuil: {item.seuil_alerte}</Text>
+                        </Group>
+                        <Box style={{ width: '100%', height: 6, backgroundColor: '#e9ecef', borderRadius: 3 }}>
+                          <Box style={{ width: `${Math.min((item.stock / (item.seuil_alerte || 1)) * 100, 100)}%`, height: '100%', backgroundColor: item.stock <= 0 ? '#e03131' : '#f08c00', borderRadius: 3 }} />
+                        </Box>
+                        <Button variant="subtle" size="compact-xs" color={item.type === 'matiere' ? 'blue' : 'violet'} onClick={() => navigate(item.type === 'matiere' ? '/matieres' : '/articles')} rightSection={<IconShoppingBag size={12} />} mt={4}>
+                          Voir {item.type === 'matiere' ? 'la matière' : "l'article"}
+                        </Button>
+                      </Paper>
+                    ))
+                  )}
                 </ScrollArea>
-                {stockAlerte > 0 && (
-                  <Button
-                    variant="light"
-                    color="blue"
-                    fullWidth
-                    mt="md"
-                    onClick={() => setPage('stock_global')}
-                  >
-                    Voir le stock détaillé
-                  </Button>
-                )}
               </Card>
             </Grid.Col>
           </Grid>
 
-          {/* Dernières transactions */}
           <Card withBorder radius="lg" shadow="sm" p="xl">
-            <Group mb="md">
-              <ThemeIcon size="md" radius="md" color="blue" variant="light">
-                <IconReceipt size={16} />
-              </ThemeIcon>
-              <Title order={3} size="h4">📋 Dernières transactions</Title>
-              <Badge color="blue" variant="light" ml="auto">10 dernières</Badge>
-            </Group>
+            <Title order={3} size="h4" mb="md">📋 Dernières transactions</Title>
             <Divider mb="md" />
             <ScrollArea h={300}>
               <Table striped highlightOnHover>
                 <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                   <Table.Tr>
-                    <Table.Th style={{ color: 'white', width: 110 }}>Date</Table.Th>
+                    <Table.Th style={{ color: 'white' }}>Date</Table.Th>
                     <Table.Th style={{ color: 'white' }}>Description</Table.Th>
-                    <Table.Th style={{ color: 'white', width: 100 }}>Type</Table.Th>
-                    <Table.Th style={{ color: 'white', textAlign: 'right', width: 130 }}>Montant</Table.Th>
+                    <Table.Th style={{ color: 'white', textAlign: 'right' }}>Entrée</Table.Th>
+                    <Table.Th style={{ color: 'white', textAlign: 'right' }}>Sortie</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {journal.slice(-10).reverse().map((j, i) => (
-                    <Table.Tr key={i}>
-                      <Table.Td>
-                        <Group gap={4} wrap="nowrap">
-                          <IconDashboard size={12} color="#1b365d" />
-                          <Text size="sm">{new Date(j.date).toLocaleDateString('fr-FR')}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td><Text size="sm" lineClamp={1}>{j.description}</Text></Table.Td>
-                      <Table.Td>
-                        <Badge color={j.entree > 0 ? "green" : "red"} variant="light" size="sm">
-                          {j.entree > 0 ? "📥 Entrée" : "📤 Sortie"}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td ta="right" fw={700} c={j.entree > 0 ? "green" : "red"}>
-                        {formatCurrency(j.entree > 0 ? j.entree : j.sortie)}
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
+                  {journal.length === 0 ? <Table.Tr><Table.Td colSpan={4} ta="center">Aucune transaction</Table.Td></Table.Tr> :
+                    journal.map((j, i) => (
+                      <Table.Tr key={i}>
+                        <Table.Td>{new Date(j.date).toLocaleDateString('fr-FR')}</Table.Td>
+                        <Table.Td>{j.description}</Table.Td>
+                        <Table.Td ta="right" c="green">{j.entree > 0 ? formatCurrency(j.entree) : '-'}</Table.Td>
+                        <Table.Td ta="right" c="red">{j.sortie > 0 ? formatCurrency(j.sortie) : '-'}</Table.Td>
+                      </Table.Tr>
+                    ))}
                 </Table.Tbody>
               </Table>
             </ScrollArea>
           </Card>
 
-          {/* Modal Instructions améliorée */}
-          <Modal
-            opened={infoModalOpen}
-            onClose={() => setInfoModalOpen(false)}
-            title="📋 Tableau de bord"
-            size="md"
-            centered
-            radius="lg"
-            styles={{
-              header: {
-                backgroundColor: '#1b365d',
-                padding: '16px 20px',
-              },
-              title: {
-                color: 'white',
-                fontWeight: 600,
-              },
-              body: {
-                padding: '24px',
-              },
-            }}
-          >
+          <Modal opened={infoModalOpen} onClose={() => setInfoModalOpen(false)} title="📋 Instructions" size="md" centered radius="md">
             <Stack gap="md">
-              <Paper p="md" radius="md" withBorder bg="blue.0">
-                <Text fw={600} size="sm" mb="md">📌 Fonctionnalités :</Text>
-                <Stack gap="xs">
-                  <Text size="sm">1️⃣ Utilisez les accès rapides pour naviguer dans l'application</Text>
-                  <Text size="sm">2️⃣ Les KPI en haut donnent une vue d'ensemble rapide</Text>
-                  <Text size="sm">3️⃣ Surveillez les alertes stock pour éviter les ruptures</Text>
-                  <Text size="sm">4️⃣ Le tableau des transactions montre les derniers mouvements</Text>
-                  <Text size="sm">5️⃣ Consultez régulièrement la situation financière</Text>
-                </Stack>
-              </Paper>
-
-              <Paper p="md" radius="md" withBorder bg="yellow.0">
-                <Text fw={600} size="sm" mb="md">💡 Indicateurs clés :</Text>
-                <Stack gap="xs">
-                  <Group gap="xs">
-                    <IconArrowUpRight size={16} color="#e65100" />
-                    <Text size="sm">Le taux de recouvrement mesure l'efficacité des encaissements</Text>
-                  </Group>
-                  <Group gap="xs">
-                    <IconArrowDownRight size={16} color="#e65100" />
-                    <Text size="sm">Le bénéfice réel tient compte de la valeur du stock</Text>
-                  </Group>
-                </Stack>
-              </Paper>
-
-              <Divider />
-              <Text size="xs" c="dimmed" ta="center">
-                Version 1.0.0 - Gestion Couture
-              </Text>
+              <Text size="sm">1️⃣ CA = total des ventes</Text>
+              <Text size="sm">2️⃣ Encaissements = montants réglés</Text>
+              <Text size="sm">3️⃣ Bénéfice = encaissements - dépenses</Text>
+              <Text size="sm">4️⃣ Les alertes couvrent matières ET tenues</Text>
+              <Divider /><Text size="xs" c="dimmed" ta="center">Version 1.0.0</Text>
             </Stack>
           </Modal>
         </Stack>

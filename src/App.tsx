@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from './theme';
 import Navbar from './components/Navbar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { initDatabase } from './database/db'; 
+import { getDb } from './database/db';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
@@ -21,14 +21,17 @@ const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
 // ==================== CLIENTS ====================
 const ListeClientsAvecMesures = lazy(() => import('./components/clients/ListeClientsAvecMesures'));
 
-// ==================== STOCK ====================
-const ListeMatieres = lazy(() => import('./components/matieres/ListeMatieres'));
-const ListeGammesTenues = lazy(() => import('./components/tenues/ListeGammesTenues'));
+// ==================== STOCK & INVENTAIRE ====================
+const MatieresManager = lazy(() => import('./components/stock/MatieresManager'));
+const ArticlesManager = lazy(() => import('./components/stock/ArticlesManager'));
+const ModelesTenuesManager = lazy(() => import('./components/stock/ModelesTenuesManager'));
 const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
 
-// ==================== VENTES (UNIFIÉ) ====================
-const FormulaireVente = lazy(() => import('./components/ventes/FormulaireVente'));
-const ListeVentes = lazy(() => import('./components/ventes/ListeVentes'));
+// ==================== VENTES ====================
+const VentesManager = lazy(() => import('./components/ventes/VentesManager'));
+
+// ==================== FACTURES & REÇUS ====================
+const FacturesRecus = lazy(() => import('./components/factures/FacturesReçus'));
 
 // ==================== FINANCES ====================
 const BilanFinancier = lazy(() => import('./components/finances/BilanFinancier'));
@@ -43,6 +46,10 @@ const ListeEmprunts = lazy(() => import('./components/emprunts/ListeEmprunts'));
 const ListePrestationsRealisees = lazy(() => import('./components/prestations/ListePrestationsRealisees'));
 
 // ==================== RÉFÉRENTIELS ====================
+const TaillesManager = lazy(() => import('./components/referentiels/TaillesManager'));
+const CouleursManager = lazy(() => import('./components/referentiels/CouleursManager'));
+const TexturesManager = lazy(() => import('./components/referentiels/TexturesManager'));
+const CategoriesMatieresManager = lazy(() => import('./components/referentiels/CategoriesMatieresManager'));
 const ListeTypesPrestations = lazy(() => import('./components/prestations/ListeTypesPrestations'));
 const ConfigurationMesures = lazy(() => import('./components/parametres/ConfigurationMesures'));
 
@@ -53,6 +60,7 @@ const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtil
 // ==================== OUTILS ====================
 const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
 const ConfigurationReseau = lazy(() => import('./components/ConfigurationReseau'));
+const ExportImportConfiguration = lazy(() => import('./components/ExportImportConfiguration'));
 
 // ==================== SUPPORT & AIDE ====================
 const SupportTechnique = lazy(() => import('./components/support/SupportTechnique'));
@@ -90,11 +98,10 @@ function AuthenticatedApp() {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Initialisation de la base de données
   useEffect(() => {
     const init = async () => {
       try {
-        await initDatabase();
+        await getDb();
         console.log('✅ Base de données initialisée');
       } catch (error) {
         console.error('❌ Erreur initialisation base:', error);
@@ -114,28 +121,33 @@ function AuthenticatedApp() {
     const routeMap: Record<string, string> = {
       dashboard: '/',
       clients: '/clients',
+      types_mesures: '/types-mesures',
+      articles: '/articles',
       matieres: '/matieres',
-      gammes_tenues: '/gammes-tenues',
       mouvements_stock: '/mouvements-stock',
-      nouvelle_vente: '/ventes/nouvelle',
+      tailles: '/tailles',
+      couleurs: '/couleurs',
+      textures: '/textures',
+      modeles_tenues: '/modeles-tenues',
+      categories_matieres: '/categories-matieres',
+      ListeTypesPrestations: '/ListeTypesPrestations',
+      atelier: '/atelier',
       ventes: '/ventes',
+      factures_recus: '/factures-recus',
+      depenses: '/depenses',
       bilan: '/bilan',
       journal: '/journal',
-      depenses: '/depenses',
-      salaires: '/salaires',
-      HistoriqueSalaires: '/historiques-salaires',
       employes: '/employes',
-      emprunts: '/emprunts',
       prestations_realisees: '/prestations-realisees',
-      prestations_types: '/prestations-types',
-      mesures: '/mesures',
+      salaires: '/salaires',
+      emprunts: '/emprunts',
       utilisateurs: '/utilisateurs',
-      parametres: '/parametres',
-      import_clients: '/import-clients',
       config_reseau: '/config-reseau',
+      import_export: '/import-export',
+      export_config: '/export-config',
+      aide: '/aide',
       support: '/support',
       export_support: '/export-support',
-      aide: '/aide'
     };
     navigate(routeMap[page] || '/');
   };
@@ -168,16 +180,21 @@ function AuthenticatedApp() {
                 <ListeClientsAvecMesures />
               </RouteGuard>
             } />
-
-            {/* STOCK */}
-            <Route path="/matieres" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <ListeMatieres />
+            <Route path="/types-mesures" element={
+              <RouteGuard roles={['admin']}>
+                <ConfigurationMesures />
               </RouteGuard>
             } />
-            <Route path="/gammes-tenues" element={
+
+            {/* STOCK & INVENTAIRE */}
+            <Route path="/articles" element={
               <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <ListeGammesTenues />
+                <ArticlesManager />
+              </RouteGuard>
+            } />
+            <Route path="/matieres" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <MatieresManager />
               </RouteGuard>
             } />
             <Route path="/mouvements-stock" element={
@@ -186,19 +203,63 @@ function AuthenticatedApp() {
               </RouteGuard>
             } />
 
-            {/* VENTES (UNIFIÉ) */}
-            <Route path="/ventes/nouvelle" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <FormulaireVente onSuccess={() => navigate('/ventes')} onCancel={() => navigate('/ventes')} />
+            {/* RÉFÉRENTIELS */}
+            <Route path="/tailles" element={
+              <RouteGuard roles={['admin']}>
+                <TaillesManager />
               </RouteGuard>
             } />
+            <Route path="/couleurs" element={
+              <RouteGuard roles={['admin']}>
+                <CouleursManager />
+              </RouteGuard>
+            } />
+            <Route path="/textures" element={
+              <RouteGuard roles={['admin']}>
+                <TexturesManager />
+              </RouteGuard>
+            } />
+            <Route path="/modeles-tenues" element={
+              <RouteGuard roles={['admin']}>
+                <ModelesTenuesManager />
+              </RouteGuard>
+            } />
+            <Route path="/categories-matieres" element={
+              <RouteGuard roles={['admin']}>
+                <CategoriesMatieresManager />
+              </RouteGuard>
+            } />
+            <Route path="/ListeTypesPrestations" element={
+              <RouteGuard roles={['admin']}>
+                <ListeTypesPrestations />
+              </RouteGuard>
+            } />
+            <Route path="/atelier" element={
+              <RouteGuard roles={['admin']}>
+                <ParametresAtelier />
+              </RouteGuard>
+            } />
+
+            {/* VENTES */}
             <Route path="/ventes" element={
               <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <ListeVentes />
+                <VentesManager />
+              </RouteGuard>
+            } />
+
+            {/* FACTURES & REÇUS */}
+            <Route path="/factures-recus" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <FacturesRecus />
               </RouteGuard>
             } />
 
             {/* FINANCES */}
+            <Route path="/depenses" element={
+              <RouteGuard roles={['admin']}>
+                <ListeDepenses />
+              </RouteGuard>
+            } />
             <Route path="/bilan" element={
               <RouteGuard roles={['admin', 'caissier']}>
                 <BilanFinancier />
@@ -209,9 +270,16 @@ function AuthenticatedApp() {
                 <JournalCaisse />
               </RouteGuard>
             } />
-            <Route path="/depenses" element={
+
+            {/* RESSOURCES HUMAINES */}
+            <Route path="/employes" element={
               <RouteGuard roles={['admin']}>
-                <ListeDepenses />
+                <ListeEmployes />
+              </RouteGuard>
+            } />
+            <Route path="/prestations-realisees" element={
+              <RouteGuard roles={['admin']}>
+                <ListePrestationsRealisees />
               </RouteGuard>
             } />
             <Route path="/salaires" element={
@@ -224,33 +292,9 @@ function AuthenticatedApp() {
                 <HistoriqueSalaires />
               </RouteGuard>
             } />
-
-            {/* RESSOURCES HUMAINES */}
-            <Route path="/employes" element={
-              <RouteGuard roles={['admin']}>
-                <ListeEmployes />
-              </RouteGuard>
-            } />
             <Route path="/emprunts" element={
               <RouteGuard roles={['admin']}>
                 <ListeEmprunts />
-              </RouteGuard>
-            } />
-            <Route path="/prestations-realisees" element={
-              <RouteGuard roles={['admin']}>
-                <ListePrestationsRealisees />
-              </RouteGuard>
-            } />
-
-            {/* RÉFÉRENTIELS */}
-            <Route path="/prestations-types" element={
-              <RouteGuard roles={['admin']}>
-                <ListeTypesPrestations />
-              </RouteGuard>
-            } />
-            <Route path="/mesures" element={
-              <RouteGuard roles={['admin']}>
-                <ConfigurationMesures />
               </RouteGuard>
             } />
 
@@ -260,25 +304,28 @@ function AuthenticatedApp() {
                 <ListeUtilisateurs />
               </RouteGuard>
             } />
-            <Route path="/parametres" element={
-              <RouteGuard roles={['admin']}>
-                <ParametresAtelier />
-              </RouteGuard>
-            } />
-
-            {/* OUTILS */}
-            <Route path="/import-clients" element={
-              <RouteGuard roles={['admin']}>
-                <ImportClientsExcel />
-              </RouteGuard>
-            } />
             <Route path="/config-reseau" element={
               <RouteGuard roles={['admin']}>
                 <ConfigurationReseau />
               </RouteGuard>
             } />
+            <Route path="/import-export" element={
+              <RouteGuard roles={['admin']}>
+                <ImportClientsExcel />
+              </RouteGuard>
+            } />
+            <Route path="/export-config" element={
+              <RouteGuard roles={['admin']}>
+                <ExportImportConfiguration />
+              </RouteGuard>
+            } />
 
-            {/* SUPPORT & AIDE */}
+            {/* SUPPORT */}
+            <Route path="/aide" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <GuideUtilisation />
+              </RouteGuard>
+            } />
             <Route path="/support" element={
               <RouteGuard roles={['admin', 'caissier', 'couturier']}>
                 <SupportTechnique onNavigate={handleSetPage} />
@@ -287,11 +334,6 @@ function AuthenticatedApp() {
             <Route path="/export-support" element={
               <RouteGuard roles={['admin']}>
                 <ExportSupport />
-              </RouteGuard>
-            } />
-            <Route path="/aide" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <GuideUtilisation />
               </RouteGuard>
             } />
 

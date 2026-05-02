@@ -36,7 +36,7 @@ import { notifications } from '@mantine/notifications';
 interface TypePrestation {
   id?: number;
   nom: string;
-  valeur_par_defaut: number;
+  prix_par_defaut: number;
 }
 
 interface Props {
@@ -50,7 +50,7 @@ interface Props {
 // ======================
 const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }) => {
   const [nom, setNom] = useState(type?.nom || '');
-  const [valeur, setValeur] = useState<number | undefined>(type?.valeur_par_defaut || 0);
+  const [valeur, setValeur] = useState<number | undefined>(type?.prix_par_defaut || 0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -63,13 +63,13 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
       notifications.show({ title: 'Erreur', message: 'Le nom est obligatoire', color: 'red' });
       return false;
     }
-    
+
     if (valeur === undefined || valeur < 0) {
       setError("La valeur doit être supérieure à 0");
       notifications.show({ title: 'Erreur', message: 'La valeur doit être supérieure à 0', color: 'red' });
       return false;
     }
-    
+
     setError('');
     return true;
   };
@@ -88,9 +88,10 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
       const db = await getDb();
 
       if (type?.id) {
+        // Corrigé : virgule en trop supprimée
         await db.execute(
           `UPDATE types_prestations 
-           SET nom = ?, valeur_par_defaut = ?, updated_at = CURRENT_TIMESTAMP
+           SET nom = ?, prix_par_defaut = ?
            WHERE id = ?`,
           [nom.trim(), valeur, type.id]
         );
@@ -103,7 +104,7 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
       } else {
         await db.execute(
           `INSERT INTO types_prestations 
-           (nom, valeur_par_defaut, est_active, created_at)
+           (nom, prix_par_defaut, est_active, created_at)
            VALUES (?, ?, 1, CURRENT_TIMESTAMP)`,
           [nom.trim(), valeur]
         );
@@ -116,7 +117,7 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
       }
 
       setSuccess(true);
-      
+
       setTimeout(() => {
         onSuccess();
       }, 1500);
@@ -133,7 +134,6 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
       setLoading(false);
     }
   };
-
 
   return (
     <Container size="md" p={0}>
@@ -154,18 +154,18 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
                     {type ? "✏️ Modifier le type" : "➕ Nouveau type"}
                   </Title>
                   <Text c="gray.3" size="sm" mt={4}>
-                    {type 
-                      ? "Modifiez le type de prestation" 
+                    {type
+                      ? "Modifiez le type de prestation"
                       : "Ajoutez un nouveau type de prestation"}
                   </Text>
                 </Box>
               </Group>
               <Group>
                 <Tooltip label="Informations">
-                  <ActionIcon 
-                    variant="light" 
-                    color="white" 
-                    size="lg" 
+                  <ActionIcon
+                    variant="light"
+                    color="white"
+                    size="lg"
                     onClick={() => setInfoModalOpen(true)}
                   >
                     <IconHelp size={20} />

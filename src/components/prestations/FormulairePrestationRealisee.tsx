@@ -10,7 +10,7 @@ interface Employe {
 interface TypePrestation {
   id: number;
   nom: string;
-  valeur_par_defaut: number;
+  prix_par_defaut: number;
 }
 
 interface Props {
@@ -46,7 +46,7 @@ const FormulairePrestationRealisee: React.FC<Props> = ({ prestation, onSuccess, 
       `);
 
       const tp = await db.select<TypePrestation[]>(`
-        SELECT id, nom, valeur_par_defaut 
+        SELECT id, nom, prix_par_defaut 
         FROM types_prestations 
         WHERE est_active = 1
       `);
@@ -70,7 +70,7 @@ const FormulairePrestationRealisee: React.FC<Props> = ({ prestation, onSuccess, 
     const t = types.find(x => x.id === id);
     if (t) {
       setDesignation(t.nom);
-      setValeur(t.valeur_par_defaut.toString());
+      setValeur(t.prix_par_defaut.toString());
     } else {
       setDesignation('');
       setValeur('');

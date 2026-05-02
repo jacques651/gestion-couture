@@ -327,7 +327,7 @@ const ListeEmprunts: React.FC = () => {
             <Group justify="space-between" align="center">
               <Group gap="md">
                 <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                  <IconMoneybag size={30} color="white" />
+                  <IconMoneybag size={30} color="black" />
                 </Avatar>
                 <Box>
                   <Title order={1} c="white" size="h2">Emprunts</Title>
