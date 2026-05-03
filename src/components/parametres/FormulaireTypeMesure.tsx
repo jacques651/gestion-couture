@@ -27,7 +27,6 @@ interface TypeMesure {
   id?: number;
   nom: string;
   unite: string;
-  categorie: string;
 }
 
 interface FormulaireTypeMesureProps {
@@ -43,7 +42,6 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
 }) => {
   const [nom, setNom] = useState('');
   const [unite, setUnite] = useState<string | null>('cm');
-  const [categorie, setCategorie] = useState<string | null>('Général');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -56,18 +54,10 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
     { value: 'pouce', label: 'Pouces' },
   ];
 
-  const categoriesOptions = [
-    { value: 'general', label: '📏 Général' },
-    { value: 'haut', label: '👕 Haut du corps' },
-    { value: 'bas', label: '👖 Bas du corps' },
-    { value: 'accessoire', label: '✨ Accessoire' },
-  ];
-
   useEffect(() => {
     if (type) {
       setNom(type.nom);
       setUnite(type.unite);
-      setCategorie(type.categorie);
     }
   }, [type]);
 
@@ -86,10 +76,7 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
 
     try {
       if (type?.id) {
-        await db.execute(
-          "UPDATE types_mesures SET nom = ?, unite = ?, categorie = ? WHERE id = ?",
-          [nom.trim(), unite, categorie, type.id]
-        );
+        
         setSuccessMessage('Type de mesure modifié avec succès');
         setSuccess(true);
       } else {
@@ -99,8 +86,8 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
         const dernierOrdre = results?.[0]?.max_ordre ?? 0;
 
         await db.execute(
-          "INSERT INTO types_mesures (nom, unite, ordre_affichage, categorie, est_active) VALUES (?, ?, ?, ?, 1)",
-          [nom.trim(), unite, dernierOrdre + 1, categorie]
+          "INSERT INTO types_mesures (nom, unite, ordre_affichage, est_active) VALUES (?, ?, ?, ?, 1)",
+          [nom.trim(), unite, dernierOrdre + 1]
         );
         setSuccessMessage('Type de mesure ajouté avec succès');
         setSuccess(true);
@@ -190,16 +177,6 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
                 value={unite}
                 onChange={setUnite}
                 leftSection={<IconRuler size={14} />}
-                size="sm"
-              />
-
-              {/* CATÉGORIE */}
-              <Select
-                label="Catégorie"
-                placeholder="Choisir une catégorie"
-                data={categoriesOptions}
-                value={categorie}
-                onChange={setCategorie}
                 size="sm"
               />
 

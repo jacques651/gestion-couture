@@ -6,9 +6,11 @@ import { IconDatabase, IconAlertCircle, IconSeeding } from '@tabler/icons-react'
 import App from "./App";
 import { getDb } from "./database/db";
 import { theme } from "./theme";
+
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import "./index.css";
+import { AuthProvider } from "./contexts/AuthContext";
 
 // Composant d'écran de chargement
 function LoadingScreen() {
@@ -112,28 +114,37 @@ function RootContent() {
         const db = await getDb();
         console.log("✅ Base de données chargée avec succès");
         
-        // Vérifier si l'admin existe déjà
-        const adminExists = await db.select<{ count: number }[]>(
-          "SELECT COUNT(*) as count FROM utilisateurs WHERE login = 'admin'"
+        // Vérifier si la table utilisateurs existe
+        const tables = await db.select<{ name: string }[]>(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='utilisateurs'"
         );
         
-        console.log("📊 Vérification admin:", adminExists[0].count);
-        
-        if (adminExists[0].count === 0) {
-          // Insérer l'admin seulement s'il n'existe pas
-          await db.execute(`
-            INSERT INTO utilisateurs 
-            (nom, login, mot_de_passe_hash, role, est_actif)
-            VALUES (?, ?, ?, ?, 1)
-          `, [
-            'Administrateur',
-            'admin',
-            '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
-            'admin'
-          ]);
-          console.log("✅ Compte administrateur créé (login: admin, password: password)");
+        if (tables.length === 0) {
+          console.log("⚠️ Table utilisateurs non trouvée");
         } else {
-          console.log("✅ Compte administrateur existe déjà");
+          // Vérifier si l'admin existe déjà
+          const adminExists = await db.select<{ count: number }[]>(
+            "SELECT COUNT(*) as count FROM utilisateurs WHERE login = 'admin'"
+          );
+          
+          console.log("📊 Vérification admin:", adminExists[0]?.count || 0);
+          
+          if (adminExists[0]?.count === 0) {
+            // Insérer l'admin seulement s'il n'existe pas
+            await db.execute(`
+              INSERT INTO utilisateurs 
+              (nom, login, mot_de_passe_hash, role, est_actif)
+              VALUES (?, ?, ?, ?, 1)
+            `, [
+              'Administrateur',
+              'admin',
+              '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+              'admin'
+            ]);
+            console.log("✅ Compte administrateur créé (login: admin, password: password)");
+          } else {
+            console.log("✅ Compte administrateur existe déjà");
+          }
         }
 
         setPret(true);
@@ -164,13 +175,15 @@ function RootContent() {
   return <App />;
 }
 
-// Point d'entrée principal - Version corrigée pour Fast Refresh
+// Point d'entrée principal - AVEC AuthProvider
 function Root() {
   return (
     <React.StrictMode>
       <MantineProvider theme={theme} defaultColorScheme="light">
         <Notifications position="top-right" zIndex={1000} />
-        <RootContent />
+        <AuthProvider> {/* 👈 AJOUT DE AuthProvider ICI */}
+          <RootContent />
+        </AuthProvider>
       </MantineProvider>
     </React.StrictMode>
   );

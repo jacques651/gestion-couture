@@ -43,7 +43,6 @@ export interface TypeMesure {
   nom: string;
   unite: string;
   ordre_affichage: number;
-  categorie: 'haut' | 'bas' | 'general' | 'accessoire';
   est_active: number;
   created_at?: string;
 }
@@ -158,7 +157,6 @@ export interface Matiere {
   categorie_id: number;
   unite: string;
   prix_achat: number;
-  prix_vente: number;
   stock_actuel: number;
   seuil_alerte: number;
   reference_fournisseur?: string;
@@ -179,12 +177,11 @@ export interface Vente {
   montant_total: number;
   montant_regle: number;
   montant_restant: number;
-  statut: 'EN_ATTENTE' | 'PARTIEL' | 'PAYEE';
+  statut: 'EN_ATTENTE' | 'PARTIEL' | 'PAYEE' | 'ANNULEE'; // ← Ajoute 'ANNULEE'
   observation: string | null;
   created_at: string;
   updated_at: string | null;
 }
-
 export interface VenteDetail {
   id: number;
   vente_id: number;
@@ -294,12 +291,12 @@ export const getTailles = async (categorie?: string): Promise<Taille[]> => {
   const db = await getDb();
   let query = 'SELECT * FROM tailles WHERE est_actif = 1';
   const params: any[] = [];
-  
+
   if (categorie) {
     query += ' AND categorie = ?';
     params.push(categorie);
   }
-  
+
   query += ' ORDER BY ordre';
   return db.select(query, params);
 };
@@ -342,18 +339,18 @@ export const updateTaille = async (id: number, taille: Partial<Taille>): Promise
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['code_taille', 'libelle', 'ordre', 'categorie', 'description', 'est_actif'];
-  
+
   Object.entries(taille).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(id);
   await db.execute(`UPDATE tailles SET ${fields.join(', ')} WHERE id = ?`, values);
 };
@@ -367,7 +364,7 @@ export const deleteTaille = async (id: number): Promise<void> => {
 
 export const getCouleurs = async (actif: boolean = true): Promise<Couleur[]> => {
   const db = await getDb();
-  const query = actif 
+  const query = actif
     ? 'SELECT * FROM couleurs WHERE est_actif = 1 ORDER BY nom_couleur'
     : 'SELECT * FROM couleurs ORDER BY nom_couleur';
   return db.select(query);
@@ -391,12 +388,32 @@ export const getCouleurByNom = async (nom_couleur: string): Promise<Couleur | nu
   return result[0] || null;
 };
 
+// Récupérer les permissions d'un utilisateur
+export const getPermissions = async (utilisateurId: number): Promise<any[]> => {
+  const db = await getDb();
+  return db.select(`SELECT * FROM permissions WHERE utilisateur_id = ?`, [utilisateurId]);
+};
+
+// Sauvegarder les permissions
+export const savePermissions = async (utilisateurId: number, permissions: { fonctionnalite: string; lecture: boolean; ecriture: boolean }[]) => {
+  const db = await getDb();
+  await db.execute(`DELETE FROM permissions WHERE utilisateur_id = ?`, [utilisateurId]);
+  for (const p of permissions) {
+    if (p.lecture || p.ecriture) {
+      await db.execute(
+        `INSERT INTO permissions (utilisateur_id, fonctionnalite, lecture, ecriture) VALUES (?, ?, ?, ?)`,
+        [utilisateurId, p.fonctionnalite, p.lecture ? 1 : 0, p.ecriture ? 1 : 0]
+      );
+    }
+  }
+};
+
 export const createCouleur = async (couleur: Omit<Couleur, 'id' | 'created_at'>): Promise<number> => {
   const db = await getDb();
-  
+
   const existing = await getCouleurByNom(couleur.nom_couleur);
   if (existing) throw new Error(`La couleur "${couleur.nom_couleur}" existe déjà`);
-  
+
   const result = await db.execute(`
     INSERT INTO couleurs (nom_couleur, code_hex, code_rgb, code_cmyk, description, est_actif)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -415,18 +432,18 @@ export const updateCouleur = async (id: number, couleur: Partial<Couleur>): Prom
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['nom_couleur', 'code_hex', 'code_rgb', 'code_cmyk', 'description', 'est_actif'];
-  
+
   Object.entries(couleur).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(id);
   await db.execute(`UPDATE couleurs SET ${fields.join(', ')} WHERE id = ?`, values);
 };
@@ -437,11 +454,11 @@ export const deleteCouleur = async (id: number): Promise<void> => {
     'SELECT COUNT(*) as count FROM articles WHERE couleur_id = ?',
     [id]
   );
-  
+
   if (usage[0].count > 0) {
     throw new Error(`Impossible de supprimer cette couleur car elle est utilisée par ${usage[0].count} article(s)`);
   }
-  
+
   await db.execute(`DELETE FROM couleurs WHERE id = ?`, [id]);
 };
 
@@ -449,7 +466,7 @@ export const deleteCouleur = async (id: number): Promise<void> => {
 
 export const getTextures = async (actif: boolean = true): Promise<Texture[]> => {
   const db = await getDb();
-  const query = actif 
+  const query = actif
     ? 'SELECT * FROM textures WHERE est_actif = 1 ORDER BY nom_texture'
     : 'SELECT * FROM textures ORDER BY nom_texture';
   return db.select(query);
@@ -483,18 +500,18 @@ export const updateTexture = async (id: number, texture: Partial<Texture>): Prom
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['nom_texture', 'description', 'densite', 'composition', 'est_actif'];
-  
+
   Object.entries(texture).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(id);
   await db.execute(`UPDATE textures SET ${fields.join(', ')} WHERE id = ?`, values);
 };
@@ -504,20 +521,12 @@ export const deleteTexture = async (id: number): Promise<void> => {
   await db.execute(`UPDATE textures SET est_actif = 0 WHERE id = ?`, [id]);
 };
 
+
 // ================= RÉFÉRENTIEL - TYPES DE MESURES =================
 
-export const getTypesMesures = async (categorie?: string): Promise<TypeMesure[]> => {
+export const getTypesMesures = async (): Promise<TypeMesure[]> => {
   const db = await getDb();
-  let query = 'SELECT * FROM types_mesures WHERE est_active = 1';
-  const params: any[] = [];
-  
-  if (categorie) {
-    query += ' AND categorie = ?';
-    params.push(categorie);
-  }
-  
-  query += ' ORDER BY ordre_affichage';
-  return db.select(query, params);
+  return db.select('SELECT * FROM types_mesures WHERE est_active = 1 ORDER BY ordre_affichage');
 };
 
 export const getTypeMesureById = async (id: number): Promise<TypeMesure | null> => {
@@ -532,13 +541,12 @@ export const getTypeMesureById = async (id: number): Promise<TypeMesure | null> 
 export const createTypeMesure = async (typeMesure: Omit<TypeMesure, 'id' | 'created_at'>): Promise<number> => {
   const db = await getDb();
   const result = await db.execute(`
-    INSERT INTO types_mesures (nom, unite, ordre_affichage, categorie, est_active)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO types_mesures (nom, unite, ordre_affichage, est_active)
+    VALUES (?, ?, ?, ?)
   `, [
     typeMesure.nom,
     typeMesure.unite,
     typeMesure.ordre_affichage || 0,
-    typeMesure.categorie,
     typeMesure.est_active ?? 1
   ]);
   return result.lastInsertId as number;
@@ -548,18 +556,18 @@ export const updateTypeMesure = async (id: number, typeMesure: Partial<TypeMesur
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
-  const allowedFields = ['nom', 'unite', 'ordre_affichage', 'categorie', 'est_active'];
-  
+
+  const allowedFields = ['nom', 'unite', 'ordre_affichage', 'est_active'];
+
   Object.entries(typeMesure).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(id);
   await db.execute(`UPDATE types_mesures SET ${fields.join(', ')} WHERE id = ?`, values);
 };
@@ -573,7 +581,7 @@ export const deleteTypeMesure = async (id: number): Promise<void> => {
 
 export const getTypesPrestations = async (actif: boolean = true): Promise<TypePrestation[]> => {
   const db = await getDb();
-  const query = actif 
+  const query = actif
     ? 'SELECT * FROM types_prestations WHERE est_active = 1 ORDER BY nom'
     : 'SELECT * FROM types_prestations ORDER BY nom';
   return db.select(query);
@@ -591,7 +599,7 @@ export const getTypePrestationById = async (id: number): Promise<TypePrestation 
 export const createTypePrestation = async (typePrestation: Omit<TypePrestation, 'id' | 'created_at' | 'code_prestation'>): Promise<number> => {
   const db = await getDb();
   const code_prestation = await getNextPrestationCode();
-  
+
   const result = await db.execute(`
     INSERT INTO types_prestations (code_prestation, nom, description, prix_par_defaut, unite, est_active)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -610,18 +618,18 @@ export const updateTypePrestation = async (id: number, typePrestation: Partial<T
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['nom', 'description', 'prix_par_defaut', 'unite', 'est_active'];
-  
+
   Object.entries(typePrestation).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(id);
   await db.execute(`UPDATE types_prestations SET ${fields.join(', ')} WHERE id = ?`, values);
 };
@@ -632,11 +640,11 @@ export const deleteTypePrestation = async (id: number): Promise<void> => {
     'SELECT COUNT(*) as count FROM prestations_realisees WHERE type_prestation_id = ?',
     [id]
   );
-  
+
   if (usage[0].count > 0) {
     throw new Error(`Impossible de supprimer ce type de prestation car il est utilisé par ${usage[0].count} prestation(s)`);
   }
-  
+
   await db.execute(`DELETE FROM types_prestations WHERE id = ?`, [id]);
 };
 
@@ -646,7 +654,7 @@ export const getModelesTenues = async (actif: boolean = true, categorie?: string
   const db = await getDb();
   let query = 'SELECT * FROM modeles_tenues WHERE 1=1';
   const params: any[] = [];
-  
+
   if (actif) {
     query += ' AND est_actif = 1';
   }
@@ -654,7 +662,7 @@ export const getModelesTenues = async (actif: boolean = true, categorie?: string
     query += ' AND categorie = ?';
     params.push(categorie);
   }
-  
+
   query += ' ORDER BY designation';
   return db.select(query, params);
 };
@@ -680,7 +688,7 @@ export const getModeleTenueByCode = async (code_modele: string): Promise<ModeleT
 export const createModeleTenue = async (modele: Omit<ModeleTenue, 'id' | 'created_at' | 'updated_at' | 'code_modele'>): Promise<number> => {
   const db = await getDb();
   const code_modele = await getNextModeleCode();
-  
+
   const result = await db.execute(`
     INSERT INTO modeles_tenues (
       code_modele, designation, description, image_url, categorie, est_actif
@@ -700,18 +708,18 @@ export const updateModeleTenue = async (id: number, modele: Partial<ModeleTenue>
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['designation', 'description', 'image_url', 'categorie', 'est_actif'];
-  
+
   Object.entries(modele).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   fields.push('updated_at = CURRENT_TIMESTAMP');
   values.push(id);
   await db.execute(`UPDATE modeles_tenues SET ${fields.join(', ')} WHERE id = ?`, values);
@@ -723,11 +731,11 @@ export const deleteModeleTenue = async (id: number): Promise<void> => {
     'SELECT COUNT(*) as count FROM articles WHERE modele_id = ?',
     [id]
   );
-  
+
   if (articlesCount[0].count > 0) {
     throw new Error(`Impossible de supprimer ce modèle car il est utilisé par ${articlesCount[0].count} article(s)`);
   }
-  
+
   await db.execute(`UPDATE modeles_tenues SET est_actif = 0 WHERE id = ?`, [id]);
 };
 
@@ -735,7 +743,7 @@ export const deleteModeleTenue = async (id: number): Promise<void> => {
 
 export const getCategoriesMatieres = async (actif: boolean = true): Promise<CategorieMatiere[]> => {
   const db = await getDb();
-  const query = actif 
+  const query = actif
     ? 'SELECT * FROM categories_matieres WHERE est_actif = 1 ORDER BY nom_categorie'
     : 'SELECT * FROM categories_matieres ORDER BY nom_categorie';
   return db.select(query);
@@ -753,7 +761,7 @@ export const getCategorieMatiereById = async (id: number): Promise<CategorieMati
 export const createCategorieMatiere = async (categorie: Omit<CategorieMatiere, 'id' | 'created_at' | 'code_categorie'>): Promise<number> => {
   const db = await getDb();
   const code_categorie = await getNextCategorieCode();
-  
+
   const result = await db.execute(`
     INSERT INTO categories_matieres (code_categorie, nom_categorie, description, couleur_associee, est_actif)
     VALUES (?, ?, ?, ?, ?)
@@ -771,18 +779,18 @@ export const updateCategorieMatiere = async (id: number, categorie: Partial<Cate
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['nom_categorie', 'description', 'couleur_associee', 'est_actif'];
-  
+
   Object.entries(categorie).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(id);
   await db.execute(`UPDATE categories_matieres SET ${fields.join(', ')} WHERE id = ?`, values);
 };
@@ -793,11 +801,11 @@ export const deleteCategorieMatiere = async (id: number): Promise<void> => {
     'SELECT COUNT(*) as count FROM matieres WHERE categorie_id = ?',
     [id]
   );
-  
+
   if (matieresCount[0].count > 0) {
     throw new Error(`Impossible de supprimer cette catégorie car elle contient ${matieresCount[0].count} matière(s)`);
   }
-  
+
   await db.execute(`DELETE FROM categories_matieres WHERE id = ?`, [id]);
 };
 
@@ -808,7 +816,7 @@ export const getConfigurationAtelier = async (): Promise<ConfigurationAtelier> =
   const result = await db.select<ConfigurationAtelier[]>(
     'SELECT * FROM atelier WHERE id = 1'
   );
-  
+
   if (result.length === 0) {
     const defaultConfig: ConfigurationAtelier = {
       id: 1,
@@ -827,13 +835,13 @@ export const getConfigurationAtelier = async (): Promise<ConfigurationAtelier> =
     await saveConfigurationAtelier(defaultConfig);
     return defaultConfig;
   }
-  
+
   return result[0];
 };
 
 export const saveConfigurationAtelier = async (config: Partial<ConfigurationAtelier>): Promise<void> => {
   const db = await getDb();
-  
+
   await db.execute(`
     INSERT OR REPLACE INTO atelier (id, nom_atelier, telephone, email, adresse, ville, pays, ifu, rccm, message_facture_defaut, logo_base64, devise, updated_at)
     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -898,7 +906,7 @@ export const createArticle = async (
 ): Promise<number> => {
   const db = await getDb();
   const code_article = await getNextArticleCode();
-  
+
   const result = await db.execute(`
     INSERT INTO articles (
       code_article, modele_id, taille_id, couleur_id, texture_id,
@@ -912,7 +920,7 @@ export const createArticle = async (
     article.emplacement || null, article.code_barre || null,
     article.notes || null, article.est_disponible ?? 1, article.est_actif ?? 1
   ]);
-  
+
   return result.lastInsertId as number;
 };
 
@@ -920,22 +928,22 @@ export const updateArticle = async (id: number, article: Partial<Article>): Prom
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = [
     'modele_id', 'taille_id', 'couleur_id', 'texture_id', 'prix_achat',
     'prix_vente', 'quantite_stock', 'seuil_alerte', 'emplacement',
     'code_barre', 'notes', 'est_disponible', 'est_actif'
   ];
-  
+
   Object.entries(article).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   fields.push('updated_at = CURRENT_TIMESTAMP');
   values.push(id);
   await db.execute(`UPDATE articles SET ${fields.join(', ')} WHERE id = ?`, values);
@@ -980,20 +988,20 @@ export const getMatiereById = async (id: number): Promise<Matiere | null> => {
 export const createMatiere = async (matiere: Omit<Matiere, 'id' | 'created_at' | 'updated_at'>): Promise<number> => {
   const db = await getDb();
   const code_matiere = await getNextMatiereCode();
-  
+
   const result = await db.execute(`
     INSERT INTO matieres (
       code_matiere, designation, categorie_id, unite, prix_achat,
-      prix_vente, stock_actuel, seuil_alerte, reference_fournisseur,
+      stock_actuel, seuil_alerte, reference_fournisseur,
       emplacement, est_supprime
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
   `, [
     code_matiere, matiere.designation, matiere.categorie_id,
-    matiere.unite, matiere.prix_achat, matiere.prix_vente,
+    matiere.unite, matiere.prix_achat,
     matiere.stock_actuel || 0, matiere.seuil_alerte || 0,
     matiere.reference_fournisseur || null, matiere.emplacement || null
   ]);
-  
+
   return result.lastInsertId as number;
 };
 
@@ -1001,21 +1009,21 @@ export const updateMatiere = async (id: number, matiere: Partial<Matiere>): Prom
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = [
     'designation', 'categorie_id', 'unite', 'prix_achat',
-    'prix_vente', 'seuil_alerte', 'reference_fournisseur', 'emplacement'
+    'seuil_alerte', 'reference_fournisseur', 'emplacement'
   ];
-  
+
   Object.entries(matiere).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   fields.push('updated_at = CURRENT_TIMESTAMP');
   values.push(id);
   await db.execute(`UPDATE matieres SET ${fields.join(', ')} WHERE id = ?`, values);
@@ -1054,12 +1062,12 @@ export const getClientById = async (telephone_id: string): Promise<Client | null
 export const createClient = async (client: Omit<Client, 'telephone_id' | 'date_enregistrement' | 'est_supprime'>): Promise<string> => {
   const db = await getDb();
   const telephone_id = await getNextClientId();
-  
+
   await db.execute(`
     INSERT INTO clients (telephone_id, nom_prenom, adresse, email, observations, est_supprime)
     VALUES (?, ?, ?, ?, ?, 0)
   `, [telephone_id, client.nom_prenom, client.adresse || null, client.email || null, client.observations || null]);
-  
+
   return telephone_id;
 };
 
@@ -1067,18 +1075,18 @@ export const updateClient = async (telephone_id: string, client: Partial<Client>
   const db = await getDb();
   const fields: string[] = [];
   const values: any[] = [];
-  
+
   const allowedFields = ['nom_prenom', 'adresse', 'email', 'observations'];
-  
+
   Object.entries(client).forEach(([key, value]) => {
     if (allowedFields.includes(key) && value !== undefined) {
       fields.push(`${key} = ?`);
       values.push(value);
     }
   });
-  
+
   if (fields.length === 0) return;
-  
+
   values.push(telephone_id);
   await db.execute(`UPDATE clients SET ${fields.join(', ')} WHERE telephone_id = ?`, values);
 };
@@ -1140,9 +1148,9 @@ export const createVenteComplete = async (
         mode_paiement, montant_total, montant_regle, statut, observation)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [vente.code_vente, vente.type_vente, vente.date_vente, vente.client_id,
-        vente.client_nom, vente.mode_paiement, vente.montant_total,
-        vente.montant_regle || 0, vente.statut, vente.observation]);
-    
+    vente.client_nom, vente.mode_paiement, vente.montant_total,
+    vente.montant_regle || 0, vente.statut, vente.observation]);
+
     const venteId = result.lastInsertId as number;
     for (const detail of details) {
       await db.execute(`
@@ -1150,8 +1158,8 @@ export const createVenteComplete = async (
           quantite, prix_unitaire, total, taille_libelle)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `, [venteId, detail.matiere_id || null, detail.article_id || null,
-          detail.designation, detail.quantite, detail.prix_unitaire,
-          detail.total, detail.taille_libelle || null]);
+        detail.designation, detail.quantite, detail.prix_unitaire,
+        detail.total, detail.taille_libelle || null]);
     }
     await db.execute('COMMIT');
     return venteId;
@@ -1162,7 +1170,7 @@ export const createVenteComplete = async (
 };
 
 export const updateVenteComplete = async (
-  id: number, 
+  id: number,
   data: {
     client_id?: string | null;
     client_nom?: string;
@@ -1191,18 +1199,18 @@ export const updateVenteComplete = async (
       SET client_id = ?, client_nom = ?, date_vente = ?, observation = ?, 
           type_vente = ?, montant_total = ?, montant_regle = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [data.client_id || null, data.client_nom || null, data.date_vente, 
-        data.observation || null, data.type_vente || 'commande',
-        data.montant_total || 0, data.montant_regle || 0, id]);
-    
+    `, [data.client_id || null, data.client_nom || null, data.date_vente,
+    data.observation || null, data.type_vente || 'commande',
+    data.montant_total || 0, data.montant_regle || 0, id]);
+
     await db.execute(`DELETE FROM vente_details WHERE vente_id = ?`, [id]);
-    
+
     for (const detail of data.details || []) {
       await db.execute(`
         INSERT INTO vente_details (vente_id, article_id, matiere_id, designation, quantite, prix_unitaire, total, taille_libelle)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [id, detail.article_id || null, detail.matiere_id || null, detail.designation, 
-          detail.quantite, detail.prix_unitaire, detail.total, detail.taille_libelle || null]);
+      `, [id, detail.article_id || null, detail.matiere_id || null, detail.designation,
+        detail.quantite, detail.prix_unitaire, detail.total, detail.taille_libelle || null]);
     }
     await db.execute('COMMIT');
   } catch (error) {
@@ -1215,10 +1223,10 @@ export const updateVentePaiement = async (id: number, montant: number, mode?: st
   const db = await getDb();
   const vente = await getVenteById(id);
   if (!vente) throw new Error('Vente non trouvée');
-  
+
   const nouveauRegle = vente.montant_regle + montant;
   const nouveauStatut = nouveauRegle >= vente.montant_total ? 'PAYEE' : 'PARTIEL';
-  
+
   await db.execute(`
     UPDATE ventes 
     SET montant_regle = ?, statut = ?, mode_paiement = COALESCE(?, mode_paiement), updated_at = CURRENT_TIMESTAMP
@@ -1242,7 +1250,6 @@ const initDatabase = async (db: Database) => {
     nom TEXT NOT NULL,
     unite TEXT NOT NULL,
     ordre_affichage INTEGER DEFAULT 0,
-    categorie TEXT CHECK(categorie IN ('haut', 'bas', 'general', 'accessoire')),
     est_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -1341,32 +1348,37 @@ const initDatabase = async (db: Database) => {
     nom TEXT NOT NULL,
     login TEXT NOT NULL UNIQUE,
     mot_de_passe_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('admin', 'caissier', 'couturier')),
+    role TEXT NOT NULL,
     est_actif INTEGER NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+)`);
 
   // 10. Clients
+  // Dans initDatabase, modifie la création de la table clients :
   await db.execute(`CREATE TABLE IF NOT EXISTS clients (
-    telephone_id TEXT PRIMARY KEY,
-    nom_prenom TEXT NOT NULL,
-    adresse TEXT,
-    email TEXT,
-    date_enregistrement DATETIME DEFAULT CURRENT_TIMESTAMP,
-    observations TEXT,
-    est_supprime INTEGER DEFAULT 0
-  )`);
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  telephone_id TEXT NOT NULL,
+  nom_prenom TEXT NOT NULL,
+  profil TEXT DEFAULT 'principal',  -- 'principal', 'enfant', 'conjoint', etc.
+  adresse TEXT,
+  email TEXT,
+  date_enregistrement DATETIME DEFAULT CURRENT_TIMESTAMP,
+  observations TEXT,
+  est_supprime INTEGER DEFAULT 0
+)`);
+
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_clients_telephone ON clients(telephone_id)`);
 
   // 11. Mesures clients
+  // 11. Mesures clients - SANS clé étrangère (car telephone_id n'est plus unique)
   await db.execute(`CREATE TABLE IF NOT EXISTS mesures_clients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id TEXT NOT NULL,
     type_mesure_id INTEGER NOT NULL,
     valeur REAL NOT NULL,
     date_mesure DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (client_id) REFERENCES clients(telephone_id),
     FOREIGN KEY (type_mesure_id) REFERENCES types_mesures(id)
-  )`);
+)`);
 
   // 12. Matières
   await db.execute(`CREATE TABLE IF NOT EXISTS matieres (
@@ -1376,7 +1388,6 @@ const initDatabase = async (db: Database) => {
     categorie_id INTEGER,
     unite TEXT NOT NULL,
     prix_achat REAL DEFAULT 0,
-    prix_vente REAL DEFAULT 0,
     stock_actuel REAL DEFAULT 0,
     seuil_alerte REAL DEFAULT 0,
     reference_fournisseur TEXT,
@@ -1437,12 +1448,13 @@ const initDatabase = async (db: Database) => {
     WHERE a.est_actif = 1`);
 
   // 15. Ventes
+  // 15. Ventes
   await db.execute(`CREATE TABLE IF NOT EXISTS ventes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code_vente TEXT UNIQUE NOT NULL,
     type_vente TEXT NOT NULL CHECK(type_vente IN ('commande', 'pret_a_porter', 'matiere')),
     date_vente DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    client_id TEXT,
+    client_id INTEGER,  -- ← Changé de TEXT à INTEGER (référence clients.id)
     client_nom TEXT,
     mode_paiement TEXT CHECK(mode_paiement IN ('Espèces', 'Orange money', 'Moov money', 'Telecel money', 'Wave', 'Sank Money', 'Virement bancaire')),
     montant_total REAL NOT NULL,
@@ -1451,8 +1463,8 @@ const initDatabase = async (db: Database) => {
     observation TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME,
-    FOREIGN KEY (client_id) REFERENCES clients(telephone_id)
-  )`);
+    FOREIGN KEY (client_id) REFERENCES clients(id)  -- ← Référence maintenant clients.id
+)`);
 
   // 16. Détails ventes
   await db.execute(`CREATE TABLE IF NOT EXISTS vente_details (
@@ -1587,6 +1599,17 @@ const initDatabase = async (db: Database) => {
     id_ligne INTEGER
   )`);
 
+  // 25. Table permissions
+  await db.execute(`CREATE TABLE IF NOT EXISTS permissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  utilisateur_id INTEGER NOT NULL,
+  fonctionnalite TEXT NOT NULL,
+  lecture INTEGER DEFAULT 1,
+  ecriture INTEGER DEFAULT 0,
+  UNIQUE(utilisateur_id, fonctionnalite),
+  FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id) ON DELETE CASCADE
+)`);
+
   // Index
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_modele ON articles(modele_id)`);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_articles_taille ON articles(taille_id)`);
@@ -1601,8 +1624,124 @@ const initDatabase = async (db: Database) => {
 
   // Données par défaut
   await seedDefaultData(db);
-  
+
   console.log("✅ Toutes les tables sont initialisées");
+
+  // ==================== JOURNAL DES MODIFICATIONS (TOUTES LES TABLES) ====================
+
+  // Table journal
+  await db.execute(`CREATE TABLE IF NOT EXISTS journal_modifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  utilisateur TEXT NOT NULL DEFAULT 'Admin',
+  action TEXT NOT NULL CHECK(action IN ('CREATE', 'UPDATE', 'DELETE')),
+  table_concernee TEXT NOT NULL,
+  id_enregistrement TEXT,
+  details TEXT,
+  date_modification DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+
+  // ========== RÉFÉRENTIELS ==========
+  // Tailles
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_tailles_insert AFTER INSERT ON tailles BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'tailles', NEW.code_taille, 'Création taille: ' || NEW.libelle); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_tailles_update AFTER UPDATE ON tailles BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'tailles', NEW.code_taille, 'Modification taille: ' || NEW.libelle); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_tailles_delete AFTER DELETE ON tailles BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'tailles', OLD.code_taille, 'Suppression taille: ' || OLD.libelle); END`);
+
+  // Couleurs
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_couleurs_insert AFTER INSERT ON couleurs BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'couleurs', NEW.nom_couleur, 'Création couleur: ' || NEW.nom_couleur); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_couleurs_update AFTER UPDATE ON couleurs BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'couleurs', NEW.nom_couleur, 'Modification couleur: ' || NEW.nom_couleur); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_couleurs_delete AFTER DELETE ON couleurs BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'couleurs', OLD.nom_couleur, 'Suppression couleur: ' || OLD.nom_couleur); END`);
+
+  // Textures
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_textures_insert AFTER INSERT ON textures BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'textures', NEW.nom_texture, 'Création texture: ' || NEW.nom_texture); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_textures_update AFTER UPDATE ON textures BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'textures', NEW.nom_texture, 'Modification texture: ' || NEW.nom_texture); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_textures_delete AFTER DELETE ON textures BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'textures', OLD.nom_texture, 'Suppression texture: ' || OLD.nom_texture); END`);
+
+  // Types de mesures
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_types_mesures_insert AFTER INSERT ON types_mesures BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'types_mesures', NEW.nom, 'Création type mesure: ' || NEW.nom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_types_mesures_update AFTER UPDATE ON types_mesures BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'types_mesures', NEW.nom, 'Modification type mesure: ' || NEW.nom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_types_mesures_delete AFTER DELETE ON types_mesures BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'types_mesures', OLD.nom, 'Suppression type mesure: ' || OLD.nom); END`);
+
+  // Types de prestations
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_types_prestations_insert AFTER INSERT ON types_prestations BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'types_prestations', NEW.code_prestation, 'Création prestation: ' || NEW.nom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_types_prestations_update AFTER UPDATE ON types_prestations BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'types_prestations', NEW.code_prestation, 'Modification prestation: ' || NEW.nom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_types_prestations_delete AFTER DELETE ON types_prestations BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'types_prestations', OLD.code_prestation, 'Suppression prestation: ' || OLD.nom); END`);
+
+  // Catégories de matières
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_categories_matieres_insert AFTER INSERT ON categories_matieres BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'categories_matieres', NEW.code_categorie, 'Création catégorie: ' || NEW.nom_categorie); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_categories_matieres_update AFTER UPDATE ON categories_matieres BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'categories_matieres', NEW.code_categorie, 'Modification catégorie: ' || NEW.nom_categorie); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_categories_matieres_delete AFTER DELETE ON categories_matieres BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'categories_matieres', OLD.code_categorie, 'Suppression catégorie: ' || OLD.nom_categorie); END`);
+
+  // Modèles de tenues
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_modeles_tenues_insert AFTER INSERT ON modeles_tenues BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'modeles_tenues', NEW.code_modele, 'Création modèle: ' || NEW.designation); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_modeles_tenues_update AFTER UPDATE ON modeles_tenues BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'modeles_tenues', NEW.code_modele, 'Modification modèle: ' || NEW.designation); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_modeles_tenues_delete AFTER DELETE ON modeles_tenues BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'modeles_tenues', OLD.code_modele, 'Suppression modèle: ' || OLD.designation); END`);
+
+  // ========== TABLES PRINCIPALES ==========
+  // Clients
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_clients_insert AFTER INSERT ON clients BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'clients', NEW.telephone_id, 'Création client: ' || NEW.nom_prenom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_clients_update AFTER UPDATE ON clients BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'clients', NEW.telephone_id, 'Modification client: ' || NEW.nom_prenom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_clients_delete AFTER DELETE ON clients BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'clients', OLD.telephone_id, 'Suppression client: ' || OLD.nom_prenom); END`);
+
+  // Mesures clients
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_mesures_clients_insert AFTER INSERT ON mesures_clients BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'mesures_clients', NEW.client_id, 'Ajout mesure client'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_mesures_clients_update AFTER UPDATE ON mesures_clients BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'mesures_clients', NEW.client_id, 'Modification mesure client'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_mesures_clients_delete AFTER DELETE ON mesures_clients BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'mesures_clients', OLD.client_id, 'Suppression mesure client'); END`);
+
+  // Articles
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_articles_insert AFTER INSERT ON articles BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'articles', NEW.code_article, 'Création article: ' || NEW.code_article); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_articles_update AFTER UPDATE ON articles BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'articles', NEW.code_article, 'Modification article: ' || NEW.code_article || ', Stock: ' || NEW.quantite_stock); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_articles_delete AFTER DELETE ON articles BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'articles', OLD.code_article, 'Suppression article: ' || OLD.code_article); END`);
+
+  // Matières
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_matieres_insert AFTER INSERT ON matieres BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'matieres', NEW.code_matiere, 'Création matière: ' || NEW.designation); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_matieres_update AFTER UPDATE ON matieres BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'matieres', NEW.code_matiere, 'Modification matière: ' || NEW.designation || ', Stock: ' || NEW.stock_actuel); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_matieres_delete AFTER DELETE ON matieres BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'matieres', OLD.code_matiere, 'Suppression matière: ' || OLD.designation); END`);
+
+  // Ventes
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_ventes_insert AFTER INSERT ON ventes BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'ventes', NEW.code_vente, 'Création vente: ' || NEW.code_vente || ' (' || NEW.montant_total || ' FCFA)'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_ventes_update AFTER UPDATE ON ventes BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'ventes', NEW.code_vente, 'Modification vente: ' || NEW.code_vente || ', Statut: ' || NEW.statut); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_ventes_delete AFTER DELETE ON ventes BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'ventes', OLD.code_vente, 'Suppression vente: ' || OLD.code_vente); END`);
+
+  // Vente details
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_vente_details_insert AFTER INSERT ON vente_details BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'vente_details', NEW.vente_id, 'Ajout détail vente: ' || NEW.designation); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_vente_details_delete AFTER DELETE ON vente_details BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'vente_details', OLD.vente_id, 'Suppression détail vente: ' || OLD.designation); END`);
+
+  // Employés
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_employes_insert AFTER INSERT ON employes BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'employes', NEW.id, 'Création employé: ' || NEW.nom_prenom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_employes_update AFTER UPDATE ON employes BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'employes', NEW.id, 'Modification employé: ' || NEW.nom_prenom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_employes_delete AFTER DELETE ON employes BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'employes', OLD.id, 'Suppression employé: ' || OLD.nom_prenom); END`);
+
+  // Prestations réalisées
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_prestations_insert AFTER INSERT ON prestations_realisees BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'prestations_realisees', NEW.id, 'Création prestation: ' || NEW.designation); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_prestations_delete AFTER DELETE ON prestations_realisees BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'prestations_realisees', OLD.id, 'Suppression prestation: ' || OLD.designation); END`);
+
+  // Emprunts
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_emprunts_insert AFTER INSERT ON emprunts BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'emprunts', NEW.id, 'Création emprunt: ' || NEW.montant || ' FCFA'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_emprunts_update AFTER UPDATE ON emprunts BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'emprunts', NEW.id, 'Remboursement emprunt'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_emprunts_delete AFTER DELETE ON emprunts BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'emprunts', OLD.id, 'Suppression emprunt: ' || OLD.montant || ' FCFA'); END`);
+
+  // Salaires
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_salaires_insert AFTER INSERT ON salaires BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'salaires', NEW.id, 'Paiement salaire: ' || NEW.montant_net || ' FCFA'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_salaires_delete AFTER DELETE ON salaires BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'salaires', OLD.id, 'Annulation salaire'); END`);
+
+  // Dépenses
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_depenses_insert AFTER INSERT ON depenses BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'depenses', NEW.id, 'Création dépense: ' || NEW.designation || ' (' || NEW.montant || ' FCFA)'); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_depenses_update AFTER UPDATE ON depenses BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'depenses', NEW.id, 'Modification dépense: ' || NEW.designation); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_depenses_delete AFTER DELETE ON depenses BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'depenses', OLD.id, 'Suppression dépense: ' || OLD.designation); END`);
+
+  // Entrées stock
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_entrees_stock_insert AFTER INSERT ON entrees_stock BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'entrees_stock', NEW.code_entree, 'Entrée stock: ' || NEW.quantite || ' unités'); END`);
+
+  // Sorties stock
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_sorties_stock_insert AFTER INSERT ON sorties_stock BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'sorties_stock', NEW.code_sortie, 'Sortie stock: ' || NEW.quantite || ' unités'); END`);
+
+  // Utilisateurs
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_utilisateurs_insert AFTER INSERT ON utilisateurs BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'CREATE', 'utilisateurs', NEW.login, 'Création utilisateur: ' || NEW.nom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_utilisateurs_update AFTER UPDATE ON utilisateurs BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'UPDATE', 'utilisateurs', NEW.login, 'Modification utilisateur: ' || NEW.nom); END`);
+  await db.execute(`CREATE TRIGGER IF NOT EXISTS trg_utilisateurs_delete AFTER DELETE ON utilisateurs BEGIN INSERT INTO journal_modifications (utilisateur, action, table_concernee, id_enregistrement, details) VALUES ('Admin', 'DELETE', 'utilisateurs', OLD.login, 'Suppression utilisateur: ' || OLD.nom); END`);
+
+  console.log("✅ Triggers journal modifications créés pour toutes les tables");
+
 };
 
 const seedDefaultData = async (db: Database) => {
@@ -1658,20 +1797,24 @@ const seedDefaultData = async (db: Database) => {
   const mesuresCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM types_mesures");
   if (mesuresCount[0].count === 0) {
     const mesures = [
-      { nom: 'Tour de poitrine', unite: 'cm', ordre: 1, categorie: 'haut' },
-      { nom: 'Tour de taille', unite: 'cm', ordre: 2, categorie: 'haut' },
-      { nom: 'Tour de hanches', unite: 'cm', ordre: 3, categorie: 'bas' },
-      { nom: 'Longueur totale', unite: 'cm', ordre: 4, categorie: 'general' },
-      { nom: 'Longueur manche', unite: 'cm', ordre: 5, categorie: 'haut' },
-      { nom: 'Tour de cou', unite: 'cm', ordre: 6, categorie: 'haut' },
-      { nom: 'Largeur épaule', unite: 'cm', ordre: 7, categorie: 'haut' },
-      { nom: 'Longueur jambe', unite: 'cm', ordre: 8, categorie: 'bas' },
-      { nom: 'Tour de cuisse', unite: 'cm', ordre: 9, categorie: 'bas' },
-      { nom: 'Tour de bras', unite: 'cm', ordre: 10, categorie: 'haut' }
+      { nom: 'Tour de poitrine', unite: 'cm', ordre: 1 },
+      { nom: 'Tour de taille', unite: 'cm', ordre: 2 },
+      { nom: 'Tour de hanches', unite: 'cm', ordre: 3 },
+      { nom: 'Longueur totale', unite: 'cm', ordre: 4 },
+      { nom: 'Longueur manche', unite: 'cm', ordre: 5 },
+      { nom: 'Tour de cou', unite: 'cm', ordre: 6 },
+      { nom: 'Largeur épaule', unite: 'cm', ordre: 7 },
+      { nom: 'Longueur jambe', unite: 'cm', ordre: 8 },
+      { nom: 'Tour de cuisse', unite: 'cm', ordre: 9 },
+      { nom: 'Tour de bras', unite: 'cm', ordre: 10 }
     ];
     for (const m of mesures) {
-      await db.execute(`INSERT INTO types_mesures (nom, unite, ordre_affichage, categorie, est_active) VALUES (?, ?, ?, ?, 1)`, [m.nom, m.unite, m.ordre, m.categorie]);
+      await db.execute(
+        `INSERT INTO types_mesures (nom, unite, ordre_affichage, est_active) VALUES (?, ?, ?, 1)`,
+        [m.nom, m.unite, m.ordre]
+      );
     }
+    // ✅ SUPPRIME la deuxième boucle qui suit
     console.log("✅ Types de mesures par défaut créés");
   }
 
@@ -1816,18 +1959,18 @@ export const payerSalaireSecurise = async (employe_id: number) => {
   if (!emp.length) throw new Error("Employé introuvable");
   const type = emp[0].type_remuneration;
   if (!type) throw new Error("Type de rémunération non défini");
-  
+
   let montant_brut = 0;
   if (type === 'fixe') montant_brut = emp[0].salaire_base || 0;
   if (type === 'prestation') {
     const prestations = await db.select<Array<{ total: number }>>(`SELECT COALESCE(SUM(total),0) as total FROM prestations_realisees WHERE employe_id = ? AND (paye = 0 OR paye IS NULL)`, [employe_id]);
     montant_brut = prestations[0]?.total || 0;
   }
-  
+
   const emprunts = await db.select<Array<{ id: number; montant: number }>>("SELECT id, montant FROM emprunts WHERE employe_id = ? AND deduit = 0", [employe_id]);
   const retenue = emprunts.reduce((sum: number, e) => sum + e.montant, 0);
   const montant_net = Math.max(montant_brut - retenue, 0);
-  
+
   return await payerSalaire({ employe_id, type: type as 'fixe' | 'prestation', montant_net, mode: 'Espèce', observation: 'Paiement automatique', empruntIds: emprunts.map(e => e.id) });
 };
 
@@ -1883,5 +2026,8 @@ export default {
   configurerBaseReseau, utiliserBaseLocale, testerConnexionReseau,
   executeSafe, selectSafe,
   payerSalaire, payerSalaireSecurise, annulerPaiementSalaire,
-  resetAllData
+  resetAllData,
+  getPermissions,
+  savePermissions
 };
+

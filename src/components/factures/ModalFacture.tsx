@@ -12,7 +12,6 @@ import {
   Table,
   Box,
   Image,
-  SimpleGrid,
   LoadingOverlay,
   Center,
   NumberInput,
@@ -22,13 +21,7 @@ import {
 import {
   IconPrinter,
   IconX,
-  IconBuildingStore,
-  IconPhone,
-  IconUser,
   IconCash,
-  IconShoppingBag,
-  IconPackage,
-  IconTools,
 } from '@tabler/icons-react';
 import { getDb, ConfigurationAtelier } from '../../database/db';
 
@@ -189,78 +182,72 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'article': return <IconShoppingBag size={14} />;
-      case 'matiere': return <IconPackage size={14} />;
-      case 'prestation': return <IconTools size={14} />;
-      default: return null;
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'article': return 'Tenue';
-      case 'matiere': return 'Matière';
-      case 'prestation': return 'Prestation';
-      default: return type;
-    }
-  };
-
-  const nombreEnUnites = (n: number): string => {
-    const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
-    if (n === 0) return '';
-    if (n < 10) return unites[n];
-    return n.toString();
-  };
-
-  const nombreEnDizaines = (n: number): string => {
-    const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
-    if (n < 10) return nombreEnUnites(n);
-    if (n < 20) {
-      if (n === 11) return 'onze';
-      if (n === 12) return 'douze';
-      if (n === 13) return 'treize';
-      if (n === 14) return 'quatorze';
-      if (n === 15) return 'quinze';
-      if (n === 16) return 'seize';
-      return dizaines[1] + (n > 10 ? '-' + nombreEnUnites(n - 10) : '');
-    }
-    const d = Math.floor(n / 10);
-    const u = n % 10;
-    if (d === 7 || d === 9) {
-      return dizaines[d - 1] + (u > 0 ? '-' + nombreEnUnites(u) : '');
-    }
-    return dizaines[d] + (u > 0 ? '-' + nombreEnUnites(u) : '');
-  };
-
   const nombreEnLettres = (montant: number): string => {
-    if (montant === 0) return 'zéro';
-    
-    const milliards = Math.floor(montant / 1000000000);
-    const millions = Math.floor((montant % 1000000000) / 1000000);
-    const milliers = Math.floor((montant % 1000000) / 1000);
-    const resteMontant = montant % 1000;
+  if (montant === 0) return 'zéro';
+  if (montant < 0) return 'moins ' + nombreEnLettres(-montant);
+
+  const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+  const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
+
+  const convertCentaines = (n: number): string => {
+    if (n === 0) return '';
+    if (n === 100) return 'cent';
     
     let result = '';
-    
-    if (milliards > 0) {
-      result += (milliards === 1 ? 'un milliard ' : nombreEnDizaines(milliards) + ' milliards ');
+    const centaines = Math.floor(n / 100);
+    const reste = n % 100;
+
+    if (centaines > 0) {
+      result += centaines === 1 ? 'cent' : unites[centaines] + ' cent';
+      if (reste === 0 && centaines > 1) result += 's';
+      if (reste > 0) result += ' ';
     }
-    if (millions > 0) {
-      result += (millions === 1 ? 'un million ' : nombreEnDizaines(millions) + ' millions ');
+
+    if (reste > 0) {
+      if (reste < 10) {
+        result += unites[reste];
+      } else if (reste < 20) {
+        const speciaux: Record<number, string> = {
+          10: 'dix', 11: 'onze', 12: 'douze', 13: 'treize', 14: 'quatorze',
+          15: 'quinze', 16: 'seize', 17: 'dix-sept', 18: 'dix-huit', 19: 'dix-neuf'
+        };
+        result += speciaux[reste];
+      } else {
+        const d = Math.floor(reste / 10);
+        const u = reste % 10;
+        if (d === 7 || d === 9) {
+          result += dizaines[d - 1] + (u > 0 ? '-' + (u === 1 ? 'et-un' : unites[u]) : '');
+        } else {
+          result += dizaines[d] + (u > 0 ? (u === 1 && d !== 8 ? ' et un' : '-' + unites[u]) : '');
+        }
+      }
     }
-    if (milliers > 0) {
-      if (milliers === 1) result += 'mille ';
-      else result += nombreEnDizaines(milliers) + ' mille ';
-    }
-    if (resteMontant > 0) {
-      result += nombreEnDizaines(resteMontant);
-    }
-    
+
     return result.trim();
   };
 
+  const milliards = Math.floor(montant / 1000000000);
+  const millions = Math.floor((montant % 1000000000) / 1000000);
+  const milliers = Math.floor((montant % 1000000) / 1000);
+  const reste = montant % 1000;
+
+  let result = '';
+
+  if (milliards > 0) {
+    result += convertCentaines(milliards) + (milliards === 1 ? ' milliard ' : ' milliards ');
+  }
+  if (millions > 0) {
+    result += convertCentaines(millions) + (millions === 1 ? ' million ' : ' millions ');
+  }
+  if (milliers > 0) {
+    result += (milliers === 1 ? '' : convertCentaines(milliers) + ' ') + 'mille ';
+  }
+  if (reste > 0 || montant === 0) {
+    result += convertCentaines(reste);
+  }
+
+  return result.trim();
+};
   const montantEnLettres = (montant: number): string => {
     const safeMontant = montant || 0;
     const francs = Math.floor(safeMontant);
@@ -281,224 +268,158 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
   }
 
   return (
-    <>
-      <Modal
-        opened={true}
-        onClose={onClose}
-        size="xl"
-        centered
-        title={`Facture N° : ${codeVente}`}
-        radius="md"
-        styles={{
-          header: { backgroundColor: '#1b365d', padding: '16px 24px' },
-          title: { color: 'white', fontWeight: 600, fontSize: '1.1rem' },
-          body: { padding: 0 },
-        }}
-      >
-        <div ref={printRef}>
-          <Stack gap={0}>
-            <Paper p="xl" radius={0} style={{ borderBottom: '2px solid #e9ecef' }}>
-              <SimpleGrid cols={{ base: 2 }} spacing="md" mb="md">
-                <Box>
-                  <Text size="sm" fw={600}>Gérant(e) :</Text>
-                  <Text size="sm">KORGO Jacques</Text>
-                </Box>
-                <Box ta="right">
-                  <Text size="sm" fw={600}>Date :</Text>
-                  <Text size="sm">{new Date().toLocaleDateString('fr-FR')}</Text>
-                </Box>
-              </SimpleGrid>
-
-              <Group justify="space-between" align="center" wrap="nowrap" mb="md">
-                <Box style={{ flex: 1 }}>
-                  <Group justify="center" mb={4}>
-                    <IconBuildingStore size={28} color="#1b365d" />
-                    <Title order={2} size="h3" c="#1b365d">
-                      {atelier?.nom_atelier || "GESTION COUTURE"}
-                    </Title>
-                  </Group>
-                  <Stack gap={2} align="center">
-                    <Text size="xs" c="dimmed">{atelier?.adresse || "Ouagadougou, Burkina Faso"}</Text>
-                    <Text size="xs" c="dimmed">Tel: {atelier?.telephone || "70 00 00 00"}</Text>
-                    {atelier?.email && <Text size="xs" c="dimmed">Email: {atelier.email}</Text>}
-                    {atelier?.ifu && <Text size="xs" c="dimmed">IFU: {atelier.ifu}</Text>}
-                  </Stack>
-                </Box>
+  <>
+    <Modal
+      opened={true}
+      onClose={onClose}
+      size="lg"
+      centered
+      title={`Facture N° ${codeVente}`}
+      radius="md"
+      styles={{
+        header: { backgroundColor: '#1b365d', padding: '12px 20px' },
+        title: { color: 'white', fontWeight: 600, fontSize: '1rem' },
+        body: { padding: 0 },
+      }}
+    >
+      <div ref={printRef}>
+        <Stack gap={0}>
+          {/* EN-TÊTE COMPACT */}
+          <Paper p="md" radius={0} style={{ borderBottom: '2px solid #e9ecef' }}>
+            <Group justify="space-between" align="flex-start" wrap="nowrap">
+              {/* Logo + Infos atelier */}
+              <Group gap="sm" wrap="nowrap">
                 {atelier?.logo_base64 && (
-                  <Box>
-                    <Image src={atelier.logo_base64} w={100} h={100} fit="contain" radius="md" style={{ border: '1px solid #dee2e6', padding: 8 }} />
-                  </Box>
+                  <Image src={atelier.logo_base64} w={60} h={60} fit="contain" radius="md" style={{ border: '1px solid #dee2e6', padding: 4 }} />
                 )}
+                <Box>
+                  <Title order={4} c="#1b365d">{atelier?.nom_atelier || "GESTION COUTURE"}</Title>
+                  <Text size="xs" c="dimmed">{atelier?.adresse || "Ouagadougou, Burkina Faso"}</Text>
+                  <Text size="xs" c="dimmed">Tel: {atelier?.telephone || "70 00 00 00"} | IFU: {atelier?.ifu || '-'}</Text>
+                </Box>
               </Group>
 
-              <Divider my="md" />
+              {/* Infos facture */}
+              <Box ta="right">
+                <Text size="xs" c="dimmed" mb={2}>FACTURE N°</Text>
+                <Text fw={700} size="sm" c="#1b365d">{codeVente}</Text>
+                <Text size="xs" c="dimmed" mt={4}>Date : {new Date(dateVente).toLocaleDateString('fr-FR')}</Text>
+              </Box>
+            </Group>
+          </Paper>
 
-              <SimpleGrid cols={{ base: 2 }} spacing="md">
+          {/* CLIENT + TOTAL */}
+          <Paper p="md" radius={0} style={{ borderBottom: '2px solid #e9ecef', backgroundColor: '#f8f9fa' }}>
+            <Group justify="space-between" wrap="wrap">
+              <Group gap="lg">
                 <Box>
-                  <Text size="sm" fw={600}>Date de la Facture</Text>
-                  <Text size="sm">{new Date(dateVente).toLocaleDateString('fr-FR')}</Text>
+                  <Text size="xs" c="dimmed">CLIENT</Text>
+                  <Text size="sm" fw={600}>{vente.client_nom || 'Client non renseigné'}</Text>
+                  {vente.client_id && <Text size="xs" c="dimmed">Tél : {vente.client_id}</Text>}
                 </Box>
-                <Box ta="right">
-                  <Text size="sm" fw={600}>Facture N° :</Text>
-                  <Text size="sm" fw={700} c="#1b365d">{codeVente}</Text>
-                </Box>
-              </SimpleGrid>
-
-              <Divider my="md" />
-
-              <Box mb="md">
-                <Text fw={700} size="sm" mb="xs" tt="uppercase">INFORMATIONS DU CLIENT</Text>
-                <Paper p="xs" radius="md" withBorder style={{ backgroundColor: '#f8f9fa' }}>
-                  <Group gap="lg" wrap="wrap">
-                    <Group gap={4}><IconUser size={14} color="#1b365d" /><Text size="sm" c="dimmed">Nom :</Text><Text fw={600} size="sm">{vente.client_nom || 'Client non renseigné'}</Text></Group>
-                    {vente.client_id && <Group gap={4}><IconPhone size={14} color="#1b365d" /><Text size="sm" c="dimmed">Tél :</Text><Text fw={600} size="sm">{vente.client_id}</Text></Group>}
-                  </Group>
-                </Paper>
+              </Group>
+              <Box ta="right">
+                <Text size="xs" c="dimmed">MONTANT TOTAL</Text>
+                <Text fw={800} size="xl" c="#1b365d">{(total || 0).toLocaleString()} FCFA</Text>
+                {(reste || 0) > 0 && (
+                  <Badge color="orange" size="sm">Reste : {(reste || 0).toLocaleString()} FCFA</Badge>
+                )}
+                {vente.statut === 'PAYEE' && (
+                  <Badge color="green" size="sm">Payée</Badge>
+                )}
               </Box>
+            </Group>
+          </Paper>
 
-              <Divider my="md" />
-
-              <Table striped highlightOnHover className="facture-table">
-                <Table.Thead style={{ backgroundColor: '#1b365d' }}>
-                  <Table.Tr>
-                    <Table.Th style={{ color: 'white', width: 50 }}>N°</Table.Th>
-                    <Table.Th style={{ color: 'white' }}>Désignation</Table.Th>
-                    <Table.Th style={{ color: 'white', textAlign: 'center', width: 80 }}>Qté</Table.Th>
-                    <Table.Th style={{ color: 'white', textAlign: 'right', width: 120 }}>Prix unitaire</Table.Th>
-                    <Table.Th style={{ color: 'white', textAlign: 'right', width: 120 }}>Total</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {lignes && lignes.length > 0 ? (
-                    lignes.map((l, i) => (
-                      <Table.Tr key={i}>
-                        <Table.Td ta="center">{i + 1}</Table.Td>
-                        <Table.Td>
-                          <Group gap={4}>
-                            {getTypeIcon(l.type)}
-                            <Text size="sm">{l.designation || 'Sans désignation'}</Text>
-                            <Badge size="xs" variant="light" color="gray">
-                              {getTypeLabel(l.type)}
-                            </Badge>
-                          </Group>
-                        </Table.Td>
-                        <Table.Td ta="center">{l.quantite || 0}</Table.Td>
-                        <Table.Td ta="right">{(l.prix_unitaire || 0).toLocaleString()} FCFA</Table.Td>
-                        <Table.Td ta="right" fw={600}>{(l.total || 0).toLocaleString()} FCFA</Table.Td>
-                      </Table.Tr>
-                    ))
-                  ) : (
-                    <Table.Tr>
-                      <Table.Td colSpan={5} ta="center" py={20}>
-                        <Text c="dimmed">Aucun détail disponible</Text>
+          {/* TABLEAU */}
+          <Paper p="md" radius={0}>
+            <Table striped highlightOnHover>
+              <Table.Thead style={{ backgroundColor: '#1b365d' }}>
+                <Table.Tr>
+                  <Table.Th style={{ color: 'white', width: 40 }}>N°</Table.Th>
+                  <Table.Th style={{ color: 'white' }}>Désignation</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'center', width: 70 }}>Qté</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'right', width: 110 }}>Prix unitaire</Table.Th>
+                  <Table.Th style={{ color: 'white', textAlign: 'right', width: 110 }}>Total</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {lignes && lignes.length > 0 ? (
+                  lignes.map((l, i) => (
+                    <Table.Tr key={i}>
+                      <Table.Td ta="center">{i + 1}</Table.Td>
+                      <Table.Td>
+                        <Text size="sm">{l.designation || '-'}</Text>
                       </Table.Td>
+                      <Table.Td ta="center">{l.quantite || 0}</Table.Td>
+                      <Table.Td ta="right">{(l.prix_unitaire || 0).toLocaleString()} FCFA</Table.Td>
+                      <Table.Td ta="right" fw={600}>{(l.total || 0).toLocaleString()} FCFA</Table.Td>
                     </Table.Tr>
-                  )}
-                </Table.Tbody>
-              </Table>
+                  ))
+                ) : (
+                  <Table.Tr><Table.Td colSpan={5} ta="center" py={20}><Text c="dimmed">Aucun détail disponible</Text></Table.Td></Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
 
-              <Box mt="xl">
-                <SimpleGrid cols={{ base: 2 }} spacing="md">
-                  <Box>
-                    {regle > 0 && (
-                      <>
-                        <Text size="sm" c="dimmed">Montant déjà réglé</Text>
-                        <Text fw={600} c="green">{(regle || 0).toLocaleString()} FCFA</Text>
-                      </>
-                    )}
-                  </Box>
-                  <Box ta="right">
-                    <Text size="sm" c="dimmed">Montant total</Text>
-                    <Text fw={800} size="xl" c="#1b365d">{(total || 0).toLocaleString()} FCFA</Text>
-                    {(reste || 0) > 0 && (
-                      <Badge color="orange" size="sm" mt={4}>
-                        Reste à payer : {(reste || 0).toLocaleString()} FCFA
-                      </Badge>
-                    )}
-                    {vente.statut === 'PAYEE' && (
-                      <Badge color="green" size="sm" mt={4}>
-                        Entièrement payée
-                      </Badge>
-                    )}
-                  </Box>
-                </SimpleGrid>
+            {/* TOTAL + MONTANT EN LETTRES */}
+            <Group justify="space-between" mt="md" p="sm" style={{ backgroundColor: '#f8f9fa', borderRadius: 8 }}>
+              <Box>
+                <Text size="xs" c="dimmed">Arrêté à la somme de :</Text>
+                <Text size="sm" fs="italic">{montantEnLettres(total || 0)}</Text>
               </Box>
+              <Box ta="right">
+                <Text size="sm" c="dimmed">Total</Text>
+                <Text fw={700} size="lg" c="#1b365d">{(total || 0).toLocaleString()} FCFA</Text>
+              </Box>
+            </Group>
 
-              <Paper p="md" mt="xl" style={{ backgroundColor: '#f8f9fa', borderRadius: 8 }}>
-                <Text size="sm">
-                  Arrêté la présente facture à la somme de : <strong>
-                    {montantEnLettres(total || 0)} ({(total || 0).toLocaleString()}) Francs CFA
-                  </strong>
-                </Text>
-              </Paper>
+            {/* SIGNATURE */}
+            <Group justify="flex-end" mt="xl">
+              <Box ta="center" style={{ width: 150 }}>
+                <Box mb={30} />
+                <Divider />
+                <Text size="xs" c="dimmed" mt={4}>Signature & cachet</Text>
+              </Box>
+            </Group>
 
-              <SimpleGrid cols={{ base: 2 }} spacing="md" mt="xl">
-                <Box></Box>
-                <Box ta="right">
-                  <Text size="sm" fw={600}>Signature et cachet</Text>
-                  <Box mt={20} style={{ borderTop: '1px solid #000', width: 150, marginLeft: 'auto' }} />
-                </Box>
-              </SimpleGrid>
-
-              {atelier?.message_facture_defaut && (
-                <Text size="xs" c="dimmed" ta="center" mt="xl" fs="italic">{atelier.message_facture_defaut}</Text>
-              )}
-            </Paper>
-          </Stack>
-        </div>
-
-        <Divider />
-        <Group justify="flex-end" p="md" className="no-print">
-          <Button variant="light" onClick={onClose} leftSection={<IconX size={16} />}>Fermer</Button>
-          <Button onClick={handlePrint} variant="outline" color="teal" leftSection={<IconPrinter size={16} />}>Imprimer</Button>
-          {vente.statut !== 'PAYEE' && (reste || 0) > 0 && (
-            <Button onClick={() => setShowPaiementModal(true)} variant="gradient" gradient={{ from: 'green', to: 'teal' }} leftSection={<IconCash size={16} />}>
-              Procéder au paiement
-            </Button>
-          )}
-        </Group>
-      </Modal>
-
-      {/* Modal de paiement */}
-      <Modal opened={showPaiementModal} onClose={() => setShowPaiementModal(false)} title="💰 Paiement de la facture" size="md" centered radius="lg">
-        <Stack gap="md">
-          <Text size="sm">Montant total : <strong>{(total || 0).toLocaleString()} FCFA</strong></Text>
-          <Text size="sm" c="green">Déjà réglé : <strong>{(regle || 0).toLocaleString()} FCFA</strong></Text>
-          <Text size="sm" c="orange">Reste à payer : <strong>{(reste || 0).toLocaleString()} FCFA</strong></Text>
-          
-          <NumberInput 
-            label="Montant du paiement" 
-            value={montantPaiement} 
-            onChange={(val) => setMontantPaiement(Number(val) || 0)} 
-            min={0} 
-            max={reste || 0} 
-            step={1000} 
-            required 
-          />
-          
-          <Select 
-            label="Mode de paiement" 
-            data={[
-              { value: 'Espèces', label: '💵 Espèces' },
-              { value: 'Orange money', label: '📱 Orange Money' },
-              { value: 'Moov money', label: '📱 Moov Money' },
-              { value: 'Telecel money', label: '📱 Telecel Money' },
-              { value: 'Wave', label: '🌊 Wave' },
-              { value: 'Sank Money', label: '💰 Sank Money' },
-              { value: 'Virement bancaire', label: '🏦 Virement bancaire' }
-            ]} 
-            value={modePaiement} 
-            onChange={(val) => setModePaiement(val || 'Espèces')} 
-          />
-          
-          <Group justify="flex-end" mt="md">
-            <Button variant="light" onClick={() => setShowPaiementModal(false)}>Annuler</Button>
-            <Button variant="gradient" gradient={{ from: 'green', to: 'teal' }} onClick={handleConfirmerPaiement}>Confirmer le paiement</Button>
-          </Group>
+            {atelier?.message_facture_defaut && (
+              <Text size="xs" c="dimmed" ta="center" mt="xl" fs="italic">{atelier.message_facture_defaut}</Text>
+            )}
+          </Paper>
         </Stack>
-      </Modal>
-    </>
-  );
+      </div>
+
+      <Divider />
+      <Group justify="flex-end" p="md" className="no-print" gap="xs">
+        <Button variant="light" size="xs" onClick={onClose} leftSection={<IconX size={14} />}>Fermer</Button>
+        <Button size="xs" onClick={handlePrint} variant="outline" color="teal" leftSection={<IconPrinter size={14} />}>Imprimer</Button>
+        {vente.statut !== 'PAYEE' && (reste || 0) > 0 && (
+          <Button size="xs" onClick={() => setShowPaiementModal(true)} variant="gradient" gradient={{ from: 'green', to: 'teal' }} leftSection={<IconCash size={14} />}>
+            Paiement
+          </Button>
+        )}
+      </Group>
+    </Modal>
+
+    {/* Modal de paiement (inchangé) */}
+    <Modal opened={showPaiementModal} onClose={() => setShowPaiementModal(false)} title="💰 Paiement" size="sm" centered radius="md">
+      <Stack gap="md">
+        <Paper p="sm" withBorder bg="gray.0">
+          <Group justify="space-between"><Text size="xs">Total</Text><Text size="sm" fw={600}>{(total || 0).toLocaleString()} FCFA</Text></Group>
+          <Group justify="space-between"><Text size="xs">Réglé</Text><Text size="sm" fw={600} c="green">{(regle || 0).toLocaleString()} FCFA</Text></Group>
+          <Group justify="space-between"><Text size="xs">Reste</Text><Text size="sm" fw={600} c="orange">{(reste || 0).toLocaleString()} FCFA</Text></Group>
+        </Paper>
+        <NumberInput label="Montant" value={montantPaiement} onChange={(val) => setMontantPaiement(Number(val) || 0)} min={0} max={reste || 0} step={500} size="sm" radius="md" />
+        <Select label="Mode" data={['Espèces', 'Orange money', 'Moov money', 'Telecel money', 'Wave', 'Sank Money', 'Virement bancaire']} value={modePaiement} onChange={(val) => setModePaiement(val || 'Espèces')} size="sm" radius="md" />
+        <Group justify="flex-end" gap="xs">
+          <Button variant="subtle" size="xs" onClick={() => setShowPaiementModal(false)}>Annuler</Button>
+          <Button size="xs" variant="gradient" gradient={{ from: 'green', to: 'teal' }} onClick={handleConfirmerPaiement}>Confirmer</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  </>
+);
 };
 
 export default ModalFacture;

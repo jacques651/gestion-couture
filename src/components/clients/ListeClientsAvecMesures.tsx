@@ -1,6 +1,7 @@
 // src/components/clients/ListeClientsAvecMesures.tsx
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { IconRuler } from '@tabler/icons-react';
 import {
   Stack,
   Card,
@@ -32,7 +33,6 @@ import {
   IconTrash,
   IconPlus,
   IconSearch,
-  IconEye,
   IconDownload,
   IconFileExcel,
   IconFile,
@@ -55,8 +55,10 @@ interface Mesure {
 }
 
 interface Client {
+  id?: number;        // Ajoute
   telephone_id: string;
   nom_prenom: string;
+  profil?: string;    // Ajoute
   adresse?: string;
   email?: string;
   observations?: string;
@@ -83,12 +85,12 @@ export default function ListeClientsAvecMesures() {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const itemsPerPage = 10;
 
-  const { 
-    data: clientsAvecMesures = [], 
-    isLoading, 
-    error, 
+  const {
+    data: clientsAvecMesures = [],
+    isLoading,
+    error,
     refetch,
-    isError 
+    isError
   } = useQuery<ClientAvecMesures[]>({
     queryKey: ['clients_avec_mesures'],
     queryFn: async () => {
@@ -97,10 +99,10 @@ export default function ListeClientsAvecMesures() {
         if (!db) throw new Error("Base de données non initialisée");
 
         const clients = await db.select<Client[]>(
-          `SELECT telephone_id, nom_prenom, adresse, email, observations, date_enregistrement
-           FROM clients 
-           WHERE est_supprime = 0 OR est_supprime IS NULL
-           ORDER BY nom_prenom`
+          `SELECT id, telephone_id, nom_prenom, profil, adresse, email, observations, date_enregistrement
+   FROM clients 
+   WHERE est_supprime = 0 OR est_supprime IS NULL
+   ORDER BY nom_prenom`
         );
 
         if (clients.length === 0) return [];
@@ -154,7 +156,7 @@ export default function ListeClientsAvecMesures() {
 
   const filteredAndSortedData = useMemo(() => {
     if (!clientsAvecMesures || clientsAvecMesures.length === 0) return [];
-    
+
     let filtered = clientsAvecMesures.filter(c =>
       (c.nom_prenom && c.nom_prenom.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (c.telephone_id && c.telephone_id.includes(searchTerm))
@@ -196,7 +198,7 @@ export default function ListeClientsAvecMesures() {
   const handleCreateVente = (client: Client) => {
     navigate(`/ventes?client_id=${client.telephone_id}&client_nom=${encodeURIComponent(client.nom_prenom)}`);
   };
-  
+
   const handleSort = (column: 'nom_prenom' | 'telephone_id') => {
     if (sortBy === column) { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); }
     else { setSortBy(column); setSortOrder('asc'); }
@@ -299,16 +301,16 @@ export default function ListeClientsAvecMesures() {
 
   if (vueForm) {
     return (
-      <FormulaireClient 
-        clientEdit={clientEdit || undefined} 
-        onBack={() => setVueForm(false)} 
-        onSuccess={(clientId, clientNom) => { 
-          setVueForm(false); 
+      <FormulaireClient
+        clientEdit={clientEdit || undefined}
+        onBack={() => setVueForm(false)}
+        onSuccess={(clientId, clientNom) => {
+          setVueForm(false);
           refetch();
           if (clientId && clientNom && confirm('Client créé avec succès ! Voulez-vous créer une vente pour ce client ?')) {
             navigate(`/ventes?client_id=${clientId}&client_nom=${encodeURIComponent(clientNom)}`);
           }
-        }} 
+        }}
       />
     );
   }
@@ -403,6 +405,7 @@ export default function ListeClientsAvecMesures() {
               />
 
               {/* Tableau */}
+              {/* Tableau */}
               {filteredAndSortedData.length === 0 ? (
                 <Alert icon={<IconAlertCircle size={16} />} color="blue" variant="light" radius="md">
                   Aucun client trouvé. Cliquez sur "Ajouter" pour commencer.
@@ -413,6 +416,7 @@ export default function ListeClientsAvecMesures() {
                     <Table striped highlightOnHover withColumnBorders style={{ fontSize: '12px' }}>
                       <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                         <Table.Tr>
+                          <Table.Th style={{ color: 'white', fontSize: '12px', padding: '8px 6px', width: 60 }}>Profil</Table.Th>
                           <Table.Th style={{ cursor: 'pointer', color: 'white', fontSize: '12px', padding: '8px 6px', whiteSpace: 'nowrap' }} onClick={() => handleSort('nom_prenom')}>
                             <Group gap={4}>Nom {sortBy === 'nom_prenom' && <Text size="xs" c="yellow">{sortOrder === 'asc' ? '↑' : '↓'}</Text>}</Group>
                           </Table.Th>
@@ -431,8 +435,23 @@ export default function ListeClientsAvecMesures() {
                       <Table.Tbody>
                         {paginatedData.map((client) => {
                           const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur}${m.unite !== 'cm' ? m.unite : ''}`]));
+                          const profilColor =
+                            client.profil === 'principal' ? 'blue' :
+                              client.profil === 'enfant' ? 'pink' :
+                                client.profil === 'conjoint' ? 'violet' :
+                                  client.profil === 'parent' ? 'orange' : 'gray';
+                          const profilLabel =
+                            client.profil === 'principal' ? 'Moi' :
+                              client.profil === 'enfant' ? 'Enfant' :
+                                client.profil === 'conjoint' ? 'Conjoint' :
+                                  client.profil === 'parent' ? 'Parent' : 'Autre';
                           return (
-                            <Table.Tr key={client.telephone_id}>
+                            <Table.Tr key={client.id || client.telephone_id}>
+                              <Table.Td style={{ padding: '6px 4px' }}>
+                                <Badge size="sm" color={profilColor} variant="light">
+                                  {profilLabel}
+                                </Badge>
+                              </Table.Td>
                               <Table.Td style={{ fontSize: '12px', padding: '6px 6px', whiteSpace: 'nowrap' }}>
                                 <Text size="sm" fw={500} lineClamp={1}>{client.nom_prenom}</Text>
                               </Table.Td>
@@ -449,23 +468,23 @@ export default function ListeClientsAvecMesures() {
                               ))}
                               <Table.Td style={{ padding: '6px 4px' }}>
                                 <Group gap={4} justify="center" wrap="nowrap">
-                                  <Tooltip label="Voir les mesures">
-                                    <ActionIcon variant="subtle" color="blue" size="sm" onClick={() => handleVoir(client)}>
-                                      <IconEye size={14} />
+                                  <Tooltip label="Ajouter/modifier les mesures">
+                                    <ActionIcon variant="light" color="blue" size="sm" onClick={() => handleVoir(client)}>
+                                      <IconRuler size={14} />
                                     </ActionIcon>
                                   </Tooltip>
                                   <Tooltip label="Nouvelle vente">
-                                    <ActionIcon variant="subtle" color="green" size="sm" onClick={() => handleCreateVente(client)}>
+                                    <ActionIcon variant="light" color="green" size="sm" onClick={() => handleCreateVente(client)}>
                                       <IconShoppingCart size={14} />
                                     </ActionIcon>
                                   </Tooltip>
-                                  <Tooltip label="Modifier">
-                                    <ActionIcon variant="subtle" color="orange" size="sm" onClick={() => handleModifier(client)}>
+                                  <Tooltip label="Modifier le client">
+                                    <ActionIcon variant="light" color="yellow" size="sm" onClick={() => handleModifier(client)}>
                                       <IconEdit size={14} />
                                     </ActionIcon>
                                   </Tooltip>
                                   <Tooltip label="Supprimer">
-                                    <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleSupprimer(client.telephone_id)}>
+                                    <ActionIcon variant="light" color="red" size="sm" onClick={() => handleSupprimer(client.telephone_id)}>
                                       <IconTrash size={14} />
                                     </ActionIcon>
                                   </Tooltip>

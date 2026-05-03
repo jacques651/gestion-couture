@@ -9,10 +9,12 @@ import {
   IconUsers, IconShoppingBag, IconReceipt, IconChartBar, IconTrendingUp,
   IconBuildingStore, IconPackage, IconFileInvoice, IconCheck,
   IconCurrencyFrank, IconInfoCircle, IconCash, IconAlertCircle, 
-  IconShirt,
+  IconShirt, IconLock,
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
 import { notifications } from '@mantine/notifications';
+import { useAuth } from '../../contexts/AuthContext';
+
 
 type PageKey =
   | 'dashboard' | 'clients' | 'ventes' | 'depenses' | 'salaires'
@@ -20,12 +22,13 @@ type PageKey =
   | 'factures-recus' | 'mouvements_stock';
 
 interface DashboardProps {
-  setPage: (page: PageKey) => void;
+  setPage?: (page: PageKey) => void;
 }
 
 const formatCurrency = (v?: number) => `${(v || 0).toLocaleString('fr-FR')} FCFA`;
 
-const Dashboard: React.FC<DashboardProps> = ({ }) => {
+const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
+  const { canRead, user } = useAuth();  // canWrite retiré car non utilisé
   const [loading, setLoading] = useState(true);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const navigate = useNavigate();
@@ -38,7 +41,22 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
   const [stockTotal, setStockTotal] = useState(0);
   const [journal, setJournal] = useState<any[]>([]);
 
-  useEffect(() => { loadAllData(); }, []);
+  // Vérification d'accès
+  const hasAccess = canRead('dashboard');
+  const canViewVentes = canRead('ventes');
+  const canViewClients = canRead('clients');
+  const canViewArticles = canRead('articles');
+  const canViewMatieres = canRead('matieres');
+  const canViewDepenses = canRead('depenses');
+  const canViewSalaires = canRead('salaires');
+
+  useEffect(() => {
+    if (hasAccess) {
+      loadAllData();
+    } else {
+      setLoading(false);
+    }
+  }, [hasAccess]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -74,22 +92,132 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
     } finally { setLoading(false); }
   };
 
+  const handleNavigate = (page: PageKey, requiredPermission: string) => {
+    if (canRead(requiredPermission)) {
+      if (setPage) {
+        setPage(page);
+      } else {
+        navigate(`/${page}`);
+      }
+    } else {
+      notifications.show({
+        title: 'Accès refusé',
+        message: `Vous n'avez pas la permission de lire ${requiredPermission}`,
+        color: 'red'
+      });
+    }
+  };
+
+  // Si pas d'accès, afficher message d'erreur
+  if (!hasAccess) {
+    return (
+      <Center style={{ height: '70vh' }}>
+        <Stack align="center" gap="md">
+          <ThemeIcon size={80} radius="xl" color="red" variant="light">
+            <IconLock size={40} />
+          </ThemeIcon>
+          <Title order={2} ta="center">Accès non autorisé</Title>
+          <Text c="dimmed" ta="center" maw={400}>
+            Vous n'avez pas les permissions nécessaires pour accéder au tableau de bord.
+            Veuillez contacter un administrateur.
+          </Text>
+          <Button 
+            variant="light" 
+            onClick={() => window.history.back()}
+            leftSection={<IconCheck size={16} />}
+          >
+            Retour
+          </Button>
+        </Stack>
+      </Center>
+    );
+  }
+
   const tauxRecouvrement = stats.chiffreAffaires > 0 ? (stats.encaissements / stats.chiffreAffaires) * 100 : 0;
   const beneficeReel = stats.beneficeTresorerie - stockTotal;
 
   const quickLinks = [
-    { label: 'Ventes', action: () => navigate('/ventes'), icon: <IconBuildingStore size={20} />, color: 'pink', description: 'Gestion des ventes', bg: '#fce4ec' },
-    { label: 'Clients', action: () => navigate('/clients'), icon: <IconUsers size={20} />, color: 'blue', description: 'Gestion des clients', bg: '#e8f4fd' },
-    { label: 'Articles', action: () => navigate('/articles'), icon: <IconShoppingBag size={20} />, color: 'violet', description: 'Inventaire des tenues', bg: '#f3e5f5' },
-    { label: 'Matières', action: () => navigate('/matieres'), icon: <IconPackage size={20} />, color: 'teal', description: 'Matières premières', bg: '#e0f7fa' },
-    { label: 'Dépenses', action: () => navigate('/depenses'), icon: <IconReceipt size={20} />, color: 'red', description: 'Gestion des dépenses', bg: '#ffebee' },
-    { label: 'Salaires', action: () => navigate('/salaires'), icon: <IconCurrencyFrank size={20} />, color: 'indigo', description: 'Gestion des salaires', bg: '#e8eaf6' },
-    { label: 'Factures & Reçus', action: () => navigate('/factures-recus'), icon: <IconFileInvoice size={20} />, color: 'orange', description: 'Documents', bg: '#fff3e0' },
-    { label: 'Modèles', action: () => navigate('/modeles-tenues'), icon: <IconShirt size={20} />, color: 'green', description: 'Modèles de tenues', bg: '#e8f5e9' },
+    { 
+      label: 'Ventes', 
+      action: () => handleNavigate('ventes', 'ventes'), 
+      icon: <IconBuildingStore size={20} />, 
+      color: 'pink', 
+      description: 'Gestion des ventes', 
+      bg: '#fce4ec',
+      permission: canViewVentes
+    },
+    { 
+      label: 'Clients', 
+      action: () => handleNavigate('clients', 'clients'), 
+      icon: <IconUsers size={20} />, 
+      color: 'blue', 
+      description: 'Gestion des clients', 
+      bg: '#e8f4fd',
+      permission: canViewClients
+    },
+    { 
+      label: 'Articles', 
+      action: () => handleNavigate('articles', 'articles'), 
+      icon: <IconShoppingBag size={20} />, 
+      color: 'violet', 
+      description: 'Inventaire des tenues', 
+      bg: '#f3e5f5',
+      permission: canViewArticles
+    },
+    { 
+      label: 'Matières', 
+      action: () => handleNavigate('matieres', 'matieres'), 
+      icon: <IconPackage size={20} />, 
+      color: 'teal', 
+      description: 'Matières premières', 
+      bg: '#e0f7fa',
+      permission: canViewMatieres
+    },
+    { 
+      label: 'Dépenses', 
+      action: () => handleNavigate('depenses', 'depenses'), 
+      icon: <IconReceipt size={20} />, 
+      color: 'red', 
+      description: 'Gestion des dépenses', 
+      bg: '#ffebee',
+      permission: canViewDepenses
+    },
+    { 
+      label: 'Salaires', 
+      action: () => handleNavigate('salaires', 'salaires'), 
+      icon: <IconCurrencyFrank size={20} />, 
+      color: 'indigo', 
+      description: 'Gestion des salaires', 
+      bg: '#e8eaf6',
+      permission: canViewSalaires
+    },
+    { 
+      label: 'Factures & Reçus', 
+      action: () => handleNavigate('factures-recus', 'ventes'), 
+      icon: <IconFileInvoice size={20} />, 
+      color: 'orange', 
+      description: 'Documents', 
+      bg: '#fff3e0',
+      permission: canViewVentes
+    },
+    { 
+      label: 'Modèles', 
+      action: () => handleNavigate('modeles', 'articles'), 
+      icon: <IconShirt size={20} />, 
+      color: 'green', 
+      description: 'Modèles de tenues', 
+      bg: '#e8f5e9',
+      permission: canViewArticles
+    },
   ];
 
   if (loading) {
-    return <Center style={{ height: '50vh' }}><LoadingOverlay visible /><Text>Chargement...</Text></Center>;
+    return (
+      <Center style={{ height: '50vh' }}>
+        <LoadingOverlay visible />
+        <Text>Chargement...</Text>
+      </Center>
+    );
   }
 
   return (
@@ -99,10 +227,20 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><IconChartBar size={30} color="white" /></Avatar>
-                <Box><Title order={1} c="white" size="h2">Tableau de bord</Title><Text c="gray.3" size="sm">Vue d'ensemble de l'activité</Text></Box>
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconChartBar size={30} color="white" />
+                </Avatar>
+                <Box>
+                  <Title order={1} c="white" size="h2">Tableau de bord</Title>
+                  <Text c="gray.3" size="sm">
+                    Vue d'ensemble de l'activité
+                    {user && <span> - Bienvenue {user.nom}</span>}
+                  </Text>
+                </Box>
               </Group>
-              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">Instructions</Button>
+              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">
+                Instructions
+              </Button>
             </Group>
           </Card>
 
@@ -114,7 +252,10 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
               { label: 'Valeur du stock', value: stockTotal, color: 'teal', icon: <IconPackage size={18} />, bg: '#e0f7fa' },
             ].map((c, i) => (
               <Paper key={i} p="md" radius="lg" withBorder bg={c.bg}>
-                <Group justify="space-between" mb="xs"><Text size="xs" c="dimmed" tt="uppercase" fw={600}>{c.label}</Text><ThemeIcon size="lg" radius="md" color={c.color} variant="light">{c.icon}</ThemeIcon></Group>
+                <Group justify="space-between" mb="xs">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{c.label}</Text>
+                  <ThemeIcon size="lg" radius="md" color={c.color} variant="light">{c.icon}</ThemeIcon>
+                </Group>
                 <Text fw={800} size="xl" c={c.color}>{formatCurrency(c.value)}</Text>
                 {c.extra && <Text size="xs" c="dimmed">{c.extra}</Text>}
               </Paper>
@@ -127,10 +268,28 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
             <Grid>
               {quickLinks.map((link, i) => (
                 <Grid.Col key={i} span={{ base: 12, sm: 6, md: 3 }}>
-                  <Paper withBorder radius="lg" p="sm" bg={link.bg} style={{ cursor: 'pointer' }} onClick={link.action}>
+                  <Paper 
+                    withBorder 
+                    radius="lg" 
+                    p="sm" 
+                    bg={link.bg} 
+                    style={{ 
+                      cursor: link.permission ? 'pointer' : 'not-allowed',
+                      opacity: link.permission ? 1 : 0.5,
+                    }} 
+                    onClick={() => link.permission && link.action()}
+                  >
                     <Group gap="md" wrap="nowrap">
-                      <ThemeIcon color={link.color} variant="light" size={40} radius="md">{link.icon}</ThemeIcon>
-                      <Stack gap={2}><Text fw={600} size="sm">{link.label}</Text><Text size="xs" c="dimmed">{link.description}</Text></Stack>
+                      <ThemeIcon color={link.color} variant="light" size={40} radius="md">
+                        {link.icon}
+                      </ThemeIcon>
+                      <Stack gap={2}>
+                        <Text fw={600} size="sm">{link.label}</Text>
+                        <Text size="xs" c="dimmed">{link.description}</Text>
+                        {!link.permission && (
+                          <Badge size="xs" color="red" variant="light">Accès limité</Badge>
+                        )}
+                      </Stack>
                     </Group>
                   </Paper>
                 </Grid.Col>
@@ -149,9 +308,18 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
                     { label: 'Bénéfice réel (après stock)', value: beneficeReel, color: beneficeReel >= 0 ? 'green' : 'red' },
                     { label: 'Reste à recouvrer', value: stats.resteARecouvrer, color: 'orange' },
                   ].map((l, i) => (
-                    <Group key={i} justify="space-between"><Text size="sm">{l.label}</Text><Text fw={700} c={l.color}>{formatCurrency(l.value)}</Text></Group>
+                    <Group key={i} justify="space-between">
+                      <Text size="sm">{l.label}</Text>
+                      <Text fw={700} c={l.color}>{formatCurrency(l.value)}</Text>
+                    </Group>
                   ))}
-                  <RingProgress size={100} thickness={8} sections={[{ value: Math.min(tauxRecouvrement, 100), color: tauxRecouvrement > 70 ? 'green' : 'orange' }]} label={<Text ta="center" fw={700} size="sm">{Math.round(tauxRecouvrement)}%</Text>} mx="auto" />
+                  <RingProgress 
+                    size={100} 
+                    thickness={8} 
+                    sections={[{ value: Math.min(tauxRecouvrement, 100), color: tauxRecouvrement > 70 ? 'green' : 'orange' }]} 
+                    label={<Text ta="center" fw={700} size="sm">{Math.round(tauxRecouvrement)}%</Text>} 
+                    mx="auto" 
+                  />
                 </Stack>
               </Card>
             </Grid.Col>
@@ -159,32 +327,52 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder radius="lg" shadow="sm" p="xl" h="100%">
                 <Group mb="md">
-                  <ThemeIcon size="md" radius="md" color="red" variant="light"><IconAlertCircle size={16} /></ThemeIcon>
+                  <ThemeIcon size="md" radius="md" color="red" variant="light">
+                    <IconAlertCircle size={16} />
+                  </ThemeIcon>
                   <Title order={3} size="h4">⚠️ Alertes stock</Title>
-                  <Badge color={stockAlertes.length > 0 ? 'red' : 'green'} variant="filled" ml="auto">{stockAlertes.length > 0 ? `🔴 ${stockAlertes.length}` : '✅ OK'}</Badge>
+                  <Badge color={stockAlertes.length > 0 ? 'red' : 'green'} variant="filled" ml="auto">
+                    {stockAlertes.length > 0 ? `🔴 ${stockAlertes.length}` : '✅ OK'}
+                  </Badge>
                 </Group>
                 <Divider mb="md" />
                 <ScrollArea h={300}>
                   {stockAlertes.length === 0 ? (
-                    <Center py={40}><IconCheck size={24} color="green" /><Text size="sm" c="green" ml="xs">Stocks suffisants</Text></Center>
+                    <Center py={40}>
+                      <IconCheck size={24} color="green" />
+                      <Text size="sm" c="green" ml="xs">Stocks suffisants</Text>
+                    </Center>
                   ) : (
                     stockAlertes.slice(0, 10).map((item, i) => (
                       <Paper key={i} p="md" radius="md" withBorder mb="sm" style={{ borderLeft: `4px solid ${item.stock <= 0 ? '#e03131' : '#f08c00'}`, cursor: 'pointer' }}>
                         <Group justify="space-between" mb={6}>
                           <Group gap={8}>
-                            <Badge size="sm" variant="filled" color={item.type === 'matiere' ? 'blue' : 'violet'}>{item.type === 'matiere' ? '🧵' : '👕'}</Badge>
+                            <Badge size="sm" variant="filled" color={item.type === 'matiere' ? 'blue' : 'violet'}>
+                              {item.type === 'matiere' ? '🧵' : '👕'}
+                            </Badge>
                             <Text size="sm" fw={600}>{item.designation}</Text>
                           </Group>
-                          <Badge color={item.stock <= 0 ? 'red' : 'orange'} variant="filled" size="sm">{item.stock <= 0 ? '🔴 Rupture' : '⚠️ Alerte'}</Badge>
+                          <Badge color={item.stock <= 0 ? 'red' : 'orange'} variant="filled" size="sm">
+                            {item.stock <= 0 ? '🔴 Rupture' : '⚠️ Alerte'}
+                          </Badge>
                         </Group>
                         <Group justify="space-between" mb={4}>
-                          <Text size="xs">Stock: <Text component="span" fw={700} c={item.stock <= 0 ? 'red' : 'orange'}>{item.stock}</Text></Text>
+                          <Text size="xs">
+                            Stock: <Text component="span" fw={700} c={item.stock <= 0 ? 'red' : 'orange'}>{item.stock}</Text>
+                          </Text>
                           <Text size="xs">Seuil: {item.seuil_alerte}</Text>
                         </Group>
                         <Box style={{ width: '100%', height: 6, backgroundColor: '#e9ecef', borderRadius: 3 }}>
                           <Box style={{ width: `${Math.min((item.stock / (item.seuil_alerte || 1)) * 100, 100)}%`, height: '100%', backgroundColor: item.stock <= 0 ? '#e03131' : '#f08c00', borderRadius: 3 }} />
                         </Box>
-                        <Button variant="subtle" size="compact-xs" color={item.type === 'matiere' ? 'blue' : 'violet'} onClick={() => navigate(item.type === 'matiere' ? '/matieres' : '/articles')} rightSection={<IconShoppingBag size={12} />} mt={4}>
+                        <Button 
+                          variant="subtle" 
+                          size="compact-xs" 
+                          color={item.type === 'matiere' ? 'blue' : 'violet'} 
+                          onClick={() => handleNavigate(item.type === 'matiere' ? 'matieres' : 'articles', item.type === 'matiere' ? 'matieres' : 'articles')} 
+                          rightSection={<IconShoppingBag size={12} />} 
+                          mt={4}
+                        >
                           Voir {item.type === 'matiere' ? 'la matière' : "l'article"}
                         </Button>
                       </Paper>
@@ -209,7 +397,11 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {journal.length === 0 ? <Table.Tr><Table.Td colSpan={4} ta="center">Aucune transaction</Table.Td></Table.Tr> :
+                  {journal.length === 0 ? (
+                    <Table.Tr>
+                      <Table.Td colSpan={4} ta="center">Aucune transaction</Table.Td>
+                    </Table.Tr>
+                  ) : (
                     journal.map((j, i) => (
                       <Table.Tr key={i}>
                         <Table.Td>{new Date(j.date).toLocaleDateString('fr-FR')}</Table.Td>
@@ -217,7 +409,8 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
                         <Table.Td ta="right" c="green">{j.entree > 0 ? formatCurrency(j.entree) : '-'}</Table.Td>
                         <Table.Td ta="right" c="red">{j.sortie > 0 ? formatCurrency(j.sortie) : '-'}</Table.Td>
                       </Table.Tr>
-                    ))}
+                    ))
+                  )}
                 </Table.Tbody>
               </Table>
             </ScrollArea>
@@ -229,7 +422,8 @@ const Dashboard: React.FC<DashboardProps> = ({ }) => {
               <Text size="sm">2️⃣ Encaissements = montants réglés</Text>
               <Text size="sm">3️⃣ Bénéfice = encaissements - dépenses</Text>
               <Text size="sm">4️⃣ Les alertes couvrent matières ET tenues</Text>
-              <Divider /><Text size="xs" c="dimmed" ta="center">Version 1.0.0</Text>
+              <Divider />
+              <Text size="xs" c="dimmed" ta="center">Version 1.0.0</Text>
             </Stack>
           </Modal>
         </Stack>

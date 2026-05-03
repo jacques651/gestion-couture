@@ -18,14 +18,13 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
     setExportResult(null);
     try {
       const db = await getDb();
-      const mesures = await db.select<{ nom: string; unite: string; categorie: string; ordre_affichage: number }[]>(
-        "SELECT nom, unite, categorie, ordre_affichage FROM types_mesures WHERE est_active = 1 ORDER BY ordre_affichage"
+      const mesures = await db.select<{ nom: string; unite: string; ordre_affichage: number }[]>(
+        "SELECT nom, unite, ordre_affichage FROM types_mesures WHERE est_active = 1 ORDER BY ordre_affichage"
       );
 
       const data = mesures.map(m => ({
         'Nom': m.nom,
         'Unité': m.unite || 'cm',
-        'Catégorie': m.categorie || 'general',
         'Ordre': m.ordre_affichage || 0
       }));
 
@@ -36,7 +35,6 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
       XLSX.utils.book_append_sheet(wb, ws, 'Types de mesures');
 
       const instructions = [
-        { 'Instruction': 'Catégories acceptées : haut, bas, general, accessoire' },
         { 'Instruction': 'Unités suggérées : cm, mm, pouce, m' },
         { 'Instruction': `Exporté le : ${new Date().toLocaleDateString('fr-FR')}` },
       ];
@@ -70,20 +68,18 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
 
       const db = await getDb();
       let count = 0;
-      const categoriesValides = ['haut', 'bas', 'general', 'accessoire'];
 
       for (const row of rows) {
         const nom = row['Nom'] || row.Nom || row['nom'] || '';
         const unite = row['Unité'] || row.Unité || row['unite'] || row['Unite'] || 'cm';
-        const categorie = (row['Catégorie'] || row.Catégorie || row['categorie'] || row['Categorie'] || 'general').toLowerCase();
         const ordre = Number(row['Ordre'] || row.Ordre || row['ordre'] || row['Ordre'] || 0);
 
         if (nom && nom.toString().trim()) {
-          const catFinale = categoriesValides.includes(categorie) ? categorie : 'general';
+    
           await db.execute(`
-            INSERT OR IGNORE INTO types_mesures (nom, unite, categorie, est_active, ordre_affichage)
+            INSERT OR IGNORE INTO types_mesures (nom, unite, est_active, ordre_affichage)
             VALUES (?, ?, ?, 1, ?)
-          `, [nom.toString().trim(), unite, catFinale, ordre || count]);
+          `, [nom.toString().trim(), unite, ordre || count]);
           count++;
         }
       }

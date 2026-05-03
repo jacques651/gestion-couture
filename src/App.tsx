@@ -1,5 +1,5 @@
 // src/App.tsx
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, BrowserRouter, useNavigate } from 'react-router-dom';
 import { AppShell, Loader, Center, MantineProvider, Button } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
@@ -11,6 +11,7 @@ import { getDb } from './database/db';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
+
 
 // ==================== AUTH ====================
 const Login = lazy(() => import('./components/auth/Login'));
@@ -56,7 +57,7 @@ const ConfigurationMesures = lazy(() => import('./components/parametres/Configur
 // ==================== PARAMÈTRES ====================
 const ParametresAtelier = lazy(() => import('./components/parametres/ParametresAtelier'));
 const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtilisateurs'));
-
+const JournalModifications = lazy(() => import('./components/parametres/JournalModifications'));
 // ==================== OUTILS ====================
 const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
 const ConfigurationReseau = lazy(() => import('./components/ConfigurationReseau'));
@@ -74,11 +75,39 @@ const LoadingFallback = () => (
   </Center>
 );
 
-function RouteGuard({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
+function RouteGuard({ children, roles, fonctionnalite }: { children: React.ReactNode; roles?: string[]; fonctionnalite?: string }) {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [hasAccess, setHasAccess] = useState(true);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const check = async () => {
+      if (fonctionnalite && user?.role !== 'admin') {
+       const { getPermissions } = await import('./database/db');
+        const perms = await getPermissions(user?.id || 0);
+        const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
+        setHasAccess(p?.lecture === 1);
+      }
+      setChecking(false);
+    };
+    if (isAuthenticated) check();
+    else setChecking(false);
+  }, [fonctionnalite, user, isAuthenticated]);
 
   if (!isAuthenticated) return <Login />;
+  if (checking) return <LoadingFallback />;
+  if (!hasAccess) {
+    return (
+      <Center style={{ height: '50vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2>⛔ Accès non autorisé</h2>
+          <p>Vous n'avez pas les permissions nécessaires.</p>
+          <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
+        </div>
+      </Center>
+    );
+  }
   if (roles && user && !roles.includes(user.role)) {
     return (
       <Center style={{ height: '50vh' }}>
@@ -145,6 +174,7 @@ function AuthenticatedApp() {
       config_reseau: '/config-reseau',
       import_export: '/import-export',
       export_config: '/export-config',
+      journal_modifications: '/journal-modifications',
       aide: '/aide',
       support: '/support',
       export_support: '/export-support',
@@ -156,9 +186,9 @@ function AuthenticatedApp() {
   if (!isAuthenticated) return <Login />;
 
   return (
-    <AppShell 
-      padding="md" 
-      navbar={{ width: 280, breakpoint: 'sm' }} 
+    <AppShell
+      padding="md"
+      navbar={{ width: 280, breakpoint: 'sm' }}
       styles={{ main: { height: '100%', overflow: 'auto', backgroundColor: '#f5f7fa' } }}
     >
       <AppShell.Navbar>
@@ -320,6 +350,12 @@ function AuthenticatedApp() {
               </RouteGuard>
             } />
 
+            <Route path="/journal-modifications" element={
+              <RouteGuard roles={['admin']}>
+                <JournalModifications />
+              </RouteGuard>
+            } />
+
             {/* SUPPORT */}
             <Route path="/aide" element={
               <RouteGuard roles={['admin', 'caissier', 'couturier']}>
@@ -357,12 +393,12 @@ function AuthenticatedApp() {
 
 // ==================== QUERY CLIENT ====================
 const queryClient = new QueryClient({
-  defaultOptions: { 
-    queries: { 
-      staleTime: 1000 * 60 * 5, 
-      retry: 1, 
-      refetchOnWindowFocus: false 
-    } 
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+      refetchOnWindowFocus: false
+    }
   },
 });
 

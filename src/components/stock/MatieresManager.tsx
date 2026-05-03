@@ -25,6 +25,7 @@ import {
   Avatar,
   Center,
   Grid,
+  Textarea,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
@@ -51,7 +52,9 @@ import {
   getCategoriesMatieres,
   CategorieMatiere,
   Matiere,
+  getDb,
 } from '../../database/db';
+import { notifications } from '@mantine/notifications';
 
 interface FormData {
   code_matiere: string;
@@ -59,7 +62,6 @@ interface FormData {
   categorie_id: number;
   unite: string;
   prix_achat: number;
-  prix_vente: number;
   stock_actuel: number;
   seuil_alerte: number;
   reference_fournisseur: string;
@@ -73,7 +75,6 @@ const initialFormData: FormData = {
   categorie_id: 0,
   unite: 'mètre',
   prix_achat: 0,
-  prix_vente: 0,
   stock_actuel: 0,
   seuil_alerte: 0,
   reference_fournisseur: '',
@@ -145,7 +146,6 @@ const MatieresManager: React.FC = () => {
       categorie_id: matiere.categorie_id,
       unite: matiere.unite,
       prix_achat: matiere.prix_achat,
-      prix_vente: matiere.prix_vente,
       stock_actuel: matiere.stock_actuel,
       seuil_alerte: matiere.seuil_alerte,
       reference_fournisseur: matiere.reference_fournisseur || '',
@@ -242,6 +242,8 @@ const MatieresManager: React.FC = () => {
     if (stock <= seuil) return { text: 'Stock faible', color: 'orange' as const };
     return { text: 'En stock', color: 'green' as const };
   };
+
+  const [newCategorieName, setNewCategorieName] = useState('');
 
   // Filtrer les matières
   const filteredMatieres = useMemo(() => {
@@ -363,7 +365,6 @@ const MatieresManager: React.FC = () => {
                           <Table.Th style={{ color: 'white', fontSize: '13px', padding: '10px 8px', fontWeight: 600, textAlign: 'center' }}>Unité</Table.Th>
                           <Table.Th style={{ color: 'white', fontSize: '13px', padding: '10px 8px', fontWeight: 600, textAlign: 'center' }}>Stock</Table.Th>
                           <Table.Th style={{ color: 'white', fontSize: '13px', padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Prix achat</Table.Th>
-                          <Table.Th style={{ color: 'white', fontSize: '13px', padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Prix vente</Table.Th>
                           <Table.Th style={{ textAlign: 'center', color: 'white', fontSize: '13px', padding: '10px 8px', fontWeight: 600 }}>Actions</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
@@ -407,9 +408,6 @@ const MatieresManager: React.FC = () => {
                               <Table.Td style={{ fontSize: '13px', padding: '8px 8px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                                 <Text size="sm" c="gray.7">{formatPrice(matiere.prix_achat)}</Text>
                               </Table.Td>
-                              <Table.Td style={{ fontSize: '13px', padding: '8px 8px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                                <Text size="sm" c="green" fw={700}>{formatPrice(matiere.prix_vente)}</Text>
-                              </Table.Td>
                               <Table.Td style={{ padding: '8px 8px' }}>
                                 <Group gap={6} justify="center" wrap="nowrap">
                                   <Tooltip label="Ajouter stock">
@@ -452,14 +450,11 @@ const MatieresManager: React.FC = () => {
           </Card>
 
           {/* Modal formulaire matière */}
+          {/* Modal formulaire matière */}
           <Modal
             opened={modalOpened}
             onClose={closeModal}
-            title={
-              <Title order={3}>
-                {editingMatiere ? 'Modifier la matière' : 'Nouvelle matière'}
-              </Title>
-            }
+            title={editingMatiere ? 'Modifier la matière' : 'Nouvelle matière'}
             size="lg"
             radius="md"
             padding="xl"
@@ -472,26 +467,70 @@ const MatieresManager: React.FC = () => {
                   placeholder="Nom de la matière"
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  required
-                  withAsterisk
-                  size="md"
-                  radius="md"
+                  required withAsterisk size="md" radius="md"
                 />
 
-                <Select
-                  label="Catégorie"
-                  placeholder="Sélectionner une catégorie"
-                  data={categories
-                    .filter((c) => c.est_actif === 1)
-                    .map((c) => ({ value: String(c.id), label: c.nom_categorie }))}
-                  value={String(formData.categorie_id)}
-                  onChange={(value) => setFormData({ ...formData, categorie_id: parseInt(value || '0') })}
-                  required
-                  withAsterisk
-                  size="md"
-                  radius="md"
-                  searchable
-                />
+                {/* Catégorie avec option "Autre" */}
+                <Stack gap={4}>
+                  <Select
+                    label="Catégorie"
+                    placeholder="Sélectionner une catégorie"
+                    data={[
+                      ...categories.filter(c => c.est_actif === 1).map(c => ({ value: String(c.id), label: c.nom_categorie })),
+                      { value: 'autre', label: '+ Autre (créer)' },
+                    ]}
+                    value={formData.categorie_id === 0 && newCategorieName ? 'autre' : String(formData.categorie_id)}
+                    onChange={(value) => {
+                      if (value === 'autre') {
+                        setFormData({ ...formData, categorie_id: 0 });
+                      } else {
+                        setFormData({ ...formData, categorie_id: parseInt(value || '0') });
+                      }
+                    }}
+                    required withAsterisk size="md" radius="md" searchable
+                  />
+                  {(formData.categorie_id === 0 || String(formData.categorie_id) === '0') && (
+                    <Group gap="xs">
+                      <TextInput
+                        placeholder="Nom de la nouvelle catégorie"
+                        value={newCategorieName}
+                        onChange={(e) => setNewCategorieName(e.target.value)}
+                        size="xs"
+                        radius="md"
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        size="xs"
+                        variant="light"
+                        color="green"
+                        onClick={async () => {
+                          if (!newCategorieName.trim()) {
+                            notifications.show({ title: 'Erreur', message: 'Nom requis', color: 'red' });
+                            return;
+                          }
+                          try {
+                            const db = await getDb();
+                            const result = await db.execute(
+                              `INSERT INTO categories_matieres (code_categorie, nom_categorie, est_actif) VALUES (?, ?, 1)`,
+                              [`CAT-${Date.now()}`, newCategorieName.trim()]
+                            );
+                            const newId = Number(result.lastInsertId);
+                            // Recharger les catégories
+                            const cats = await getCategoriesMatieres();
+                            setCategories(cats);
+                            setFormData({ ...formData, categorie_id: newId });
+                            setNewCategorieName('');
+                            notifications.show({ title: 'Succès', message: 'Catégorie créée', color: 'green' });
+                          } catch (err: any) {
+                            notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
+                          }
+                        }}
+                      >
+                        Créer
+                      </Button>
+                    </Group>
+                  )}
+                </Stack>
 
                 <Grid>
                   <Grid.Col span={6}>
@@ -506,8 +545,7 @@ const MatieresManager: React.FC = () => {
                       ]}
                       value={formData.unite}
                       onChange={(value) => setFormData({ ...formData, unite: value || 'mètre' })}
-                      size="md"
-                      radius="md"
+                      size="md" radius="md"
                     />
                   </Grid.Col>
                   <Grid.Col span={6}>
@@ -516,9 +554,7 @@ const MatieresManager: React.FC = () => {
                       placeholder="Rayon, étagère..."
                       value={formData.emplacement}
                       onChange={(e) => setFormData({ ...formData, emplacement: e.target.value })}
-                      size="md"
-                      radius="md"
-                      leftSection={<IconMapPin size={16} />}
+                      size="md" radius="md" leftSection={<IconMapPin size={16} />}
                     />
                   </Grid.Col>
                 </Grid>
@@ -526,79 +562,46 @@ const MatieresManager: React.FC = () => {
                 <Grid>
                   <Grid.Col span={6}>
                     <NumberInput
-                      label="Prix d'achat (FCFA)"
-                      placeholder="0"
+                      label="Prix d'achat (FCFA)" placeholder="0"
                       value={formData.prix_achat}
                       onChange={(value) => setFormData({ ...formData, prix_achat: typeof value === 'number' ? value : 0 })}
-                      size="md"
-                      radius="md"
-                      leftSection={<Text size="sm" fw={600}>FCFA</Text>}
-                      thousandSeparator=" "
-                      hideControls
+                      size="md" radius="md" leftSection={<Text size="sm" fw={600}>FCFA</Text>} thousandSeparator=" " hideControls
                     />
                   </Grid.Col>
-                  <Grid.Col span={6}>
-                    <NumberInput
-                      label="Prix de vente (FCFA)"
-                      placeholder="0"
-                      value={formData.prix_vente}
-                      onChange={(value) => setFormData({ ...formData, prix_vente: typeof value === 'number' ? value : 0 })}
-                      size="md"
-                      radius="md"
-                      leftSection={<Text size="sm" fw={600}>FCFA</Text>}
-                      thousandSeparator=" "
-                      hideControls
-                    />
-                  </Grid.Col>
-                </Grid>
-
-                <Grid>
                   <Grid.Col span={6}>
                     <NumberInput
                       label="Stock initial"
                       value={formData.stock_actuel}
                       onChange={(value) => setFormData({ ...formData, stock_actuel: typeof value === 'number' ? value : 0 })}
-                      size="md"
-                      radius="md"
-                      leftSection={<IconPackage size={16} />}
-                      hideControls
-                    />
-                  </Grid.Col>
-                  <Grid.Col span={6}>
-                    <NumberInput
-                      label="Seuil d'alerte"
-                      description="En dessous de ce seuil, une alerte sera affichée"
-                      value={formData.seuil_alerte}
-                      onChange={(value) => setFormData({ ...formData, seuil_alerte: typeof value === 'number' ? value : 0 })}
-                      size="md"
-                      radius="md"
-                      hideControls
+                      size="md" radius="md" leftSection={<IconPackage size={16} />} hideControls
                     />
                   </Grid.Col>
                 </Grid>
 
-                <TextInput
-                  label="Référence fournisseur"
-                  placeholder="Réf. fournisseur"
-                  value={formData.reference_fournisseur}
-                  onChange={(e) => setFormData({ ...formData, reference_fournisseur: e.target.value })}
-                  size="md"
-                  radius="md"
-                  leftSection={<IconBarcode size={16} />}
-                />
+                <Grid>
+                  <Grid.Col span={6}>
+                    <NumberInput
+                      label="Seuil d'alerte" description="Alerte si stock ≤ ce seuil"
+                      value={formData.seuil_alerte}
+                      onChange={(value) => setFormData({ ...formData, seuil_alerte: typeof value === 'number' ? value : 0 })}
+                      size="md" radius="md" hideControls
+                    />
+                  </Grid.Col>
+                  <Grid.Col span={6}>
+                    <TextInput
+                      label="Référence fournisseur" placeholder="Réf. fournisseur"
+                      value={formData.reference_fournisseur}
+                      onChange={(e) => setFormData({ ...formData, reference_fournisseur: e.target.value })}
+                      size="md" radius="md" leftSection={<IconBarcode size={16} />}
+                    />
+                  </Grid.Col>
+                </Grid>
 
-                {error && (
-                  <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">
-                    {error}
-                  </Alert>
-                )}
+                {error && <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">{error}</Alert>}
 
                 <Divider my="sm" />
-
                 <Group justify="flex-end" gap="md">
-                  <Button variant="subtle" onClick={closeModal} size="md" radius="md" disabled={saving}>
-                    Annuler
-                  </Button>
+                  <Button variant="subtle" onClick={closeModal} size="md" radius="md" disabled={saving}>Annuler</Button>
                   <Button type="submit" color="blue" size="md" radius="md" loading={saving}>
                     {editingMatiere ? 'Mettre à jour' : 'Enregistrer'}
                   </Button>
@@ -607,67 +610,82 @@ const MatieresManager: React.FC = () => {
             </form>
           </Modal>
 
-          {/* Modal gestion stock */}
+          {/* Modal gestion stock (Ajout/Retrait avec historique) */}
           <Modal
             opened={stockModalOpened}
             onClose={closeStockModal}
-            title={
-              <Title order={3}>
-                {stockAction === 'add' ? 'Ajouter du stock' : 'Retirer du stock'}
-              </Title>
-            }
-            size="sm"
+            title={stockAction === 'add' ? '📥 Ajouter du stock' : '📤 Retirer du stock'}
+            size="md"
             radius="md"
-            padding="lg"
+            padding="xl"
             centered
           >
             <Stack gap="md">
               {selectedMatiere && (
-                <>
-                  <Text size="sm">
-                    Matière : <Text component="span" fw={600}>{selectedMatiere.designation}</Text>
-                  </Text>
-                  <Text size="sm">
-                    Code : <Text component="span" ff="monospace">{selectedMatiere.code_matiere}</Text>
-                  </Text>
-                  <Text size="sm">
-                    Stock actuel : <Text component="span" fw={700}>{selectedMatiere.stock_actuel} {selectedMatiere.unite}</Text>
-                  </Text>
-                </>
+                <Card withBorder radius="md" p="sm" bg="gray.0">
+                  <Group justify="space-between">
+                    <Box>
+                      <Text size="sm" fw={600}>{selectedMatiere.designation}</Text>
+                      <Text size="xs" c="dimmed">Code : {selectedMatiere.code_matiere}</Text>
+                    </Box>
+                    <Badge color={selectedMatiere.stock_actuel <= selectedMatiere.seuil_alerte ? 'red' : 'green'} size="lg">
+                      Stock : {selectedMatiere.stock_actuel} {selectedMatiere.unite}
+                    </Badge>
+                  </Group>
+                </Card>
               )}
+
               <NumberInput
                 label={`Quantité à ${stockAction === 'add' ? 'ajouter' : 'retirer'}`}
+                description={stockAction === 'remove' && selectedMatiere ? `Maximum : ${selectedMatiere.stock_actuel} ${selectedMatiere.unite}` : ''}
                 value={stockQuantity}
                 onChange={(value) => setStockQuantity(typeof value === 'number' ? Math.max(1, value) : 1)}
                 min={1}
-                size="md"
-                radius="md"
-                autoFocus
+                max={stockAction === 'remove' && selectedMatiere ? selectedMatiere.stock_actuel : undefined}
+                size="md" radius="md" autoFocus
               />
 
-              {error && (
-                <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">
-                  {error}
-                </Alert>
-              )}
+              <NumberInput
+                label={stockAction === 'add' ? "Coût unitaire d'achat (FCFA)" : "Valeur unitaire (FCFA)"}
+                placeholder="0"
+                value={formData.prix_achat || 0}
+                onChange={(_value) => {/* Optionnel : stocker le coût */ }}
+                size="md" radius="md" leftSection={<Text size="sm" fw={600}>FCFA</Text>} thousandSeparator=" " hideControls
+              />
 
-              <Group justify="flex-end" gap="md">
-                <Button variant="subtle" onClick={closeStockModal} size="md" radius="md" disabled={saving}>
-                  Annuler
-                </Button>
+              {stockAction === 'add' && (
+                <TextInput label="Fournisseur" placeholder="Nom du fournisseur (optionnel)" size="md" radius="md" />
+              )}
+              {stockAction === 'remove' && (
+                <Select
+                  label="Motif de sortie"
+                  data={[
+                    { value: 'vente', label: '💰 Vente' },
+                    { value: 'utilisation', label: '🔧 Utilisation interne' },
+                    { value: 'perte', label: '🗑️ Perte/Casse' },
+                    { value: 'retour_fournisseur', label: '📦 Retour fournisseur' },
+                    { value: 'autre', label: '📝 Autre' },
+                  ]}
+                  size="md" radius="md"
+                />
+              )}
+              <Textarea label="Observation" placeholder="Notes..." rows={2} size="md" radius="md" />
+
+              {error && <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">{error}</Alert>}
+
+              <Group justify="flex-end" gap="md" mt="md">
+                <Button variant="subtle" onClick={closeStockModal} size="md" radius="md" disabled={saving}>Annuler</Button>
                 <Button
                   color={stockAction === 'add' ? 'green' : 'orange'}
                   onClick={handleStockUpdate}
-                  size="md"
-                  radius="md"
-                  loading={saving}
+                  size="md" radius="md" loading={saving}
+                  leftSection={stockAction === 'add' ? <IconArrowUp size={16} /> : <IconArrowDown size={16} />}
                 >
-                  {stockAction === 'add' ? 'Ajouter' : 'Retirer'}
+                  {stockAction === 'add' ? 'Ajouter au stock' : 'Retirer du stock'}
                 </Button>
               </Group>
             </Stack>
           </Modal>
-
           {/* Modal confirmation suppression */}
           <Modal
             opened={deleteModalOpened}

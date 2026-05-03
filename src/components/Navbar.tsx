@@ -43,6 +43,7 @@ import {
   IconCertificate,
   IconRuler,
   IconList,
+  IconHistory,
 } from '@tabler/icons-react';
 import { Role } from '../types/auth';
 
@@ -373,7 +374,7 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               roles={allUsers}
               userRole={userRole}
             />
-<NavItem
+            <NavItem
               label="Factures & reçus"
               path="/factures-recus"
               icon={<IconShoppingBag size={18} color="white" stroke={1.5} />}
@@ -384,6 +385,7 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
           </NavSection>
 
           {/* ================= SECTION FINANCES ================= */}
+
           <NavSection
             title="FINANCES"
             icon={<IconChartBar size={20} color="white" stroke={1.5} />}
@@ -442,6 +444,13 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
             />
             <NavItem
+              label="Historique salaires"
+              path="/historiques-salaires"
+              icon={<IconHistory size={18} color="white" stroke={1.5} />}
+              roles={adminOnly}
+              userRole={userRole}
+            />
+            <NavItem
               label="Emprunts"
               path="/emprunts"
               icon={<IconMoneybag size={18} color="white" stroke={1.5} />}
@@ -475,6 +484,13 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               label="Import/Export"
               path="/import-export"
               icon={<IconFileExcel size={18} color="white" stroke={1.5} />}
+              roles={adminOnly}
+              userRole={userRole}
+            />
+            <NavItem
+              label="Journal modifications"
+              path="/journal-modifications"
+              icon={<IconHistory size={18} color="white" stroke={1.5} />}
               roles={adminOnly}
               userRole={userRole}
             />

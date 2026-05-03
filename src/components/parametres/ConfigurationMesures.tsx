@@ -34,7 +34,6 @@ import {
   IconInfoCircle,
   IconArrowUp,
   IconArrowDown,
-  IconCategory,
   IconSortAscending,
   IconCheck,
   IconDimensions,
@@ -48,7 +47,6 @@ interface TypeMesure {
   unite: string;
   ordre_affichage: number;
   est_active: number;
-  categorie: string;
 }
 
 const ConfigurationMesures: React.FC = () => {
@@ -122,8 +120,6 @@ const ConfigurationMesures: React.FC = () => {
     currentPage * itemsPerPage
   );
 
-  const categories = [...new Set(types.map(t => t.categorie).filter(Boolean))];
-
   if (vueForm) {
     return (
       <FormulaireTypeMesure
@@ -191,11 +187,6 @@ const ConfigurationMesures: React.FC = () => {
                     <Badge size="sm" variant="white" color="blue">
                       {typesFiltres.length} type{typesFiltres.length > 1 ? 's' : ''} de mesure
                     </Badge>
-                    {categories.length > 0 && (
-                      <Badge size="sm" variant="white" color="cyan">
-                        {categories.length} catégorie{categories.length > 1 ? 's' : ''}
-                      </Badge>
-                    )}
                   </Group>
                 </Box>
               </Group>
@@ -222,17 +213,6 @@ const ConfigurationMesures: React.FC = () => {
               </Group>
               <Text fw={700} size="xl" c="blue">{types.length}</Text>
               <Text size="xs" c="dimmed" mt={4}>Types configurés</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#e8f4fd' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Catégories</Text>
-                <ThemeIcon size="lg" radius="md" color="cyan" variant="light">
-                  <IconCategory size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={700} size="xl" c="cyan">{categories.length}</Text>
-              <Text size="xs" c="dimmed" mt={4}>Différentes catégories</Text>
             </Paper>
 
             <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#ebfbee' }}>
@@ -325,15 +305,6 @@ const ConfigurationMesures: React.FC = () => {
                           <Badge color="gray" variant="light" size="md">
                             {t.unite || 'cm'}
                           </Badge>
-                        </Table.Td>
-                        <Table.Td>
-                          {t.categorie ? (
-                            <Badge color="cyan" variant="light" size="sm">
-                              {t.categorie}
-                            </Badge>
-                          ) : (
-                            <Text size="xs" c="dimmed">—</Text>
-                          )}
                         </Table.Td>
                         <Table.Td ta="center">
                           <Badge color="blue" variant="filled" size="sm">

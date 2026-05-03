@@ -73,7 +73,7 @@ const Login: React.FC = () => {
       try {
         const db = await getDb();
         const conf = await db.select<ConfigurationAtelier[]>(
-          "SELECT * FROM configuration_atelier WHERE id = 1"
+          "SELECT * FROM atelier WHERE id = 1"
         );
         setConfig(conf[0] || null);
       } catch (err) {
