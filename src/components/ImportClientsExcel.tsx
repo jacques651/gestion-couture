@@ -493,7 +493,7 @@ const ImportClientsExcel: React.FC = () => {
         );
 
         let clientId: number;
-        let isNew = false;
+        
 
         if (existingClient && existingClient.length > 0) {
           clientId = existingClient[0].id;
@@ -510,7 +510,7 @@ const ImportClientsExcel: React.FC = () => {
             clientData.adresse || '', clientData.email || '', clientData.observations || '']
           );
           clientId = Number(result.lastInsertId);
-          isNew = true;
+   
           messages.push(`✅ Ligne ${i + 2}: ${clientData.nom_prenom} créé`);
         }
 
