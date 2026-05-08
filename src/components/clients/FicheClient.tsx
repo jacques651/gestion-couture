@@ -40,7 +40,7 @@ const FicheClient: React.FC<FicheClientProps> = ({ client, mesures, onBack }) =>
     const chargerInfosAtelier = async () => {
       try {
         const db = await getDb();
-        const res = await db.select<any[]>("SELECT * FROM configuration_atelier WHERE id = 1");
+        const res = await db.select<any[]>("SELECT * FROM atelier WHERE id = 1");
         if (res.length > 0) setConfig(res[0]);
       } catch (err) {
         console.error("Erreur config atelier:", err);

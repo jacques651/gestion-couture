@@ -35,7 +35,6 @@ import {
   IconInfoCircle,
   IconArrowUp,
   IconArrowDown,
-  IconSortAscending,
   IconCheck,
   IconDimensions,
 } from '@tabler/icons-react';
@@ -78,19 +77,16 @@ const ConfigurationMesures: React.FC = () => {
   }, []);
 
   const supprimerType = async (id: number, nom: string) => {
-    if (!
-globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
+    if (!globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
     const db = await getDb();
     await db.execute("UPDATE types_mesures SET est_active = 0 WHERE id = ?", [id]);
 
-    // Journalisation suppression
     await journaliserAction({
       utilisateur: 'Utilisateur',
       action: 'DELETE',
       table: 'types_mesures',
       idEnregistrement: id,
-      details:
-        `Suppression type mesure : ${nom}`
+      details: `Suppression type mesure : ${nom}`
     });
 
     await chargerTypes();
@@ -113,14 +109,12 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
       [nouvelOrdre, id]
     );
 
-    // Journalisation ordre
     await journaliserAction({
       utilisateur: 'Utilisateur',
       action: 'UPDATE',
       table: 'types_mesures',
       idEnregistrement: id,
-      details:
-        `Modification ordre affichage : ${direction}`
+      details: `Modification ordre affichage : ${direction}`
     });
 
     await chargerTypes();
@@ -130,11 +124,8 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
   };
 
   const handleReset = async () => {
-
     setRecherche('');
-
     await chargerTypes();
-
     setCurrentPage(1);
 
     await journaliserAction({
@@ -142,8 +133,7 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
       action: 'UPDATE',
       table: 'types_mesures',
       idEnregistrement: 'REFRESH',
-      details:
-        'Actualisation liste types mesures'
+      details: 'Actualisation liste types mesures'
     });
   };
 
@@ -193,7 +183,7 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
 
   return (
     <Box p="md">
-      <Container size="full ">
+      <Container size="full">
         <Stack gap="lg">
           {/* Notification de succès */}
           {showSuccess && (
@@ -239,33 +229,8 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
             </Group>
           </Card>
 
-          {/* Statistiques KPI */}
-          <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-            <Paper p="md" radius="lg" withBorder>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Total mesures</Text>
-                <ThemeIcon size="lg" radius="md" color="blue" variant="light">
-                  <IconRulerMeasure size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={700} size="xl" c="blue">{types.length}</Text>
-              <Text size="xs" c="dimmed" mt={4}>Types configurés</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#ebfbee' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Ordre</Text>
-                <ThemeIcon size="lg" radius="md" color="green" variant="light">
-                  <IconSortAscending size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={700} size="xl" c="green">Personnalisable</Text>
-              <Text size="xs" c="dimmed" mt={4}>Utilisez les flèches ↑↓</Text>
-            </Paper>
-          </SimpleGrid>
-
           {/* Barre d'outils */}
-          <Card withBorder radius="lg" shadow="sm" p="md">
+          <Card withBorder radius="lg" shadow="sm" p="sm">
             <Group justify="space-between" wrap="wrap" gap="sm">
               <Group gap="sm">
                 <TextInput
@@ -276,19 +241,19 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
                     setRecherche(e.target.value);
                     setCurrentPage(1);
                   }}
-                  size="md"
+                  size="sm"
                   radius="md"
-                  style={{ width: 300 }}
+                  style={{ width: 260 }}
                 />
               </Group>
               <Group gap="sm">
                 <Tooltip label="Actualiser">
-                  <ActionIcon variant="light" onClick={handleReset} size="lg" radius="md">
+                  <ActionIcon variant="light" onClick={handleReset} size="md" radius="md">
                     <IconRefresh size={18} />
                   </ActionIcon>
                 </Tooltip>
                 <Button
-                  leftSection={<IconPlus size={18} />}
+                  leftSection={<IconPlus size={16} />}
                   onClick={() => {
                     setTypeEdition(null);
                     setVueForm(true);
@@ -296,6 +261,7 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
                   variant="gradient"
                   gradient={{ from: '#1b365d', to: '#2a4a7a' }}
                   radius="md"
+                  size="sm"
                 >
                   Nouveau type
                 </Button>
@@ -303,7 +269,7 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
             </Group>
           </Card>
 
-          {/* Tableau des types de mesures */}
+          {/* Tableau des types de mesures - COMPACT */}
           <Card withBorder radius="lg" shadow="sm" p={0} style={{ overflow: 'hidden' }}>
             {typesFiltres.length === 0 ? (
               <Stack align="center" py={60} gap="sm">
@@ -317,62 +283,66 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
               </Stack>
             ) : (
               <>
-                <Table striped highlightOnHover>
+                <Table 
+                  striped 
+                  highlightOnHover 
+                  verticalSpacing="xs"
+                  horizontalSpacing="sm"
+                >
                   <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                     <Table.Tr>
-                      <Table.Th style={{ color: 'white' }}>Nom</Table.Th>
-                      <Table.Th style={{ color: 'white' }}>Unité</Table.Th>
-                      <Table.Th style={{ color: 'white' }}>Catégorie</Table.Th>
-                      <Table.Th style={{ textAlign: 'center', color: 'white', width: 100 }}>Ordre</Table.Th>
-                      <Table.Th style={{ textAlign: 'center', color: 'white', width: 180 }}>Actions</Table.Th>
+                      <Table.Th style={{ color: 'white', padding: '8px 12px' }}>Nom</Table.Th>
+                      <Table.Th style={{ color: 'white', padding: '8px 12px' }}>Unité</Table.Th>
+                      <Table.Th style={{ color: 'white', padding: '8px 12px', width: 80 }}>Ordre</Table.Th>
+                      <Table.Th style={{ textAlign: 'center', color: 'white', padding: '8px 12px', width: 140 }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
                     {paginatedData.map((t) => (
                       <Table.Tr key={t.id}>
-                        <Table.Td fw={500}>
-                          <Group gap="xs">
-                            <Avatar size="sm" radius="xl" color="violet">
+                        <Table.Td fw={500} style={{ padding: '6px 12px' }}>
+                          <Group gap="xs" wrap="nowrap">
+                            <Avatar size={24} radius="xl" color="violet">
                               <IconDimensions size={12} />
                             </Avatar>
-                            {t.nom}
+                            <Text size="sm">{t.nom}</Text>
                           </Group>
                         </Table.Td>
-                        <Table.Td>
-                          <Badge color="gray" variant="light" size="md">
+                        <Table.Td style={{ padding: '6px 12px' }}>
+                          <Badge color="gray" variant="light" size="sm">
                             {t.unite || 'cm'}
                           </Badge>
                         </Table.Td>
-                        <Table.Td ta="center">
+                        <Table.Td style={{ padding: '6px 12px' }}>
                           <Badge color="blue" variant="filled" size="sm">
                             {t.ordre_affichage}
                           </Badge>
                         </Table.Td>
-                        <Table.Td>
-                          <Group gap="xs" justify="center">
-                            <Tooltip label="Monter (augmenter l'ordre)">
+                        <Table.Td style={{ padding: '6px 12px' }}>
+                          <Group gap={4} justify="center" wrap="nowrap">
+                            <Tooltip label="Monter">
                               <ActionIcon
-                                size="md"
+                                size="sm"
                                 variant="subtle"
                                 color="blue"
                                 onClick={() => changerOrdre(t.id, t.ordre_affichage, 'haut')}
                               >
-                                <IconArrowUp size={18} />
+                                <IconArrowUp size={16} />
                               </ActionIcon>
                             </Tooltip>
-                            <Tooltip label="Descendre (diminuer l'ordre)">
+                            <Tooltip label="Descendre">
                               <ActionIcon
-                                size="md"
+                                size="sm"
                                 variant="subtle"
                                 color="blue"
                                 onClick={() => changerOrdre(t.id, t.ordre_affichage, 'bas')}
                               >
-                                <IconArrowDown size={18} />
+                                <IconArrowDown size={16} />
                               </ActionIcon>
                             </Tooltip>
                             <Tooltip label="Modifier">
                               <ActionIcon
-                                size="md"
+                                size="sm"
                                 variant="subtle"
                                 color="orange"
                                 onClick={() => {
@@ -380,17 +350,17 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
                                   setVueForm(true);
                                 }}
                               >
-                                <IconEdit size={18} />
+                                <IconEdit size={16} />
                               </ActionIcon>
                             </Tooltip>
                             <Tooltip label="Supprimer">
                               <ActionIcon
-                                size="md"
+                                size="sm"
                                 variant="subtle"
                                 color="red"
                                 onClick={() => supprimerType(t.id, t.nom)}
                               >
-                                <IconTrash size={18} />
+                                <IconTrash size={16} />
                               </ActionIcon>
                             </Tooltip>
                           </Group>
@@ -401,13 +371,13 @@ globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
                 </Table>
 
                 {totalPages > 1 && (
-                  <Group justify="center" p="md">
+                  <Group justify="center" p="sm">
                     <Pagination
                       value={currentPage}
                       onChange={setCurrentPage}
                       total={totalPages}
                       color="#1b365d"
-                      size="md"
+                      size="sm"
                       radius="md"
                     />
                   </Group>

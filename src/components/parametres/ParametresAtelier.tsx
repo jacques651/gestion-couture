@@ -129,7 +129,7 @@ export default function ParametresAtelier() {
     journaliserAction({
       utilisateur: 'Utilisateur',
       action: 'UPDATE',
-      table: 'configuration_atelier',
+      table: 'atelier',
       idEnregistrement: config.id,
       details:
         `Import logo atelier : ${file.name}`
@@ -155,7 +155,7 @@ export default function ParametresAtelier() {
     await journaliserAction({
       utilisateur: 'Utilisateur',
       action: 'UPDATE',
-      table: 'configuration_atelier',
+      table: 'atelier',
       idEnregistrement: config.id,
       details: 'Suppression logo atelier'
     });
@@ -183,7 +183,7 @@ export default function ParametresAtelier() {
     await journaliserAction({
       utilisateur: 'Utilisateur',
       action: 'UPDATE',
-      table: 'configuration_atelier',
+      table: 'atelier',
       idEnregistrement: config.id,
       details:
         `Modification paramètres atelier : ${config.nom_atelier}`

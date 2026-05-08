@@ -10,12 +10,16 @@ type ConfigAtelier = {
   nom_atelier: string;
   telephone: string;
   adresse: string;
+  ville: string;              // ajouté
+  pays: string;              // ajouté
   email: string;
-  nif: string;
-  message_facture: string;
+  ifu: string;              
+  rccm: string;             // ajouté
+  message_facture_defaut: string;  // remplace message_facture
   logo_base64: string;
+  devise: string;           // ajouté
+  updated_at: string;       // ajouté
 };
-
 interface Props {
   client: any;
   lignes: any[];
@@ -55,7 +59,7 @@ const FicheFacture: React.FC<Props> = ({
         const db = await getDb();
 
         const res = await db.select<ConfigAtelier[]>(
-          "SELECT * FROM configuration_atelier WHERE id = 1"
+          "SELECT * FROM atelier WHERE id = 1"
         );
 
         setConfig(res[0] || null);

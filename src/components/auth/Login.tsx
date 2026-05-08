@@ -41,11 +41,16 @@ interface ConfigurationAtelier {
   id: number;
   nom_atelier: string;
   telephone: string;
-  adresse: string;
   email: string;
-  nif: string;
-  message_facture: string;
+  adresse: string;
+  ville: string;
+  pays: string;
+  ifu: string;          
+  rccm: string;          // ajouté
+  message_facture_defaut: string;  // au lieu de message_facture
   logo_base64: string;
+  devise: string;        // valeur par défaut 'XOF'
+  updated_at: string;    // DATETIME
 }
 
 const Login: React.FC = () => {

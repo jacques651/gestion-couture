@@ -1,31 +1,17 @@
 import { useEffect, useState } from "react";
 import {
   Modal,
-  Stack,
-  Card,
-  Text,
   Group,
   Button,
   Divider,
-  Table,
   Paper,
-  Box,
   LoadingOverlay,
-  SimpleGrid,
-  Badge,
-  Title,
+  Text,
 } from '@mantine/core';
 import {
   IconPrinter,
   IconFile,
   IconX,
-  IconUser,
-  IconPhone,
-  IconCalendar,
-  IconCash,
-  IconBuildingStore,
-  IconCreditCard,
-  IconWallet,
 } from '@tabler/icons-react';
 import { getDb } from "../../database/db";
 import html2pdf from "html2pdf.js";
@@ -36,57 +22,74 @@ interface Employe {
   nom_prenom: string;
   salaire_base: number;
   telephone?: string;
-  date_embauche?: string;
-  type_remuneration: 'fixe' | 'prestation'
+  personne_a_prevenir?: string;
   lieu_residence?: string;
+  date_embauche?: string;
+  type_remuneration: 'fixe' | 'prestation';
+  est_actif: number;
+  est_supprime: number;
 }
 
 interface Atelier {
+  id: number;
   nom_atelier: string;
   telephone: string;
   adresse: string;
+  ville: string;
+  pays: string;
   email: string;
-  nif: string;
-  message_facture: string;
+  ifu: string;
+  rccm: string;
+  message_facture_defaut: string;
   logo_base64: string;
+  devise: string;
 }
 
 interface Emprunt {
   id: number;
+  employe_id: number;
   montant: number;
   date_emprunt: string;
-  raison?: string;
+  deduit: number;
+  date_deduction: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
-interface SalaireVersement {
+interface SalairePaye {
   id: number;
+  montant_brut: number;
   montant_net: number;
-  date_paiement: string;
+  montant_emprunts: number;
   mode: string;
+  date_paiement: string;
+  observation: string | null;
+  periode_debut: string | null;
+  periode_fin: string | null;
 }
 
 interface PrestationRealisee {
   id: number;
+  employe_id: number;
+  type_prestation_id: number | null;
+  date_prestation: string;
   designation: string;
   valeur: number;
   nombre: number;
   total: number;
-  date_prestation: string;
+  paye: number;
+  created_at?: string;
 }
 
 interface BulletinData {
   employe: Employe;
   atelier: Atelier | null;
-  salaireBrut: number;
-  prestations: PrestationRealisee[];
-  totalPrestations: number;
-  emprunts: Emprunt[];
-  totalEmprunts: number;
+  salairePaye: SalairePaye | null;
+  avoirs: Array<{ code: string; libelle: string; montant: number }>;
+  totalAvoirs: number;
+  retenues: Array<{ code: string; libelle: string; montant: number }>;
+  totalRetenues: number;
   netAPayer: number;
-  versements: SalaireVersement[];
-  totalVersements: number;
-  resteAPayer: number;
-  modePaiement?: string;
 }
 
 interface Props {
@@ -105,10 +108,21 @@ const BulletinSalaire = ({ employeId, onClose }: Props) => {
       setLoading(true);
       const db = await getDb();
 
-      // Récupérer l'employé
+      // 1. Récupérer l'employé
       const emp = await db.select<Employe[]>(
-        `SELECT id, nom_prenom, COALESCE(salaire_base, 0) as salaire_base, telephone, date_embauche, type_remuneration, lieu_residence
-   FROM employes WHERE id = ?`,
+        `SELECT 
+          id, 
+          nom_prenom, 
+          COALESCE(salaire_base, 0) as salaire_base, 
+          telephone, 
+          date_embauche, 
+          type_remuneration, 
+          lieu_residence,
+          personne_a_prevenir,
+          est_actif,
+          est_supprime
+         FROM employes 
+         WHERE id = ? AND est_actif = 1 AND est_supprime = 0`,
         [employeId]
       );
 
@@ -119,65 +133,114 @@ const BulletinSalaire = ({ employeId, onClose }: Props) => {
 
       const employe = emp[0];
 
-      // Récupérer l'atelier
+      // 2. Récupérer l'atelier
       const atelierRows = await db.select<Atelier[]>(
-        `SELECT nom_atelier, telephone, adresse, email, nif, message_facture, logo_base64
-         FROM configuration_atelier WHERE id = 1`
+        `SELECT 
+          id, nom_atelier, telephone, adresse, ville, pays, email, 
+          ifu, rccm, message_facture_defaut, logo_base64, devise
+         FROM atelier WHERE id = 1`
       );
       const atelier = atelierRows.length ? atelierRows[0] : null;
 
-      let salaireBrut = 0;
-      let prestations: PrestationRealisee[] = [];
-      let totalPrestations = 0;
+      // 3. Récupérer le dernier salaire payé (non annulé)
+      const salairesPayes = await db.select<SalairePaye[]>(
+        `SELECT 
+          id, montant_brut, montant_net, montant_emprunts, mode, 
+          date_paiement, observation, periode_debut, periode_fin
+         FROM salaires 
+         WHERE employe_id = ? 
+         AND annule = 0
+         ORDER BY date_paiement DESC
+         LIMIT 1`,
+        [employeId]
+      );
 
-      if (employe.type_remuneration === 'fixe') {
-        salaireBrut = employe.salaire_base;
-      } else {
-        // Récupérer les prestations non payées
-        const prestaData = await db.select<PrestationRealisee[]>(
-          `SELECT id, designation, valeur, nombre, total, date_prestation
-           FROM prestations_realisees 
-           WHERE employe_id = ? AND (paye = 0 OR paye IS NULL)`,
+      const salairePaye = salairesPayes.length > 0 ? salairesPayes[0] : null;
+
+      let avoirs: Array<{ code: string; libelle: string; montant: number }> = [];
+      let totalAvoirs = 0;
+      let retenues: Array<{ code: string; libelle: string; montant: number }> = [];
+      let totalRetenues = 0;
+      let netAPayer = 0;
+
+      if (salairePaye) {
+        netAPayer = salairePaye.montant_net;
+        totalRetenues = salairePaye.montant_emprunts;
+
+        // 4. Récupérer les détails des AVOIRS selon le type d'employé
+        if (employe.type_remuneration === 'fixe') {
+          // Pour un fixe, les avoirs = salaire de base
+          avoirs.push({
+            code: "SALA",
+            libelle: "Salaire de base mensuel",
+            montant: salairePaye.montant_brut
+          });
+          totalAvoirs = salairePaye.montant_brut;
+        } else {
+
+          // Pour un prestataire, récupérer les prestations payées (paye = 1)
+          const prestationsPayees = await db.select<PrestationRealisee[]>(
+            `SELECT 
+    id, employe_id, type_prestation_id, date_prestation, 
+    designation, valeur, nombre, total, paye
+   FROM prestations_realisees 
+   WHERE employe_id = ? AND paye = 1`,
+            [employeId]
+          );
+
+          if (prestationsPayees.length > 0) {
+            prestationsPayees.forEach((p, idx) => {
+              avoirs.push({
+                code: `P${String(idx + 1).padStart(4, '0')}`,
+                libelle: p.designation,
+                montant: p.total
+              });
+              totalAvoirs += p.total;
+            });
+          } else {
+            // Si pas de prestations trouvées, afficher le montant brut
+            avoirs.push({
+              code: "PRES",
+              libelle: "Prestations du mois",
+              montant: salairePaye.montant_brut
+            });
+            totalAvoirs = salairePaye.montant_brut;
+          }
+        }
+
+        // 5. Récupérer les emprunts déduits sur ce salaire
+        const empruntsDeduits = await db.select<Emprunt[]>(
+          `SELECT id, employe_id, montant, date_emprunt, deduit, date_deduction
+   FROM emprunts 
+   WHERE employe_id = ? AND deduit = 1`,
           [employeId]
         );
-        prestations = prestaData;
-        totalPrestations = prestaData.reduce((sum, p) => sum + p.total, 0);
-        salaireBrut = totalPrestations;
+
+        empruntsDeduits.forEach((e, idx) => {
+          retenues.push({
+            code: `E${String(idx + 1).padStart(4, '0')}`,
+            libelle: `Emprunt du ${new Date(e.date_emprunt).toLocaleDateString('fr-FR')}`,
+            montant: e.montant
+          });
+        });
+      } else {
+        // Aucun salaire trouvé
+        avoirs = [];
+        totalAvoirs = 0;
+        retenues = [];
+        totalRetenues = 0;
+        netAPayer = 0;
       }
-
-      // Récupérer les emprunts non déduits
-      const emprunts = await db.select<Emprunt[]>(
-        `SELECT id, montant, date_emprunt, NULL as raison
-         FROM emprunts 
-         WHERE employe_id = ? AND deduit = 0`,
-        [employeId]
-      );
-      const totalEmprunts = emprunts.reduce((s, e) => s + e.montant, 0);
-      const netAPayer = salaireBrut - totalEmprunts;
-
-      // Récupérer les versements déjà effectués
-      const versements = await db.select<SalaireVersement[]>(
-        `SELECT id, montant_net, date_paiement, mode
-         FROM salaires 
-         WHERE employe_id = ? AND annule = 0
-         ORDER BY date_paiement DESC`,
-        [employeId]
-      );
-      const totalVersements = versements.reduce((s, v) => s + v.montant_net, 0);
-      const resteAPayer = netAPayer - totalVersements;
 
       setData({
         employe,
         atelier,
-        salaireBrut,
-        prestations,
-        totalPrestations,
-        emprunts,
-        totalEmprunts,
+        salairePaye,
+        avoirs,
+        totalAvoirs,
+        retenues,
+        totalRetenues,
         netAPayer,
-        versements,
-        totalVersements,
-        resteAPayer,
       });
       setLoading(false);
     };
@@ -192,61 +255,37 @@ const BulletinSalaire = ({ employeId, onClose }: Props) => {
     html2pdf()
       .from(el)
       .set({
-        margin: 10,
-        filename: `bulletin-salaire-${data?.employe.nom_prenom?.replace(/\s/g, '-')}.pdf`,
-        html2canvas: { scale: 2 },
+        margin: 8,
+        filename: `decharge-${data?.employe.nom_prenom?.replace(/\s/g, '-')}.pdf`,
+        html2canvas: { scale: 2, letterRendering: true },
         jsPDF: { format: "a4", orientation: "portrait" },
       })
       .save();
   };
 
-  const nombreEnLettres = (montant: number): string => {
-    if (montant === 0) return 'zéro';
-    const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
-    const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
-
-    if (montant < 10) return unites[montant];
-    if (montant < 20) {
-      if (montant === 11) return 'onze';
-      if (montant === 12) return 'douze';
-      return `${dizaines[1]}${montant > 10 ? '-' + unites[montant - 10] : ''}`;
-    }
-    const d = Math.floor(montant / 10);
-    const u = montant % 10;
-    if (d === 7 || d === 9) return `${dizaines[d - 1]}${u > 0 ? '-' + unites[u] : ''}`;
-    return `${dizaines[d]}${u > 0 ? '-' + unites[u] : ''}`;
-  };
-
-  const montantEnLettres = (montant: number): string => {
-    const mille = Math.floor(montant / 1000);
-    const reste = montant % 1000;
-    let result = '';
-    if (mille > 0) {
-      if (mille === 1) result += 'mille ';
-      else result += `${nombreEnLettres(mille)} mille `;
-    }
-    if (reste > 0) result += nombreEnLettres(reste);
-    return result.trim() || 'zéro';
-  };
-
   if (loading) {
     return (
-      <Modal opened={true} onClose={onClose} size="xl" centered title="Bulletin de salaire">
-        <Card withBorder radius="md" p="lg" pos="relative">
+      <Modal opened={true} onClose={onClose} size="xl" centered title="Quittance de salaire">
+        <Paper p="lg" pos="relative">
           <LoadingOverlay visible={true} />
-          <Text>Chargement du bulletin...</Text>
-        </Card>
+          <Text>Chargement de la quittance...</Text>
+        </Paper>
       </Modal>
     );
   }
 
   if (!data) return null;
 
-  const getModePaiementIcon = (mode: string) => {
-    if (mode === 'Espèces' || mode === 'cash') return <IconWallet size={14} />;
-    if (mode === 'Orange money' || mode === 'Moov money' || mode === 'Wave') return <IconCreditCard size={14} />;
-    return <IconCash size={14} />;
-  };
+  const currentDate = new Date();
+  const matricule = `MAT-${String(data.employe.id).padStart(6, '0')}`;
+  const numeroQuittance = `Q-${currentDate.getFullYear()}${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(data.employe.id).padStart(4, '0')}`;
+  const datePaiement = data.salairePaye
+    ? new Date(data.salairePaye.date_paiement).toLocaleDateString('fr-FR')
+    : 'Non payé';
+
+  const periodeText = data.salairePaye?.periode_debut && data.salairePaye?.periode_fin
+    ? `du ${new Date(data.salairePaye.periode_debut).toLocaleDateString('fr-FR')} au ${new Date(data.salairePaye.periode_fin).toLocaleDateString('fr-FR')}`
+    : 'période concernée';
 
   return (
     <Modal
@@ -260,345 +299,253 @@ const BulletinSalaire = ({ employeId, onClose }: Props) => {
         body: { padding: 0 },
       }}
     >
-      {/* ZONE IMPRIMABLE */}
-      <div id="bulletin-print" style={{ backgroundColor: 'white' }}>
-        <Stack gap={0}>
-          {/* EN-TÊTE ATELIER */}
-          <Paper p="xl" radius={0} style={{ borderBottom: '3px solid #1b365d', backgroundColor: '#f8f9fa' }}>
-            <Group justify="space-between" align="center">
-              <Box>
-                <Title order={2} c="#1b365d" size="h3">BULLETIN DE SALAIRE</Title>
-                <Text size="xs" c="dimmed" mt={4}>N°: {new Date().getFullYear()}-{String(data.employe.id).padStart(4, '0')}</Text>
-              </Box>
-              <Box ta="right">
-                <Text fw={700} size="lg">{data.atelier?.nom_atelier || "GESTION COUTURE"}</Text>
-                <Text size="xs" c="dimmed">{data.atelier?.adresse}</Text>
-                <Text size="xs" c="dimmed">Tél: {data.atelier?.telephone}</Text>
-                <Text size="xs" c="dimmed">NIF: {data.atelier?.nif}</Text>
-              </Box>
-            </Group>
-          </Paper>
+      <div id="bulletin-print" style={{ backgroundColor: 'white', fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '11px' }}>
 
-          {/* INFORMATIONS EMPLOYÉ */}
-          <Paper p="xl" radius={0}>
-            <Title order={4} size="sm" mb="md" c="#1b365d">📋 INFORMATIONS DE L'EMPLOYÉ</Title>
-            <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-              <Group gap="sm">
-                <IconUser size={16} color="#1b365d" />
-                <Text size="sm" fw={500}>Nom complet:</Text>
-                <Text size="sm">{data.employe.nom_prenom}</Text>
-              </Group>
-              {data.employe.telephone && (
-                <Group gap="sm">
-                  <IconPhone size={16} color="#1b365d" />
-                  <Text size="sm" fw={500}>Téléphone:</Text>
-                  <Text size="sm">{data.employe.telephone}</Text>
-                </Group>
+        {/* ================= EN-TÊTE ATELIER ================= */}
+        <div style={{ padding: '20px 25px 15px 25px', borderBottom: '2px solid #1b365d' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              {data.atelier?.logo_base64 && (
+                <img src={data.atelier.logo_base64} alt="Logo" style={{ height: '50px', marginBottom: '8px' }} />
               )}
-              <Group gap="sm">
-                <IconCalendar size={16} color="#1b365d" />
-                <Text size="sm" fw={500}>Période:</Text>
-                <Text size="sm">{new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</Text>
-              </Group>
-              <Group gap="sm">
-                <IconCash size={16} color="#1b365d" />
-                <Text size="sm" fw={500}>Type:</Text>
-                <Badge size="sm" color={data.employe.type_remuneration === 'fixe' ? 'blue' : 'green'}>
-                  {data.employe.type_remuneration === 'fixe' ? 'Salaire fixe' : 'À prestation'}
-                </Badge>
-              </Group>
-              {data.employe.date_embauche && (
-                <Group gap="sm">
-                  <IconCalendar size={16} color="#1b365d" />
-                  <Text size="sm" fw={500}>Date embauche:</Text>
-                  <Text size="sm">{new Date(data.employe.date_embauche).toLocaleDateString('fr-FR')}</Text>
-                </Group>
+              <h2 style={{ margin: 0, color: '#1b365d', fontSize: '18px', fontWeight: 'bold' }}>
+                {data.atelier?.nom_atelier || "GESTION COUTURE"}
+              </h2>
+              <div style={{ marginTop: '5px', color: '#333', fontSize: '10px', lineHeight: '1.4' }}>
+                {data.atelier?.adresse && <div>{data.atelier.adresse}</div>}
+                {data.atelier?.ville && <div>{data.atelier.ville}, {data.atelier?.pays}</div>}
+                {data.atelier?.telephone && <div>Tél: {data.atelier.telephone}</div>}
+                {data.atelier?.email && <div>Email: {data.atelier.email}</div>}
+                {data.atelier?.ifu && <div>IFU: {data.atelier.ifu}</div>}
+                {data.atelier?.rccm && <div>RCCM: {data.atelier.rccm}</div>}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{
+                border: '2px solid #1b365d',
+                padding: '10px 20px',
+                backgroundColor: '#f8f9fa'
+              }}>
+                <h1 style={{ margin: 0, fontSize: '20px', letterSpacing: '1px', color: '#1b365d' }}>QUITTANCE</h1>
+                <h2 style={{ margin: '3px 0 0 0', fontSize: '14px', fontWeight: 'normal', color: '#333' }}>DE SALAIRE</h2>
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '10px' }}>
+                N°: {numeroQuittance}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '15px' }}>
+            <h3 style={{ margin: 0, fontSize: '14px', textTransform: 'uppercase' }}>
+              Quittance de paiement
+            </h3>
+            <div style={{ fontSize: '10px', color: '#666' }}>Date d'édition : {currentDate.toLocaleDateString('fr-FR')}</div>
+          </div>
+        </div>
+
+        {/* ================= INFORMATIONS EMPLOYÉ ================= */}
+        <div style={{ padding: '15px 25px', backgroundColor: '#fafafa', borderBottom: '1px solid #ddd' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', fontSize: '10px' }}>
+            <div><strong>Matricule :</strong> {matricule}</div>
+            <div><strong>Nom complet :</strong> {data.employe.nom_prenom}</div>
+            <div><strong>Type :</strong> {data.employe.type_remuneration === 'fixe' ? 'Salaire fixe' : 'Prestataire'}</div>
+            <div><strong>Téléphone :</strong> {data.employe.telephone || 'Non renseigné'}</div>
+            <div><strong>Date d'embauche :</strong> {data.employe.date_embauche ? new Date(data.employe.date_embauche).toLocaleDateString('fr-FR') : 'Non renseignée'}</div>
+            <div><strong>Lieu de résidence :</strong> {data.employe.lieu_residence || 'Non renseigné'}</div>
+            <div><strong>Personne à prévenir :</strong> {data.employe.personne_a_prevenir || 'Non renseignée'}</div>
+            <div><strong>Date paiement :</strong> {datePaiement}</div>
+          </div>
+        </div>
+
+        {/* ================= TABLEAU PRINCIPAL ================= */}
+        <div style={{ padding: '20px 25px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#1b365d', color: 'white' }}>
+                <th style={{ padding: '8px', textAlign: 'left', width: '10%' }}>Code</th>
+                <th style={{ padding: '8px', textAlign: 'left', width: '50%' }}>Libellés des éléments de paie</th>
+                <th style={{ padding: '8px', textAlign: 'right', width: '20%' }}>Avoirs (FCFA)</th>
+                <th style={{ padding: '8px', textAlign: 'right', width: '20%' }}>Retenues (FCFA)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Lignes des avoirs */}
+              {data.avoirs.map((avoir, idx) => (
+                <tr key={`avoir-${idx}`} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '6px' }}>{avoir.code}</td>
+                  <td style={{ padding: '6px' }}>{avoir.libelle}</td>
+                  <td style={{ padding: '6px', textAlign: 'right', color: '#2e7d32' }}>{avoir.montant.toLocaleString()}</td>
+                  <td style={{ padding: '6px', textAlign: 'right' }}>-</td>
+                </tr>
+              ))}
+
+              {/* Lignes des retenues */}
+              {data.retenues.map((retenue, idx) => (
+                <tr key={`retenue-${idx}`} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '6px' }}>{retenue.code}</td>
+                  <td style={{ padding: '6px' }}>{retenue.libelle}</td>
+                  <td style={{ padding: '6px', textAlign: 'right' }}>-</td>
+                  <td style={{ padding: '6px', textAlign: 'right', color: '#d32f2f' }}>{retenue.montant.toLocaleString()}</td>
+                </tr>
+              ))}
+
+              {/* Ligne vide si nécessaire */}
+              {data.avoirs.length === 0 && data.retenues.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                    Aucun élément de paie trouvé
+                  </td>
+                </tr>
               )}
-              {data.employe.lieu_residence && (
-                <Group gap="sm">
-                  <IconBuildingStore size={16} color="#1b365d" />
-                  <Text size="sm" fw={500}>Résidence:</Text>
-                  <Text size="sm">{data.employe.lieu_residence}</Text>
-                </Group>
+            </tbody>
+
+            {/* Totaux */}
+            <tfoot>
+              <tr style={{ backgroundColor: '#f0f7ff', fontWeight: 'bold' }}>
+                <td colSpan={2} style={{ padding: '8px', textAlign: 'right' }}>TOTAUX :</td>
+                <td style={{ padding: '8px', textAlign: 'right', color: '#2e7d32' }}>{data.totalAvoirs.toLocaleString()}</td>
+                <td style={{ padding: '8px', textAlign: 'right', color: '#d32f2f' }}>{data.totalRetenues.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* ================= RÉCAPITULATIF ================= */}
+        <div style={{ padding: '15px 25px', backgroundColor: '#f8f9fa', borderTop: '1px solid #ddd', borderBottom: '1px solid #ddd' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+            <div style={{ fontSize: '10px' }}>
+              <div><strong>Période :</strong> {periodeText}</div>
+              {data.salairePaye?.mode && (
+                <div><strong>Mode de paiement :</strong> {data.salairePaye.mode}</div>
               )}
-            </SimpleGrid>
-          </Paper>
+            </div>
+            <div style={{ fontSize: '12px' }}>
+              <table style={{ borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '4px 8px' }}><strong>Brut à payer :</strong></td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right' }}>{data.totalAvoirs.toLocaleString()} FCFA</td>
+                  </tr>
+                  <tr style={{ borderTop: '2px solid #ddd' }}>
+                    <td style={{ padding: '4px 8px' }}><strong>NET PAYÉ :</strong></td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px', color: '#1b365d' }}>{data.netAPayer.toLocaleString()} FCFA</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
 
-          <Divider />
+        {/* ================= DÉCHARGE ================= */}
+        <div style={{ padding: '20px 25px', textAlign: 'center' }}>
+          <div style={{
+            border: '1px solid #ddd',
+            padding: '20px',
+            borderRadius: '8px',
+            backgroundColor: '#fefce8'
+          }}>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '15px' }}>
+              DÉCHARGE
+            </div>
+            <div style={{ fontSize: '11px', lineHeight: '1.6', textAlign: 'justify' }}>
+              Je soussigné(e) <strong>{data.employe.nom_prenom}</strong>,
+              reconnais avoir reçu ce jour <strong>{datePaiement}</strong>,
+              la somme de <strong style={{ fontSize: '14px' }}>{data.netAPayer.toLocaleString()} FCFA</strong>
+              ({montantEnLettres(data.netAPayer).toUpperCase()}),
+              correspondant au paiement de mon salaire pour {periodeText}.
+              <br /><br />
+              Je déclare que ce paiement est complet et libératoire.
+            </div>
+          </div>
+        </div>
 
-          {/* Tableau principal - 3 colonnes */}
-          <Paper p="xl" radius={0}>
-            <Table striped highlightOnHover>
-              <Table.Thead style={{ backgroundColor: '#1b365d' }}>
-                <Table.Tr>
-                  <Table.Th style={{ color: 'white', width: '33%' }}>ÉLÉMENTS DE PAIE</Table.Th>
-                  <Table.Th style={{ color: 'white', width: '33%' }}>AVOIRS</Table.Th>
-                  <Table.Th style={{ color: 'white', width: '34%' }}>RETENUES</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                <Table.Tr>
-                  {/* Éléments de paie */}
-                  <Table.Td valign="top">
-                    <Stack gap="xs">
-                      {data.employe.type_remuneration === 'fixe' ? (
-                        <Group justify="space-between">
-                          <Text size="sm">Salaire de base</Text>
-                          <Text fw={600}>{data.salaireBrut.toLocaleString()} FCFA</Text>
-                        </Group>
-                      ) : (
-                        <Stack gap="xs">
-                          {data.prestations.map((p, idx) => (
-                            <Group key={idx} justify="space-between">
-                              <Text size="sm">{p.designation} x{p.nombre}</Text>
-                              <Text>{p.total.toLocaleString()} FCFA</Text>
-                            </Group>
-                          ))}
-                          <Divider />
-                          <Group justify="space-between" fw={700}>
-                            <Text size="sm">Total prestations</Text>
-                            <Text c="blue">{data.totalPrestations.toLocaleString()} FCFA</Text>
-                          </Group>
-                        </Stack>
-                      )}
-                    </Stack>
-                  </Table.Td>
+        {/* ================= OBSERVATIONS ================= */}
+        <div style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ fontSize: '9px', color: '#666', fontStyle: 'italic', maxWidth: '60%' }}>
+            <strong>Observations :</strong><br />
+            {data.salairePaye?.observation || data.atelier?.message_facture_defaut || "Merci pour votre travail."}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ width: '180px', borderTop: '1px solid #000', marginBottom: '3px' }}></div>
+            <div style={{ fontSize: '9px', color: '#666' }}>Signature de l'employé</div>
+          </div>
+        </div>
 
-                  {/* Avoirs - Pour prestataire, afficher les prestations comme avoirs */}
-                  <Table.Td valign="top">
-                    <Stack gap="xs">
-                      {data.employe.type_remuneration === 'prestation' ? (
-                        <>
-                          {data.prestations.map((p, idx) => (
-                            <Group key={idx} justify="space-between">
-                              <Text size="sm">✓ {p.designation}</Text>
-                              <Text c="green">{p.total.toLocaleString()} FCFA</Text>
-                            </Group>
-                          ))}
-                          <Divider />
-                          <Group justify="space-between" fw={700}>
-                            <Text size="sm">Total avoirs</Text>
-                            <Text c="green" fw={700}>{data.totalPrestations.toLocaleString()} FCFA</Text>
-                          </Group>
-                        </>
-                      ) : (
-                        <Group justify="space-between">
-                          <Text size="sm">Aucun avoir</Text>
-                          <Text>0 FCFA</Text>
-                        </Group>
-                      )}
-                    </Stack>
-                  </Table.Td>
-
-                  {/* Retenues */}
-                  <Table.Td valign="top">
-                    <Stack gap="xs">
-                      {data.emprunts.length > 0 ? (
-                        data.emprunts.map((e, idx) => (
-                          <Group key={idx} justify="space-between">
-                            <Text size="sm">Emprunt du {new Date(e.date_emprunt).toLocaleDateString('fr-FR')}</Text>
-                            <Text c="red">- {e.montant.toLocaleString()} FCFA</Text>
-                          </Group>
-                        ))
-                      ) : (
-                        <Text size="sm" c="dimmed">Aucune retenue</Text>
-                      )}
-                      {data.emprunts.length > 0 && (
-                        <>
-                          <Divider />
-                          <Group justify="space-between" fw={700}>
-                            <Text size="sm">Total retenues</Text>
-                            <Text c="red">- {data.totalEmprunts.toLocaleString()} FCFA</Text>
-                          </Group>
-                        </>
-                      )}
-                    </Stack>
-                  </Table.Td>
-                </Table.Tr>
-              </Table.Tbody>
-            </Table>
-          </Paper>
-
-          <Divider />
-
-          {/* RÉCAPITULATIF DES VERSEMENTS */}
-          {data.versements.length > 0 && (
-            <Paper p="xl" radius={0}>
-              <Title order={4} size="sm" mb="md" c="#1b365d">💰 VERSEMENTS EFFECTUÉS</Title>
-              <Table striped>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Date</Table.Th>
-                    <Table.Th>Mode</Table.Th>
-                    <Table.Th>Montant</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {data.versements.map((v, idx) => (
-                    <Table.Tr key={idx}>
-                      <Table.Td>{new Date(v.date_paiement).toLocaleDateString('fr-FR')}</Table.Td>
-                      <Table.Td>
-                        <Group gap={4}>
-                          {getModePaiementIcon(v.mode)}
-                          <Text size="sm">{v.mode}</Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>{v.montant_net.toLocaleString()} FCFA</Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Paper>
-          )}
-
-          <Divider />
-
-          {/* RÉCAPITULATIF FINAL */}
-          <Paper p="xl" radius={0} style={{ backgroundColor: '#f0f7ff' }}>
-            <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
-              <Paper p="md" radius="md" bg="white">
-                <Text size="xs" c="dimmed">BRUT À PAYER</Text>
-                <Text fw={700} size="xl" c="blue">{data.salaireBrut.toLocaleString()} FCFA</Text>
-              </Paper>
-              <Paper p="md" radius="md" bg="white">
-                <Text size="xs" c="dimmed">RETENUES</Text>
-                <Text fw={700} size="xl" c="red">- {data.totalEmprunts.toLocaleString()} FCFA</Text>
-              </Paper>
-              <Paper p="md" radius="md" bg="white">
-                <Text size="xs" c="dimmed">NET À PAYER</Text>
-                <Text fw={700} size="xl" c="green">{data.netAPayer.toLocaleString()} FCFA</Text>
-              </Paper>
-              <Paper p="md" radius="md" bg="white">
-                <Text size="xs" c="dimmed">DÉJÀ VERSÉ</Text>
-                <Text fw={700} size="xl" c="orange">- {data.totalVersements.toLocaleString()} FCFA</Text>
-              </Paper>
-            </SimpleGrid>
-
-            <Divider my="lg" />
-
-            <Paper p="xl" radius="md" bg={data.resteAPayer > 0 ? '#fff5f5' : '#f0fff0'} style={{ border: `2px solid ${data.resteAPayer > 0 ? '#ff8787' : '#69db7e'}` }}>
-              <Group justify="space-between" align="center">
-                <Box>
-                  <Text size="sm" c="dimmed">MODE DE PAIEMENT</Text>
-                  <Group gap="sm" mt={4}>
-                    <Badge size="lg" color="blue" variant="light">
-                      <Group gap={4}>
-                        <IconWallet size={14} />
-                        <Text>Espèces</Text>
-                      </Group>
-                    </Badge>
-                    <Badge size="lg" color="orange" variant="light">
-                      <Group gap={4}>
-                        <IconCreditCard size={14} />
-                        <Text>Mobile Money</Text>
-                      </Group>
-                    </Badge>
-                    <Badge size="lg" color="gray" variant="light">
-                      <Group gap={4}>
-                        <IconBuildingStore size={14} />
-                        <Text>Virement</Text>
-                      </Group>
-                    </Badge>
-                  </Group>
-                </Box>
-                <Box ta="right">
-                  <Text size="sm" c="dimmed">NET À PAYER</Text>
-                  <Text fw={800} size="32px" c={data.resteAPayer > 0 ? "red" : "green"}>
-                    {data.resteAPayer.toLocaleString()} FCFA
-                  </Text>
-                  {data.resteAPayer <= 0 && (
-                    <Badge color="green" size="lg" mt={4}>✅ SALAIRE COMPLET</Badge>
-                  )}
-                </Box>
-              </Group>
-            </Paper>
-
-            {/* Montant en lettres */}
-            <Box ta="center" mt="lg">
-              <Text size="sm" fw={600} c="#1b365d">Arrêté le présent bulletin à la somme de :</Text>
-              <Text size="md" fw={800} c="#1b365d" mt={5}>
-                {montantEnLettres(data.resteAPayer)} ({data.resteAPayer.toLocaleString()}) Francs CFA
-              </Text>
-            </Box>
-          </Paper>
-
-          {/* MESSAGE ET SIGNATURE */}
-          <Paper p="xl" radius={0} style={{ borderTop: '1px solid #e9ecef' }}>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-              <Box>
-                <Text size="xs" c="dimmed">Observations:</Text>
-                <Text size="sm" fs="italic" c="dimmed" mt={4}>
-                  {data.atelier?.message_facture || "Merci pour votre travail. En cas d'erreur, veuillez contacter le service comptable."}
-                </Text>
-              </Box>
-              <Box ta="right">
-                <Box mt={30} style={{ borderTop: '1px solid #000', width: 200, marginLeft: 'auto' }} />
-                <Text size="xs" c="dimmed" mt={4}>Signature et cachet de l'employeur</Text>
-              </Box>
-            </SimpleGrid>
-          </Paper>
-
-          {/* PIED DE PAGE */}
-          <Paper p="md" radius={0} ta="center" bg="gray.0">
-            <Text size="xs" c="gray.5">
-              Document généré automatiquement par Gestion Couture - Gestion d'atelier professionnel
-            </Text>
-            <Text size="xs" c="gray.5" mt={2}>
-              © {new Date().getFullYear()} - Tous droits réservés
-            </Text>
-          </Paper>
-        </Stack>
+        {/* ================= PIED DE PAGE ================= */}
+        <div style={{ padding: '10px 25px', backgroundColor: '#f0f0f0', textAlign: 'center', borderTop: '1px solid #ddd' }}>
+          <div style={{ fontSize: '8px', color: '#999' }}>
+            Document généré automatiquement par Gestion Couture - {currentDate.toLocaleString()}
+          </div>
+          <div style={{ fontSize: '8px', color: '#999', marginTop: '3px' }}>
+            Cachet de l'atelier
+          </div>
+        </div>
       </div>
 
-      {/* ACTIONS */}
+      {/* BOUTONS D'ACTION */}
       <Divider />
       <Group justify="flex-end" p="md" className="no-print">
         <Button variant="light" onClick={onClose} leftSection={<IconX size={16} />} radius="md">
           Fermer
         </Button>
-        <Button
-          onClick={handlePrint}
-          variant="outline"
-          color="teal"
-          leftSection={<IconPrinter size={16} />}
-          radius="md"
-        >
+        <Button onClick={handlePrint} variant="outline" color="teal" leftSection={<IconPrinter size={16} />} radius="md">
           Imprimer
         </Button>
-        <Button
-          onClick={handlePDF}
-          variant="gradient"
-          gradient={{ from: '#1b365d', to: '#2a4a7a' }}
-          leftSection={<IconFile size={16} />}
-          radius="md"
-        >
+        <Button onClick={handlePDF} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }} leftSection={<IconFile size={16} />} radius="md">
           PDF
         </Button>
       </Group>
 
-      {/* STYLES D'IMPRESSION */}
       <style>{`
         @media print {
-          .no-print {
-            display: none !important;
-          }
-          #bulletin-print {
-            margin: 0;
-            padding: 0;
-          }
-          body {
-            background: white;
-          }
-          .mantine-Modal-root {
-            display: none;
-          }
-          @page {
-            margin: 1.5cm;
-          }
+          .no-print { display: none !important; }
+          #bulletin-print { margin: 0; padding: 0; }
+          body { background: white; margin: 0; }
+          .mantine-Modal-root { display: none; }
+          @page { margin: 1cm; }
         }
       `}</style>
     </Modal>
   );
 };
+
+// Fonction pour convertir un nombre en lettres
+function nombreEnLettres(nombre: number): string {
+  if (nombre === 0) return 'zéro';
+
+  const unites = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+  const dizaines = ['', 'dix', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante-dix', 'quatre-vingt', 'quatre-vingt-dix'];
+
+  const traiterNombre = (n: number): string => {
+    if (n < 10) return unites[n];
+    if (n < 20) {
+      if (n === 11) return 'onze';
+      if (n === 12) return 'douze';
+      return `${dizaines[1]}${n > 10 ? '-' + unites[n - 10] : ''}`;
+    }
+    const d = Math.floor(n / 10);
+    const u = n % 10;
+    if (d === 7 || d === 9) return `${dizaines[d - 1]}${u > 0 ? '-' + unites[u] : ''}`;
+    return `${dizaines[d]}${u > 0 ? '-' + unites[u] : ''}`;
+  };
+
+  const milliers = Math.floor(nombre / 1000);
+  const reste = nombre % 1000;
+  let result = '';
+
+  if (milliers > 0) {
+    if (milliers === 1) result += 'mille ';
+    else result += `${traiterNombre(milliers)} mille `;
+  }
+  if (reste > 0) result += traiterNombre(reste);
+
+  return result.trim();
+}
+
+function montantEnLettres(montant: number): string {
+  const francs = Math.floor(montant);
+  if (francs === 0) return 'zéro francs';
+  return `${nombreEnLettres(francs)} francs`;
+}
 
 export default BulletinSalaire;
