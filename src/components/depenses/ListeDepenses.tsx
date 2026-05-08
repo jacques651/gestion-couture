@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -86,14 +87,54 @@ const ListeDepenses: React.FC = () => {
   }, []);
 
   const supprimer = async (id: number, designation: string) => {
-    if (!window.confirm(`Supprimer la dépense "${designation}" ?`)) return;
+
+  if (!
+globalThis.confirm(`Supprimer la dépense "${designation}" ?`)) {
+    return;
+  }
+
+  try {
+
     const db = await getDb();
-    await db.execute("DELETE FROM depenses WHERE id = ?", [id]);
+
+    // Suppression
+    await db.execute(
+      `DELETE FROM depenses WHERE id = ?`,
+      [id]
+    );
+
+    // Journalisation
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'DELETE',
+      table: 'depenses',
+      idEnregistrement: id,
+      details: `Suppression dépense : ${designation}`
+    });
+
+    // Recharger
     await chargerDepenses();
-    setSuccessMessage(`Dépense "${designation}" supprimée avec succès`);
+
+    // Notification succès
+    setSuccessMessage(
+      `Dépense "${designation}" supprimée avec succès`
+    );
+
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
-  };
+
+    setTimeout(() => {
+      setShowSuccess(false);
+    }, 3000);
+
+  } catch (error) {
+
+    console.error(
+      "Erreur suppression dépense:",
+      error
+    );
+
+  }
+};
 
   const handleReset = () => {
     setRecherche('');

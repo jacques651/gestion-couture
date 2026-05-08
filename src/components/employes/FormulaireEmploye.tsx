@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -69,20 +70,65 @@ const FormulaireEmploye = ({ employe, onSuccess, onCancel }: any) => {
       const salaireFinal = type === 'fixe' ? salaire : 0;
 
       if (employe) {
+
         await db.execute(
-          `UPDATE employes 
-           SET nom_prenom=?, telephone=?, type_remuneration=?, salaire_base=? 
-           WHERE id=?`,
-          [nomPrenom, telephone || null, type, salaireFinal, employe.id]
+          `
+    UPDATE employes
+    SET nom_prenom=?,
+        telephone=?,
+        type_remuneration=?,
+        salaire_base=?
+    WHERE id=?
+    `,
+          [
+            nomPrenom,
+            telephone || null,
+            type,
+            salaireFinal,
+            employe.id
+          ]
         );
+
+        // Journalisation modification
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'employes',
+          idEnregistrement: employe.id,
+          details: `Modification employé : ${nomPrenom}`
+        });
+
         setSuccess('Employé modifié avec succès');
+
       } else {
+
         await db.execute(
-          `INSERT INTO employes 
-           (nom_prenom, telephone, type_remuneration, salaire_base)
-           VALUES (?, ?, ?, ?)`,
-          [nomPrenom, telephone || null, type, salaireFinal]
+          `
+    INSERT INTO employes (
+      nom_prenom,
+      telephone,
+      type_remuneration,
+      salaire_base
+    )
+    VALUES (?, ?, ?, ?)
+    `,
+          [
+            nomPrenom,
+            telephone || null,
+            type,
+            salaireFinal
+          ]
         );
+
+        // Journalisation création
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'CREATE',
+          table: 'employes',
+          idEnregistrement: nomPrenom,
+          details: `Création employé : ${nomPrenom}`
+        });
+
         setSuccess('Employé ajouté avec succès');
       }
 

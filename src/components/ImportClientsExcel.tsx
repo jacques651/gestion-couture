@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
+
 import {
   Stack,
   Card,
@@ -34,6 +35,7 @@ import {
 import * as XLSX from 'xlsx';
 import { getDb } from '../database/db';
 import { notifications } from '@mantine/notifications';
+import { journaliserAction } from '../services/journal';
 
 const CHAMPS_DISPONIBLES = [
   { value: 'telephone_id', label: '📞 Téléphone (ID client)', required: true },
@@ -291,17 +293,21 @@ const ImportClientsExcel: React.FC = () => {
       console.log("📏 Mesures pour le template:", colonnesMesures);
 
       // Valeurs d'exemple pour chaque mesure
-      const valeursExemples: Record<string, number> = {
-        'Tour de poitrine': 95,
-        'Tour de taille': 75,
-        'Tour de hanches': 102,
-        'Longueur totale': 165,
-        'Longueur manche': 60,
-        'Tour de cou': 38,
-        'Largeur épaule': 42,
-        'Longueur jambe': 105,
-        'Tour de cuisse': 58,
-        'Tour de bras': 32,
+      const genererValeurExemple = (nom: string): number => {
+        const n = nom.toLowerCase();
+
+        if (n.includes('poitrine')) return 95;
+        if (n.includes('taille')) return 75;
+        if (n.includes('hanches') || n.includes('bassin')) return 102;
+        if (n.includes('epaule')) return 42;
+        if (n.includes('manche')) return 60;
+        if (n.includes('cuisse')) return 58;
+        if (n.includes('poignet')) return 18;
+        if (n.includes('col')) return 38;
+        if (n.includes('robe')) return 140;
+        if (n.includes('pantalon')) return 105;
+
+        return 85;
       };
 
       // Ligne 1: Client principal
@@ -315,7 +321,7 @@ const ImportClientsExcel: React.FC = () => {
       };
 
       colonnesMesures.forEach(nom => {
-        templatePrincipal[nom] = valeursExemples[nom] || 85;
+        templatePrincipal[nom] = genererValeurExemple(nom);
       });
 
       // Ligne 2: Conjoint (même téléphone)
@@ -329,7 +335,7 @@ const ImportClientsExcel: React.FC = () => {
       };
 
       colonnesMesures.forEach(nom => {
-        const valeurBase = valeursExemples[nom] || 85;
+        const valeurBase = genererValeurExemple(nom);
         templateConjoint[nom] = nom.includes('Longueur') ? valeurBase - 10 : valeurBase - 5;
       });
 
@@ -344,7 +350,7 @@ const ImportClientsExcel: React.FC = () => {
       };
 
       colonnesMesures.forEach(nom => {
-        const valeurBase = valeursExemples[nom] || 85;
+        const valeurBase = genererValeurExemple(nom);
         templateEnfant[nom] = Math.round(valeurBase * 0.6);
       });
 
@@ -410,6 +416,18 @@ const ImportClientsExcel: React.FC = () => {
 
       if (filePath) {
         await writeFile(filePath, new Uint8Array(excelBuffer));
+
+        // Journalisation téléchargement template
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'CREATE',
+          table: 'templates_import',
+          idEnregistrement: 'EXCEL_TEMPLATE',
+          details:
+            `Téléchargement template import clients - ` +
+            `${colonnesMesures.length} mesures`
+        });
+
         alert(`✅ Modèle téléchargé avec succès !\n📊 ${colonnesMesures.length} mesures incluses\n👥 3 exemples (principal, conjoint, enfant)`);
       }
     } catch (error) {
@@ -432,7 +450,17 @@ const ImportClientsExcel: React.FC = () => {
 
     const db = await getDb();
     const mesures = typesMesuresExistants;
-    const mesureMap = new Map(mesures.map(m => [m.nom.toLowerCase(), m.id]));
+    const normalize = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, "")
+        .trim();
+
+    const mesureMap = new Map(
+      mesures.map(m => [normalize(m.nom), m.id])
+    );
 
     let successCount = 0;
     let errorCount = 0;
@@ -493,7 +521,7 @@ const ImportClientsExcel: React.FC = () => {
         );
 
         let clientId: number;
-        
+
 
         if (existingClient && existingClient.length > 0) {
           clientId = existingClient[0].id;
@@ -501,6 +529,18 @@ const ImportClientsExcel: React.FC = () => {
             `UPDATE clients SET profil = ?, adresse = ?, email = ?, observations = ? WHERE id = ?`,
             [profil, clientData.adresse || '', clientData.email || '', clientData.observations || '', clientId]
           );
+
+          // Journalisation mise à jour client
+          await journaliserAction({
+            utilisateur: 'Utilisateur',
+            action: 'UPDATE',
+            table: 'clients',
+            idEnregistrement: clientId,
+            details:
+              `Import Excel - mise à jour client : ` +
+              `${clientData.nom_prenom}`
+          });
+
           messages.push(`✏️ Ligne ${i + 2}: ${clientData.nom_prenom} mis à jour`);
         } else {
           const result = await db.execute(
@@ -510,14 +550,27 @@ const ImportClientsExcel: React.FC = () => {
             clientData.adresse || '', clientData.email || '', clientData.observations || '']
           );
           clientId = Number(result.lastInsertId);
-   
+
+          // Journalisation création client
+          await journaliserAction({
+            utilisateur: 'Utilisateur',
+            action: 'CREATE',
+            table: 'clients',
+            idEnregistrement: clientId,
+            details:
+              `Import Excel - création client : ` +
+              `${clientData.nom_prenom}`
+          });
+
           messages.push(`✅ Ligne ${i + 2}: ${clientData.nom_prenom} créé`);
         }
 
         // Insérer les mesures
         let mesuresCount = 0;
         for (const mesure of mesuresData) {
-          const mesureId = mesureMap.get(mesure.nom.toLowerCase());
+          const mesureId = mesureMap.get(
+            normalize(mesure.nom)
+          );
           if (mesureId) {
             const existingMeasure = await db.select<{ id: number }[]>(
               "SELECT id FROM mesures_clients WHERE client_id = ? AND type_mesure_id = ?",
@@ -531,6 +584,13 @@ const ImportClientsExcel: React.FC = () => {
                 [mesure.valeur, clientId, mesureId]
               );
             } else {
+
+              console.log("🧪 INSERT MESURE", {
+                clientId,
+                mesureId,
+                valeur: mesure.valeur,
+                nom: mesure.nom
+              });
               await db.execute(
                 `INSERT INTO mesures_clients (client_id, type_mesure_id, valeur)
                VALUES (?, ?, ?)`,
@@ -557,6 +617,18 @@ const ImportClientsExcel: React.FC = () => {
     setImportResult({ success: successCount, errors: errorCount, messages });
     setActiveStep(3);
     setLoading(false);
+
+    // Journalisation import global
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'CREATE',
+      table: 'imports_excel',
+      idEnregistrement: fileName,
+      details:
+        `Import Excel terminé : ` +
+        `${successCount} succès, ` +
+        `${errorCount} erreurs`
+    });
 
     notifications.show({
       title: 'Import terminé',

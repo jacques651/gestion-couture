@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -92,19 +93,75 @@ const FormulaireEmprunt: React.FC<Props> = ({ emprunt, onSuccess, onCancel }) =>
       const db = await getDb();
 
       if (emprunt) {
+
         await db.execute(
-          `UPDATE emprunts 
-           SET employe_id = ?, montant = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [parseInt(employeId), montant, emprunt.id]
+          `
+    UPDATE emprunts
+    SET employe_id = ?,
+        montant = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    `,
+          [
+            parseInt(employeId),
+            montant,
+            emprunt.id
+          ]
         );
+
+        // Employé concerné
+        const employeNom =
+          employes.find(
+            e => e.id === parseInt(employeId)
+          )?.nom_prenom || 'Inconnu';
+
+        // Journalisation modification
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'emprunts',
+          idEnregistrement: emprunt.id,
+          details:
+            `Modification emprunt : ${employeNom} - ` +
+            `${Number(montant).toLocaleString()} FCFA`
+        });
+
         setSuccess('Emprunt modifié avec succès');
+
       } else {
+
         await db.execute(
-          `INSERT INTO emprunts (employe_id, montant, date_emprunt)
-           VALUES (?, ?, DATE('now'))`,
-          [parseInt(employeId), montant]
+          `
+    INSERT INTO emprunts (
+      employe_id,
+      montant,
+      date_emprunt
+    )
+    VALUES (?, ?, DATE('now'))
+    `,
+          [
+            parseInt(employeId),
+            montant
+          ]
         );
+
+        // Employé concerné
+        const employeNom =
+          employes.find(
+            e => e.id === parseInt(employeId)
+          )?.nom_prenom || 'Inconnu';
+
+        // Journalisation création
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'CREATE',
+          table: 'emprunts',
+          idEnregistrement: employeId,
+          details:
+            `Création emprunt : ${employeNom} - ` +
+            `${Number(montant).toLocaleString()} FCFA`
+        });
+
         setSuccess('Emprunt ajouté avec succès');
       }
 

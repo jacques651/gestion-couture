@@ -73,7 +73,8 @@ export const ListeCategoriesMatieres: React.FC = () => {
   };
 
   const handleDelete = async (id: number, nom: string) => {
-    if (confirm(`Supprimer la catégorie "${nom}" ?`)) {
+    if (
+globalThis.confirm(`Supprimer la catégorie "${nom}" ?`)) {
       const db = await getDb();
       try {
         // Vérifier si des matières utilisent cette catégorie

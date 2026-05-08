@@ -4,7 +4,7 @@ import {
   Box, Container, Stack, Card, Title, Text, Group, Button,
   TextInput, Select, Badge, ActionIcon, Tooltip, Divider,
   ScrollArea, Table, Pagination, Avatar, Center, LoadingOverlay,
-  Modal, SimpleGrid, Paper, ThemeIcon, 
+  Modal, SimpleGrid, Paper, ThemeIcon,
   Alert,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -93,19 +93,157 @@ const JournalModifications: React.FC = () => {
 
   const stats = {
     total: entries.length,
-    creates: entries.filter(e => e.action === 'CREATE').length,
-    updates: entries.filter(e => e.action === 'UPDATE').length,
-    deletes: entries.filter(e => e.action === 'DELETE').length,
+
+    creates:
+      entries.filter(
+        e => e.action === 'CREATE'
+      ).length,
+
+    updates:
+      entries.filter(
+        e => e.action === 'UPDATE'
+      ).length,
+
+    deletes:
+      entries.filter(
+        e => e.action === 'DELETE'
+      ).length,
+
+    exports:
+      entries.filter(
+        e => e.action === 'EXPORT'
+      ).length,
+
+    imports:
+      entries.filter(
+        e => e.action === 'IMPORT'
+      ).length,
+
+    prints:
+      entries.filter(
+        e => e.action === 'PRINT'
+      ).length,
+
+    logins:
+      entries.filter(
+        e => e.action === 'LOGIN'
+      ).length,
+
+    logouts:
+      entries.filter(
+        e => e.action === 'LOGOUT'
+      ).length,
   };
 
   const uniqueTables = [...new Set(entries.map(e => e.table_concernee))].sort();
 
-  const getActionBadge = (action: string) => {
+  const getActionBadge = (
+    action: string
+  ) => {
+
     switch (action) {
-      case 'CREATE': return <Badge color="green" variant="light" size="sm" leftSection={<IconPlus size={12} />}>Création</Badge>;
-      case 'UPDATE': return <Badge color="orange" variant="light" size="sm" leftSection={<IconEdit size={12} />}>Modification</Badge>;
-      case 'DELETE': return <Badge color="red" variant="light" size="sm" leftSection={<IconTrash size={12} />}>Suppression</Badge>;
-      default: return <Badge color="gray" variant="light" size="sm">{action}</Badge>;
+
+      case 'CREATE':
+        return (
+          <Badge
+            color="green"
+            variant="light"
+            size="sm"
+            leftSection={<IconPlus size={12} />}
+          >
+            Création
+          </Badge>
+        );
+
+      case 'UPDATE':
+        return (
+          <Badge
+            color="orange"
+            variant="light"
+            size="sm"
+            leftSection={<IconEdit size={12} />}
+          >
+            Modification
+          </Badge>
+        );
+
+      case 'DELETE':
+        return (
+          <Badge
+            color="red"
+            variant="light"
+            size="sm"
+            leftSection={<IconTrash size={12} />}
+          >
+            Suppression
+          </Badge>
+        );
+
+      case 'IMPORT':
+        return (
+          <Badge
+            color="cyan"
+            variant="light"
+            size="sm"
+          >
+            Import
+          </Badge>
+        );
+
+      case 'EXPORT':
+        return (
+          <Badge
+            color="lime"
+            variant="light"
+            size="sm"
+          >
+            Export
+          </Badge>
+        );
+
+      case 'PRINT':
+        return (
+          <Badge
+            color="grape"
+            variant="light"
+            size="sm"
+          >
+            Impression
+          </Badge>
+        );
+
+      case 'LOGIN':
+        return (
+          <Badge
+            color="teal"
+            variant="light"
+            size="sm"
+          >
+            Connexion
+          </Badge>
+        );
+
+      case 'LOGOUT':
+        return (
+          <Badge
+            color="gray"
+            variant="light"
+            size="sm"
+          >
+            Déconnexion
+          </Badge>
+        );
+
+      default:
+        return (
+          <Badge
+            color="dark"
+            variant="light"
+            size="sm"
+          >
+            {action}
+          </Badge>
+        );
     }
   };
 
@@ -129,7 +267,15 @@ const JournalModifications: React.FC = () => {
   const exportExcel = async () => {
     setExporting(true);
     try {
-      const data = filtered.map(e => ({ 'Date': formatDate(e.date_modification), 'Utilisateur': e.utilisateur, 'Action': e.action === 'CREATE' ? 'Création' : e.action === 'UPDATE' ? 'Modification' : 'Suppression', 'Table': e.table_concernee, 'ID': e.id_enregistrement, 'Détails': e.details }));
+      const data = filtered.map(e => ({
+        'Date': formatDate(e.date_modification),
+        'Utilisateur': e.utilisateur,
+        'Action': e.action,
+        'Table': e.table_concernee,
+        'ID': e.id_enregistrement,
+        'Détails': e.details
+      }));
+
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Journal');
       const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -184,7 +330,40 @@ const JournalModifications: React.FC = () => {
           <Card withBorder radius="lg" shadow="sm" p="md">
             <Group>
               <TextInput placeholder="Rechercher..." leftSection={<IconSearch size={16} />} value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ flex: 1 }} radius="md" size="sm" />
-              <Select placeholder="Action" data={[{ value: 'CREATE', label: 'Création' }, { value: 'UPDATE', label: 'Modification' }, { value: 'DELETE', label: 'Suppression' }]} value={filterAction} onChange={(v) => { setFilterAction(v); setCurrentPage(1); }} clearable radius="md" size="sm" style={{ width: 140 }} />
+              <Select placeholder="Action" data={[
+                {
+                  value: 'CREATE',
+                  label: 'Création'
+                },
+                {
+                  value: 'UPDATE',
+                  label: 'Modification'
+                },
+                {
+                  value: 'DELETE',
+                  label: 'Suppression'
+                },
+                {
+                  value: 'IMPORT',
+                  label: 'Import'
+                },
+                {
+                  value: 'EXPORT',
+                  label: 'Export'
+                },
+                {
+                  value: 'PRINT',
+                  label: 'Impression'
+                },
+                {
+                  value: 'LOGIN',
+                  label: 'Connexion'
+                },
+                {
+                  value: 'LOGOUT',
+                  label: 'Déconnexion'
+                }
+              ]} value={filterAction} onChange={(v) => { setFilterAction(v); setCurrentPage(1); }} clearable radius="md" size="sm" style={{ width: 140 }} />
               <Select placeholder="Table" data={uniqueTables.map(t => ({ value: t, label: getTableLabel(t) }))} value={filterTable} onChange={(v) => { setFilterTable(v); setCurrentPage(1); }} clearable radius="md" size="sm" style={{ width: 160 }} />
               <Tooltip label="Réinitialiser filtres"><ActionIcon variant="light" color="gray" onClick={resetFilters} size="lg" radius="md"><IconFilter size={18} /></ActionIcon></Tooltip>
               <Tooltip label="Actualiser"><ActionIcon variant="light" color="blue" onClick={loadJournal} size="lg" radius="md"><IconRefresh size={18} /></ActionIcon></Tooltip>

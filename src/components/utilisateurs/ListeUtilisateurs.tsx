@@ -1,4 +1,13 @@
 // src/components/utilisateurs/ListeUtilisateurs.tsx
+
+
+import {
+  journaliserAction
+} from '../../services/journal';
+
+import {
+  getUtilisateurConnecte
+} from '../../services/session';
 import React, { useEffect, useState } from 'react';
 import {
   Box, Container, Stack, Card, Title, Text, Group, Button,
@@ -12,6 +21,7 @@ import {
 import { getDb } from '../../database/db';
 import { notifications } from '@mantine/notifications';
 import FormulaireUtilisateur from './FormulaireUtilisateur';
+import { aPermission } from '../../services/permissions';
 
 interface Utilisateur {
   id: number;
@@ -48,12 +58,57 @@ const ListeUtilisateurs: React.FC = () => {
 
   // Désactiver/Réactiver un utilisateur
   const handleToggleActif = async () => {
+
+    const session = getUtilisateurConnecte();
+
+    if (desactiverId === session?.id) {
+
+      notifications.show({
+        title: 'Erreur',
+        message:
+          'Vous ne pouvez pas désactiver votre propre compte',
+        color: 'red'
+      });
+
+      return;
+    }
     if (!desactiverId) return;
     try {
       const db = await getDb();
-      const user = utilisateurs.find(u => u.id === desactiverId);
-      const newStatus = user?.est_actif === 1 ? 0 : 1;
-      await db.execute(`UPDATE utilisateurs SET est_actif = ? WHERE id = ?`, [newStatus, desactiverId]);
+      const user =
+        utilisateurs.find(
+          u => u.id === desactiverId
+        );
+
+      const newStatus =
+        user?.est_actif === 1
+          ? 0
+          : 1;
+
+      await db.execute(
+        `
+  UPDATE utilisateurs
+  SET est_actif = ?
+  WHERE id = ?
+  `,
+        [
+          newStatus,
+          desactiverId
+        ]
+      );
+
+      // Journalisation activation/désactivation
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'UPDATE',
+        table: 'utilisateurs',
+        idEnregistrement: desactiverId,
+        details:
+          `${newStatus === 0
+            ? 'Désactivation'
+            : 'Réactivation'} utilisateur : ` +
+          `${user?.nom}`
+      });
       const message = newStatus === 0 ? 'Utilisateur désactivé' : 'Utilisateur réactivé';
       notifications.show({ title: 'Succès', message, color: 'green' });
       setDesactiverModalOpen(false);
@@ -62,6 +117,8 @@ const ListeUtilisateurs: React.FC = () => {
     } catch (err: any) {
       notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
     }
+
+
   };
 
   // Supprimer définitivement
@@ -77,6 +134,19 @@ const ListeUtilisateurs: React.FC = () => {
       loadUsers();
     } catch (err: any) {
       notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
+    }
+    const session = getUtilisateurConnecte();
+
+    if (deleteUserId === session?.id) {
+
+      notifications.show({
+        title: 'Erreur',
+        message:
+          'Vous ne pouvez pas supprimer votre propre compte',
+        color: 'red'
+      });
+
+      return;
     }
   };
 
@@ -98,6 +168,24 @@ const ListeUtilisateurs: React.FC = () => {
       default: return <Badge color="gray" variant="light">👤 {role}</Badge>;
     }
   };
+
+  if (!aPermission('utilisateurs')) {
+
+    return (
+      <Center h="70vh">
+
+        <Alert
+          color="red"
+          title="Accès refusé"
+          radius="md"
+        >
+          Vous n'avez pas accès
+          à la gestion des utilisateurs.
+        </Alert>
+
+      </Center>
+    );
+  }
 
   if (loading) {
     return (

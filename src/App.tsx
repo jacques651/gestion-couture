@@ -33,6 +33,10 @@ const VentesManager = lazy(() => import('./components/ventes/VentesManager'));
 
 // ==================== FACTURES & REÇUS ====================
 const FacturesRecus = lazy(() => import('./components/factures/FacturesReçus'));
+// ==================== RENDEZ-VOUS ====================
+const SuiviRendezVous = lazy(() => import('./components/rendezvous/SuiviRendezVous'));
+
+
 
 // ==================== FINANCES ====================
 const BilanFinancier = lazy(() => import('./components/finances/BilanFinancier'));
@@ -84,7 +88,7 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
   useEffect(() => {
     const check = async () => {
       if (fonctionnalite && user?.role !== 'admin') {
-       const { getPermissions } = await import('./database/db');
+        const { getPermissions } = await import('./database/db');
         const perms = await getPermissions(user?.id || 0);
         const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
         setHasAccess(p?.lecture === 1);
@@ -140,10 +144,17 @@ function AuthenticatedApp() {
   }, []);
 
   const handleLogout = () => {
-    if (window.confirm("Voulez-vous vous déconnecter ?")) {
-      logout();
-      navigate('/login');
-    }
+
+    const confirmed =
+      globalThis.confirm(
+        "Voulez-vous vous déconnecter ?"
+      );
+
+    if (!confirmed) return;
+
+    logout();
+
+    navigate('/login');
   };
 
   const handleSetPage = (page: string) => {
@@ -177,6 +188,7 @@ function AuthenticatedApp() {
       journal_modifications: '/journal-modifications',
       aide: '/aide',
       support: '/support',
+      SuiviRendezVous: '/SuiviRendezVous',
       export_support: '/export-support',
     };
     navigate(routeMap[page] || '/');
@@ -281,6 +293,13 @@ function AuthenticatedApp() {
             <Route path="/factures-recus" element={
               <RouteGuard roles={['admin', 'caissier', 'couturier']}>
                 <FacturesRecus />
+              </RouteGuard>
+            } />
+
+            {/* RENDEZ-VOUS */}
+            <Route path="/rendezvous" element={
+              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+                <SuiviRendezVous />
               </RouteGuard>
             } />
 

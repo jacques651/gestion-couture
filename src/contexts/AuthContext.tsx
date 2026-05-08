@@ -10,6 +10,13 @@ export interface User {
   nom: string;
   login: string;
   role: Role;
+  permissions?: Record<
+    string,
+    {
+      lecture: boolean;
+      ecriture: boolean;
+    }
+  >;
 }
 
 interface Permission {
@@ -21,7 +28,14 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (login: string, password: string) => Promise<boolean>;
+  login: (
+    login: string,
+    password: string
+  ) => Promise<{
+    success: boolean;
+    utilisateur?: any;
+  }>;
+
   register: (nom: string, login: string, password: string, role: Role) => Promise<void>;
   logout: () => void;
   hasRole: (roles: Role[]) => boolean;
@@ -83,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: normalizeRole(parsed.role || 'couturier')
           };
           setUser(userObj);
-          
+
           // Charger les permissions si ce n'est pas un admin
           if (userObj.role !== 'admin') {
             const perms = await loadUserPermissions(userObj.id);
@@ -109,19 +123,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  const login = async (loginValue: string, password: string): Promise<boolean> => {
+  const login = async (
+    loginValue: string,
+    password: string
+  ): Promise<{
+    success: boolean;
+    utilisateur?: User;
+  }> => {
+
     try {
+
       const db = await getDb();
+
       const results = await db.select<DbUser[]>(
-        `SELECT * FROM utilisateurs WHERE login = ? AND est_actif = 1`,
+        `
+      SELECT *
+      FROM utilisateurs
+      WHERE login = ?
+      AND est_actif = 1
+      `,
         [loginValue.trim()]
       );
 
-      if (!Array.isArray(results) || results.length === 0) return false;
+      if (
+        !Array.isArray(results) ||
+        results.length === 0
+      ) {
+
+        return {
+          success: false
+        };
+      }
 
       const dbUser = results[0];
-      const isValid = await bcrypt.compare(password, dbUser.mot_de_passe_hash);
-      if (!isValid) return false;
+
+      const isValid = await bcrypt.compare(
+        password,
+        dbUser.mot_de_passe_hash
+      );
+
+      if (!isValid) {
+
+        return {
+          success: false
+        };
+      }
 
       const userObj: User = {
         id: dbUser.id,
@@ -131,20 +177,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       setUser(userObj);
-      localStorage.setItem('user', JSON.stringify(userObj));
 
-      // Charger les permissions après login
+      localStorage.setItem(
+        'user',
+        JSON.stringify(userObj)
+      );
+
+      // Permissions
       if (userObj.role !== 'admin') {
-        const perms = await loadUserPermissions(userObj.id);
+
+        const perms =
+          await loadUserPermissions(
+            userObj.id
+          );
+
         setPermissions(perms);
+
+        // AJOUT IMPORTANT
+        userObj.permissions = perms;
+
       } else {
+
         setPermissions({});
       }
 
-      return true;
+      return {
+        success: true,
+        utilisateur: userObj
+      };
+
     } catch (err) {
-      console.error('Erreur login:', err);
-      return false;
+
+      console.error(
+        'Erreur login:',
+        err
+      );
+
+      return {
+        success: false
+      };
     }
   };
 

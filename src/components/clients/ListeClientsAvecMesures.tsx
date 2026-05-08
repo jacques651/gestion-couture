@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IconRuler } from '@tabler/icons-react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -34,6 +35,7 @@ import {
   IconPlus,
   IconSearch,
   IconDownload,
+  IconDatabaseOff,
   IconFileExcel,
   IconFile,
   IconPrinter,
@@ -104,12 +106,13 @@ export default function ListeClientsAvecMesures() {
    WHERE est_supprime = 0 OR est_supprime IS NULL
    ORDER BY nom_prenom`
         );
+        console.log("👤 clients =", clients);
 
         if (clients.length === 0) return [];
 
-        const ids = clients.map(c => c.telephone_id);
+        const ids = clients.map(c => c.id);
         const placeholders = ids.map(() => '?').join(',');
-        const mesuresRows = await db.select<Array<{ client_id: string; nom: string; valeur: number; unite: string | null }>>(
+        const mesuresRows = await db.select<Array<{ client_id: number; nom: string; valeur: number; unite: string | null }>>(
           `SELECT mc.client_id, tm.nom, mc.valeur, tm.unite
            FROM mesures_clients mc
            JOIN types_mesures tm ON tm.id = mc.type_mesure_id
@@ -117,23 +120,37 @@ export default function ListeClientsAvecMesures() {
            ORDER BY tm.ordre_affichage, tm.nom`,
           ids
         );
+        console.log("📏 mesuresRows =", mesuresRows);
 
-        const mesuresParClient = new Map<string, Mesure[]>();
-        for (const row of mesuresRows) {
-          if (!mesuresParClient.has(row.client_id)) {
-            mesuresParClient.set(row.client_id, []);
+        const mesuresParClient = new Map<number, Mesure[]>();
+
+        mesuresRows.forEach((row: any) => {
+          const clientId = Number(row.client_id);
+
+          if (!mesuresParClient.has(clientId)) {
+            mesuresParClient.set(clientId, []);
           }
-          mesuresParClient.get(row.client_id)!.push({
+
+          mesuresParClient.get(clientId)!.push({
             nom: row.nom,
             valeur: row.valeur,
-            unite: row.unite || 'cm'
+            unite: row.unite
           });
-        }
+        });
+
+        console.log("🧪 Exemple client:", clients[0]);
+        console.log("🧪 Exemple mesures:", mesuresRows[0]);
+
+        console.log(
+          "🔍 Recherche mesures pour client:",
+          clients[0].id,
+          mesuresParClient.get(clients[0].id!)
+        );
 
         return clients.map(client => ({
           ...client,
           observations: client.observations || '',
-          mesures: mesuresParClient.get(client.telephone_id) || []
+          mesures: mesuresParClient.get(client.id!) || []
         }));
       } catch (err) {
         console.error("Erreur dans queryFn:", err);
@@ -177,18 +194,137 @@ export default function ListeClientsAvecMesures() {
   const paginatedData = filteredAndSortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const deleteMutation = useMutation({
+
     mutationFn: async (id: string) => {
+
       const db = await getDb();
-      if (!db) throw new Error("Base de données non disponible");
-      await db.execute("UPDATE clients SET est_supprime = 1 WHERE telephone_id = ?", [id]);
+
+      if (!db) {
+        throw new Error(
+          "Base de données non disponible"
+        );
+      }
+
+      // =========================
+      // Récupérer le client
+      // =========================
+      const clients =
+        await db.select<Client[]>(
+          `
+        SELECT
+          nom_prenom,
+          telephone_id
+        FROM clients
+        WHERE telephone_id = ?
+        `,
+          [id]
+        );
+
+      const client = clients[0];
+
+      // =========================
+      // Suppression logique
+      // =========================
+      await db.execute(
+        `
+      UPDATE clients
+      SET est_supprime = 1
+      WHERE telephone_id = ?
+      `,
+        [id]
+      );
+
+      // =========================
+      // Journalisation
+      // =========================
+      await journaliserAction({
+
+        utilisateur: 'Utilisateur',
+
+        action: 'DELETE',
+
+        table: 'clients',
+
+        idEnregistrement: id,
+
+        details:
+          `Suppression client : ${client?.nom_prenom || id
+          }`
+      });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['clients_avec_mesures'] });
+
+    // =========================
+    // Succès
+    // =========================
+    onSuccess: async () => {
+
+      // Fermer modal
       setDeleteId(null);
+
+      // Rafraîchir cache React Query
+      await queryClient.invalidateQueries({
+        queryKey: ['clients_avec_mesures']
+      });
+
+      // Recharger immédiatement
+      await refetch();
+
+      alert(
+        "✅ Client supprimé avec succès"
+      );
     },
+
+    // =========================
+    // Erreur
+    // =========================
     onError: (error) => {
-      console.error('Erreur:', error);
-      alert('Erreur lors de la suppression du client');
+
+      console.error(error);
+
+      alert(
+        "❌ Erreur lors de la suppression"
+      );
+    }
+  });
+  const viderListeMutation = useMutation({
+    mutationFn: async () => {
+      const db = await getDb();
+
+      if (!db) {
+        throw new Error("Base de données non disponible");
+      }
+
+      // Supprimer d'abord les mesures
+      await db.execute(`DELETE FROM mesures_clients`);
+
+      // Puis les clients
+      await db.execute(`DELETE FROM clients`);
+
+      // Réinitialiser les IDs auto increment
+      await db.execute(`DELETE FROM sqlite_sequence WHERE name='clients'`);
+      await db.execute(`DELETE FROM sqlite_sequence WHERE name='mesures_clients'`);
+
+      // Journalisation
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'DELETE',
+        table: 'clients',
+        idEnregistrement: 'ALL',
+        details: 'Vidage complet de la liste des clients et mesures'
+      });
+    },
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['clients_avec_mesures']
+      });
+
+      alert("✅ Liste des clients vidée avec succès");
+    },
+
+    onError: (error) => {
+      console.error(error);
+      alert("❌ Erreur lors du vidage");
     }
   });
 
@@ -307,8 +443,22 @@ export default function ListeClientsAvecMesures() {
         onSuccess={(clientId, clientNom) => {
           setVueForm(false);
           refetch();
-          if (clientId && clientNom && confirm('Client créé avec succès ! Voulez-vous créer une vente pour ce client ?')) {
-            navigate(`/ventes?client_id=${clientId}&client_nom=${encodeURIComponent(clientNom)}`);
+          if (
+            clientId &&
+            clientNom
+          ) {
+
+            const confirmed =
+              globalThis.confirm(
+                'Client créé avec succès ! Voulez-vous créer une vente pour ce client ?'
+              );
+
+            if (confirmed) {
+
+              navigate(
+                `/ventes?client_id=${clientId}&client_nom=${encodeURIComponent(clientNom)}`
+              );
+            }
           }
         }}
       />
@@ -388,6 +538,22 @@ export default function ListeClientsAvecMesures() {
                     </Menu.Dropdown>
                   </Menu>
                   <Button leftSection={<IconPrinter size={16} />} onClick={handlePrint} variant="outline" color="teal">Imprimer</Button>
+                  <Button
+                    leftSection={<IconDatabaseOff size={16} />}
+                    color="red"
+                    variant="light"
+                    onClick={() => {
+                      const confirmDelete = confirm(
+                        "Voulez-vous vraiment vider toute la liste des clients et mesures ?"
+                      );
+                      if (confirmDelete) {
+                        viderListeMutation.mutate();
+                      }
+                    }}
+                    loading={viderListeMutation.isPending}
+                  >
+                    Vider la liste
+                  </Button>
                   <Button leftSection={<IconPlus size={16} />} onClick={() => { setClientEdit(null); setVueForm(true); }} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }}>Ajouter un client</Button>
                 </Group>
               </Group>
@@ -514,14 +680,30 @@ export default function ListeClientsAvecMesures() {
               <Text size="sm" c="dimmed">Cette action est irréversible.</Text>
               <Group justify="flex-end" mt="md">
                 <Button variant="light" onClick={() => setDeleteId(null)}>Annuler</Button>
-                <Button color="red" onClick={() => deleteId && deleteMutation.mutate(deleteId)} loading={deleteMutation.isPending}>Supprimer</Button>
+                <Button color="red" onClick={() => {
+                  if (!deleteId) return;
+
+                  deleteMutation.mutate(deleteId);
+                }} loading={deleteMutation.isPending}>Supprimer</Button>
               </Group>
             </Stack>
           </Modal>
 
           {/* Modal mesures */}
           {showModal && selectedClient && (
-            <ModalMesures client={selectedClient} mesures={selectedClient.mesures} onClose={() => setShowModal(false)} />
+            <ModalMesures
+              client={selectedClient}
+              mesures={selectedClient.mesures}
+              onClose={() => {
+                setShowModal(false);
+
+                queryClient.invalidateQueries({
+                  queryKey: ['clients_avec_mesures']
+                });
+
+                refetch();
+              }}
+            />
           )}
 
           {/* Modal instructions */}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -86,20 +87,81 @@ const ListeEmployes: React.FC = () => {
     chargerEmployes();
   }, []);
 
-  const supprimerEmploye = async (id: number, nom: string) => {
-    if (!window.confirm(`Supprimer l'employé "${nom}" ?`)) return;
-    const db = await getDb();
-    await db.execute("UPDATE employes SET est_supprime = 1 WHERE id=?", [id]);
-    await chargerEmployes();
-    setSuccessMessage(`Employé "${nom}" supprimé avec succès`);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+  const supprimerEmploye = async (
+    id: number,
+    nom: string
+  ) => {
+
+    if (!
+globalThis.confirm(
+      `Supprimer l'employé "${nom}" ?`
+    )) {
+      return;
+    }
+
+    try {
+
+      const db = await getDb();
+
+      // Suppression logique
+      await db.execute(
+        `
+      UPDATE employes
+      SET est_supprime = 1
+      WHERE id = ?
+      `,
+        [id]
+      );
+
+      // Journalisation
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'DELETE',
+        table: 'employes',
+        idEnregistrement: id,
+        details: `Suppression employé : ${nom}`
+      });
+
+      // Recharge
+      await chargerEmployes();
+
+      // Succès
+      setSuccessMessage(
+        `Employé "${nom}" supprimé avec succès`
+      );
+
+      setShowSuccess(true);
+
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 3000);
+
+    } catch (error) {
+
+      console.error(
+        "Erreur suppression employé:",
+        error
+      );
+
+    }
   };
 
   const handlePaiement = async (e: Employe) => {
     try {
       setLoadingPaiement(e.id);
       const result = await payerSalaireSecurise(e.id);
+      
+      // Journalisation paiement
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'CREATE',
+        table: 'paiements_salaires',
+        idEnregistrement: e.id,
+        details:
+          `Paiement salaire : ${e.nom_prenom} - ` +
+          `${result.montant_net.toLocaleString()} FCFA`
+      });
+
       setPaiementResult({
         employe: e.nom_prenom,
         brut: result.montant_brut,

@@ -76,7 +76,8 @@ const ListeTypesPrestations: React.FC = () => {
   }, []);
 
   const supprimerType = async (id: number, nom: string) => {
-    if (!window.confirm(`Supprimer le type "${nom}" ?`)) return;
+    if (!
+globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
     const db = await getDb();
     await db.execute("UPDATE types_prestations SET est_active = 0 WHERE id = ?", [id]);
     await chargerTypes();

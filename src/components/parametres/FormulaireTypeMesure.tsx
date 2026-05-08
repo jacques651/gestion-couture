@@ -22,6 +22,7 @@ import {
   IconAlertCircle,
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
+import { journaliserAction } from '../../services/journal';
 
 interface TypeMesure {
   id?: number;
@@ -76,9 +77,36 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
 
     try {
       if (type?.id) {
-        
-        setSuccessMessage('Type de mesure modifié avec succès');
+
+        await db.execute(
+          `
+    UPDATE types_mesures
+    SET nom = ?, unite = ?
+    WHERE id = ?
+    `,
+          [
+            nom.trim(),
+            unite,
+            type.id
+          ]
+        );
+
+        // Journalisation modification
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'types_mesures',
+          idEnregistrement: type.id,
+          details:
+            `Modification type mesure : ${nom}`
+        });
+
+        setSuccessMessage(
+          'Type de mesure modifié avec succès'
+        );
+
         setSuccess(true);
+
       } else {
         const results = await db.select<{ max_ordre: number }[]>(
           "SELECT COALESCE(MAX(ordre_affichage), 0) as max_ordre FROM types_mesures WHERE est_active = 1"
@@ -86,9 +114,20 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
         const dernierOrdre = results?.[0]?.max_ordre ?? 0;
 
         await db.execute(
-          "INSERT INTO types_mesures (nom, unite, ordre_affichage, est_active) VALUES (?, ?, ?, ?, 1)",
+          "INSERT INTO types_mesures (nom, unite, ordre_affichage, est_active) VALUES (?, ?, ?, 1)",
           [nom.trim(), unite, dernierOrdre + 1]
         );
+
+        // Journalisation création
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'CREATE',
+          table: 'types_mesures',
+          idEnregistrement: nom,
+          details:
+            `Création type mesure : ${nom}`
+        });
+
         setSuccessMessage('Type de mesure ajouté avec succès');
         setSuccess(true);
       }

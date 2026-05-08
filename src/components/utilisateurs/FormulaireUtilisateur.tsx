@@ -10,6 +10,17 @@ import {
 import { getDb, savePermissions, getPermissions } from '../../database/db';
 import { notifications } from '@mantine/notifications';
 import bcrypt from 'bcryptjs';
+import {
+    journaliserAction
+} from '../../services/journal';
+
+import {
+    aPermission
+} from '../../services/permissions';
+
+import {
+    getUtilisateurConnecte
+} from '../../services/session';
 
 const FONCTIONNALITES = [
     { id: 'dashboard', label: '📊 Tableau de bord' },
@@ -103,6 +114,24 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
             return;
         }
         if (!role) {
+
+            const session =
+                getUtilisateurConnecte();
+
+            if (
+                role === 'admin' &&
+                session?.role !== 'admin'
+            ) {
+
+                notifications.show({
+                    title: 'Accès refusé',
+                    message:
+                        'Seul un administrateur peut créer un administrateur',
+                    color: 'red'
+                });
+
+                return;
+            }
             notifications.show({ title: 'Erreur', message: 'Veuillez sélectionner ou créer un rôle', color: 'red' });
             return;
         }
@@ -113,10 +142,41 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
 
             if (utilisateur) {
                 // MODIFICATION
+
+                const session =
+                    getUtilisateurConnecte();
+
+                if (
+                    utilisateur.role === 'admin' &&
+                    session?.role !== 'admin'
+                ) {
+
+                    notifications.show({
+                        title: 'Accès refusé',
+                        message:
+                            'Seul un administrateur peut modifier un administrateur',
+                        color: 'red'
+                    });
+
+                    setLoading(false);
+
+                    return;
+                }
                 await db.execute(
                     `UPDATE utilisateurs SET nom=?, login=?, role=? WHERE id=?`,
                     [nom, login, role, utilisateur.id]
                 );
+
+                // Journalisation modification utilisateur
+                await journaliserAction({
+                    utilisateur: 'Utilisateur',
+                    action: 'UPDATE',
+                    table: 'utilisateurs',
+                    idEnregistrement: utilisateur.id,
+                    details:
+                        `Modification utilisateur : ${nom} (${role})`
+                });
+
             } else {
                 // CRÉATION
                 if (!password) {
@@ -144,6 +204,16 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
                     [nom, login, hash, role]
                 );
                 userId = Number(result.lastInsertId);
+
+                // Journalisation création utilisateur
+                await journaliserAction({
+                    utilisateur: 'Utilisateur',
+                    action: 'CREATE',
+                    table: 'utilisateurs',
+                    idEnregistrement: userId,
+                    details:
+                        `Création utilisateur : ${nom} (${role})`
+                });
             }
 
             // Sauvegarder les permissions
@@ -154,6 +224,16 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
                     ecriture: val.ecriture,
                 }));
                 await savePermissions(userId, permsArray);
+
+                // Journalisation permissions
+                await journaliserAction({
+                    utilisateur: 'Utilisateur',
+                    action: 'UPDATE',
+                    table: 'permissions',
+                    idEnregistrement: userId,
+                    details:
+                        `Mise à jour permissions : ${nom}`
+                });
             }
 
             notifications.show({ title: 'Succès', message: 'Utilisateur enregistré', color: 'green' });
@@ -172,7 +252,7 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
             { value: 'couturier', label: '🧵 Couturier' },
             ...customRoles.map(r => ({ value: r.toLowerCase(), label: `👤 ${r}` })),
         ];
-        
+
         // Si le rôle actuel de l'utilisateur (ex: 'gestionnaire') n'est pas dans la liste, on l'ajoute
         if (utilisateur?.role && !['admin', 'caissier', 'couturier'].includes(utilisateur.role)) {
             const roleExists = baseOptions.some(opt => opt.value === utilisateur.role);
@@ -180,11 +260,15 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
                 baseOptions.push({ value: utilisateur.role, label: `👤 ${utilisateur.role}` });
             }
         }
-        
+
         baseOptions.push({ value: 'autre', label: '+ Autre (créer)' });
         return baseOptions;
     };
 
+    if (!aPermission('utilisateurs')) {
+
+        return null;
+    }
     return (
         <Modal
             opened={true}

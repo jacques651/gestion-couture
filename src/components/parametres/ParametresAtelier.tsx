@@ -43,6 +43,7 @@ import {
   getConfigurationAtelier,
   saveConfigurationAtelier,
 } from '../../database/db';
+import { journaliserAction } from '../../services/journal';
 
 // Interface alignée avec la table
 interface ConfigForm {
@@ -124,13 +125,40 @@ export default function ParametresAtelier() {
       setLogoPreview(base64);
       setConfig((prev) => ({ ...prev, logo_base64: base64 }));
     };
+    // Journalisation import logo
+    journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'configuration_atelier',
+      idEnregistrement: config.id,
+      details:
+        `Import logo atelier : ${file.name}`
+    });
+
     reader.readAsDataURL(file);
   };
 
-  const supprimerLogo = () => {
+  const supprimerLogo = async () => {
+
     setLogoPreview(null);
-    setConfig({ ...config, logo_base64: '' });
-    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    setConfig({
+      ...config,
+      logo_base64: ''
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    // Journalisation suppression logo
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'configuration_atelier',
+      idEnregistrement: config.id,
+      details: 'Suppression logo atelier'
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -150,6 +178,16 @@ export default function ParametresAtelier() {
       logo_base64: config.logo_base64,
       devise: config.devise,
     } as any);
+
+    // Journalisation configuration atelier
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'configuration_atelier',
+      idEnregistrement: config.id,
+      details:
+        `Modification paramètres atelier : ${config.nom_atelier}`
+    });
     setSaving(false);
     setShowNotification(true);
     setTimeout(() => setShowNotification(false), 3000);
@@ -273,7 +311,7 @@ export default function ParametresAtelier() {
                           radius="md"
                         />
                       </Grid.Col>
-                    
+
                     </Grid>
 
                     <Grid>

@@ -261,7 +261,8 @@ const ListePrestationsRealisees: React.FC = () => {
   };
 
   const supprimer = async (id: number, designation: string) => {
-    if (!window.confirm(`Supprimer la prestation "${designation}" ?`)) return;
+    if (!
+globalThis.confirm(`Supprimer la prestation "${designation}" ?`)) return;
     const db = await getDb();
     await db.execute("DELETE FROM prestations_realisees WHERE id = ?", [id]);
     await chargerPrestations();

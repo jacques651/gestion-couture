@@ -3,6 +3,8 @@ import { Group, Button, Card, Title, Text, Stack, Alert, LoadingOverlay, Switch,
 import { IconDownload, IconUpload, IconCheck, IconAlertCircle, IconInfoCircle, IconRuler } from '@tabler/icons-react';
 import { getDb } from '../database/db';
 import * as XLSX from 'xlsx';
+import { journaliserAction } from '../services/journal';
+
 
 interface ExportImportConfigurationProps {
   onComplete?: () => void;
@@ -19,10 +21,10 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
     setExportResult(null);
     try {
       const db = await getDb();
-      const mesures = await db.select<{ 
+      const mesures = await db.select<{
         id: number;
-        nom: string; 
-        unite: string; 
+        nom: string;
+        unite: string;
         categorie: string;
         ordre_affichage: number;
         est_active: number;
@@ -71,6 +73,17 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
       XLSX.utils.book_append_sheet(wb, wsInstructions, 'Instructions');
 
       XLSX.writeFile(wb, `configuration_mesures_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+      // Journalisation export configuration
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'EXPORT',
+        table: 'types_mesures',
+        idEnregistrement: 'CONFIG_EXPORT',
+        details:
+          `Export configuration mesures : ` +
+          `${mesures.length} types exportés`
+      });
       setExportResult({ success: true, message: `${mesures.length} types de mesures exportés` });
     } catch (error) {
       console.error('Export error:', error);
@@ -104,7 +117,7 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
       for (let i = 0; i < rows.length; i++) {
         try {
           const row = rows[i];
-          
+
           // Extraire les valeurs avec différents cas possibles
           let id = row['ID'] || row.Id || row.id;
           const nom = row['Nom'] || row.Nom || row.nom || '';
@@ -112,7 +125,7 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
           const categorie = row['Catégorie'] || row.Catégorie || row.categorie || 'Général';
           const ordre = Number(row['Ordre'] || row.Ordre || row.ordre || 0);
           let active = row['Active'] || row.Active || row.active || row.est_active;
-          
+
           // Convertir active en boolean
           let est_active = 1;
           if (active !== undefined && active !== null && active !== '') {
@@ -136,7 +149,7 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
 
           // Vérifier si le type de mesure existe déjà
           let existingId: number | null = null;
-          
+
           if (id && !isNaN(Number(id))) {
             // Si un ID est fourni, vérifier s'il existe
             const existing = await db.select<{ id: number }[]>(
@@ -147,7 +160,7 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
               existingId = existing[0].id;
             }
           }
-          
+
           // Si pas d'ID ou ID invalide, chercher par nom
           if (!existingId) {
             const existing = await db.select<{ id: number }[]>(
@@ -187,12 +200,25 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
       }
 
       const message = `${created} créé(s), ${updated} mis à jour, ${errors} erreur(s)`;
+
+      // Journalisation import configuration
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'IMPORT',
+        table: 'types_mesures',
+        idEnregistrement: file.name,
+        details:
+          `Import configuration mesures : ` +
+          `${created} créés, ` +
+          `${updated} mis à jour, ` +
+          `${errors} erreurs`
+      });
       setImportResult({ success: errors === 0, message });
-      
+
       if (errorMessages.length > 0 && errors > 0) {
         console.error('Erreurs d\'import:', errorMessages);
       }
-      
+
       if (onComplete && (created > 0 || updated > 0)) {
         setTimeout(() => onComplete(), 2000);
       }
@@ -247,20 +273,20 @@ const ExportImportConfiguration: React.FC<ExportImportConfigurationProps> = ({ o
         </Group>
 
         <Group grow>
-          <Button 
-            onClick={exportConfigMesures} 
-            variant="gradient" 
-            gradient={{ from: 'blue', to: 'cyan' }} 
-            leftSection={<IconDownload size={18} />} 
+          <Button
+            onClick={exportConfigMesures}
+            variant="gradient"
+            gradient={{ from: 'blue', to: 'cyan' }}
+            leftSection={<IconDownload size={18} />}
             disabled={loading}
           >
             Exporter (Excel)
           </Button>
-          <Button 
-            component="label" 
-            variant="gradient" 
-            gradient={{ from: 'green', to: 'teal' }} 
-            leftSection={<IconUpload size={18} />} 
+          <Button
+            component="label"
+            variant="gradient"
+            gradient={{ from: 'green', to: 'teal' }}
+            leftSection={<IconUpload size={18} />}
             disabled={loading}
           >
             Importer (Excel)

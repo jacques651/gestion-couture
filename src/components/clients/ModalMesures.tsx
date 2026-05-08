@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Modal,
   Stack,
@@ -227,6 +228,13 @@ const ModalMesures: React.FC<Props> = ({ client, mesures, onClose }) => {
     };
   }
 };
+  journaliserAction({
+    utilisateur: 'Utilisateur',
+    action: 'CREATE',
+    table: 'impression_mesures',
+    idEnregistrement: client.telephone_id,
+    details: `Impression fiche mesures (${FormData}) : ${client.nom_prenom}`
+  });
 
   return (
     <Modal

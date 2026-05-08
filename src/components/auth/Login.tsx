@@ -29,6 +29,13 @@ import {
 } from "@tabler/icons-react";
 import { getDb } from "../../database/db";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  sauvegarderSession
+} from "../../services/session";
+
+import {
+  journaliserAction
+} from "../../services/journal";
 
 interface ConfigurationAtelier {
   id: number;
@@ -93,14 +100,56 @@ const Login: React.FC = () => {
     try {
       if (isFirstUser) {
         await register(nom, loginValue, password, "admin");
+
+        // Journalisation création admin
+        await journaliserAction({
+          utilisateur: nom,
+          action: 'CREATE',
+          table: 'utilisateurs',
+          idEnregistrement: loginValue,
+          details:
+            `Création administrateur : ${nom}`
+        });
+
         alert("✅ Administrateur créé avec succès ! Connectez-vous maintenant.");
         setIsFirstUser(false);
         setPassword("");
         setNom("");
         setLoginValue("");
       } else {
-        const success = await login(loginValue, password);
-        if (!success) setError("❌ Identifiants incorrects. Veuillez réessayer.");
+        const result = await login(
+          loginValue,
+          password
+        );
+
+        if (
+          result.success &&
+          result.utilisateur
+        ) {
+
+          // Sauvegarde session
+          sauvegarderSession({
+            id: result.utilisateur.id,
+            nom: result.utilisateur.nom,
+            role: result.utilisateur.role
+          });
+          // Journalisation connexion
+          await journaliserAction({
+            utilisateur: loginValue,
+            action: 'LOGIN',
+            table: 'auth',
+            idEnregistrement: loginValue,
+            details:
+              `Connexion utilisateur : ${loginValue}`
+          });
+
+        } else {
+
+          setError(
+            "❌ Identifiants incorrects. Veuillez réessayer."
+          );
+
+        }
       }
     } catch (err: any) {
       setError("Erreur : " + err.message);
@@ -296,8 +345,8 @@ const Login: React.FC = () => {
                 {loading
                   ? "Traitement en cours..."
                   : isFirstUser
-                  ? "Créer l'administrateur"
-                  : "Se connecter"}
+                    ? "Créer l'administrateur"
+                    : "Se connecter"}
               </Button>
             </Stack>
           </form>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { journaliserAction } from '../services/journal';
 import {
   Stack,
   Card,
@@ -57,6 +58,15 @@ const ConfigurationReseau: React.FC = () => {
       setNetworkPath(path as string);
       notifications.show({ title: 'Fichier sélectionné', message: path as string, color: 'blue' });
     }
+    // Journalisation sélection fichier
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'configuration_reseau',
+      idEnregistrement: path as string,
+      details:
+        `Sélection fichier base réseau`
+    });
   };
 
   const handleTestConnection = async () => {
@@ -67,6 +77,17 @@ const ConfigurationReseau: React.FC = () => {
     setTesting(true);
     try {
       const test = await testerConnexionReseau(networkPath);
+
+      // Journalisation test connexion
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'UPDATE',
+        table: 'configuration_reseau',
+        idEnregistrement: networkPath,
+        details:
+          `Test connexion réseau : ` +
+          `${test.success ? 'SUCCÈS' : 'ÉCHEC'} - ${networkPath}`
+      });
       notifications.show({
         title: test.success ? 'Connexion réussie' : 'Échec',
         message: test.message,
@@ -93,11 +114,32 @@ const ConfigurationReseau: React.FC = () => {
           return;
         }
         await configurerBaseReseau(networkPath);
+
+        // Journalisation activation réseau
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'configuration_reseau',
+          idEnregistrement: networkPath,
+          details:
+            `Activation mode réseau : ${networkPath}`
+        });
+
         localStorage.setItem('use_network_db', 'true');
         localStorage.setItem('network_db_path', networkPath);
         notifications.show({ title: 'Succès', message: 'Mode réseau activé', color: 'green' });
       } else {
         await utiliserBaseLocale();
+
+        // Journalisation retour local
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'configuration_reseau',
+          idEnregistrement: 'LOCAL',
+          details: 'Activation mode local'
+        });
+
         localStorage.setItem('use_network_db', 'false');
         notifications.show({ title: 'Succès', message: 'Mode local activé', color: 'green' });
       }

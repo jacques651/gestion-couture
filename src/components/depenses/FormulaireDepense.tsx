@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -88,30 +89,30 @@ const FormulaireDepense: React.FC<{
   // Validation
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-    
+
     if (!categorie) {
       errors.categorie = "La catégorie est requise";
     }
-    
+
     if (!designation.trim()) {
       errors.designation = "La désignation est requise";
     }
-    
+
     if (!montant || montant <= 0) {
       errors.montant = "Le montant doit être supérieur à 0";
     }
-    
+
     if (!responsable.trim()) {
       errors.responsable = "Le responsable est requis";
     }
-    
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -123,24 +124,78 @@ const FormulaireDepense: React.FC<{
       const db = await getDb();
 
       if (depense) {
+
         await db.execute(
-          `UPDATE depenses 
-           SET categorie=?, designation=?, montant=?, responsable=?, observation=?, date_depense=?
-           WHERE id=?`,
-          [categorie, designation, montant, responsable, observation, dateDepense, depense.id]
+          `
+    UPDATE depenses
+    SET categorie=?,
+        designation=?,
+        montant=?,
+        responsable=?,
+        observation=?,
+        date_depense=?
+    WHERE id=?
+    `,
+          [
+            categorie,
+            designation,
+            montant,
+            responsable,
+            observation,
+            dateDepense,
+            depense.id
+          ]
         );
+
+        // Journalisation modification
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'depenses',
+          idEnregistrement: depense.id,
+          details: `Modification dépense : ${designation}`
+        });
+
         setSuccess('Dépense modifiée avec succès');
+
       } else {
+
         await db.execute(
-          `INSERT INTO depenses (categorie, designation, montant, responsable, observation, date_depense)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [categorie, designation, montant, responsable, observation, dateDepense]
+          `
+    INSERT INTO depenses (
+      categorie,
+      designation,
+      montant,
+      responsable,
+      observation,
+      date_depense
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    `,
+          [
+            categorie,
+            designation,
+            montant,
+            responsable,
+            observation,
+            dateDepense
+          ]
         );
+
+        // Journalisation création
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'CREATE',
+          table: 'depenses',
+          idEnregistrement: designation,
+          details: `Création dépense : ${designation}`
+        });
+
         setSuccess('Dépense ajoutée avec succès');
       }
 
       setShowSuccess(true);
-      
+
       setTimeout(() => {
         setShowSuccess(false);
         onSuccess();
@@ -168,11 +223,11 @@ const FormulaireDepense: React.FC<{
       <Box style={{ maxWidth: 800, margin: '0 auto' }} p="md">
         <Stack gap="lg">
           {/* HEADER MODERNE */}
-          <Card 
-            withBorder 
-            radius="lg" 
-            p="xl" 
-            style={{ 
+          <Card
+            withBorder
+            radius="lg"
+            p="xl"
+            style={{
               background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)',
               position: 'relative',
               overflow: 'hidden'
@@ -191,28 +246,28 @@ const FormulaireDepense: React.FC<{
                     {depense ? "✏️ Modifier la dépense" : "💰 Nouvelle dépense"}
                   </Title>
                   <Text c="gray.3" size="sm" mt={4}>
-                    {depense 
-                      ? "Modifiez les informations de la dépense" 
+                    {depense
+                      ? "Modifiez les informations de la dépense"
                       : "Enregistrez une nouvelle dépense de l'atelier"}
                   </Text>
                 </Box>
               </Group>
               <Group>
                 <Tooltip label="Aide">
-                  <ActionIcon 
-                    variant="light" 
-                    color="white" 
-                    size="lg" 
+                  <ActionIcon
+                    variant="light"
+                    color="white"
+                    size="lg"
                     onClick={() => setInfoModalOpen(true)}
                   >
                     <IconInfoCircle size={20} />
                   </ActionIcon>
                 </Tooltip>
                 <Tooltip label="Retour">
-                  <ActionIcon 
-                    variant="light" 
-                    color="white" 
-                    size="lg" 
+                  <ActionIcon
+                    variant="light"
+                    color="white"
+                    size="lg"
                     onClick={onCancel}
                   >
                     <IconArrowLeft size={20} />

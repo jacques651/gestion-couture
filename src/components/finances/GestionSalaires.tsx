@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -149,6 +150,18 @@ const GestionSalaires = () => {
       mode,
       observation
     });
+
+    // Journalisation paiement salaire
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'CREATE',
+      table: 'salaires',
+      idEnregistrement: selectedEmploye.id,
+      details:
+        `Paiement salaire : ${selectedEmploye.nom} - ` +
+        `${montant.toLocaleString()} FCFA (${mode})`
+    });
+
     setShowModal(false);
     await loadEmployes();
     setSuccessMessage(`Paiement de ${montant.toLocaleString()} FCFA effectué pour ${selectedEmploye.nom}`);
@@ -174,6 +187,18 @@ const GestionSalaires = () => {
     setSubmitting(true);
     try {
       await annulerPaiementSalaire(salaireId);
+
+      // Journalisation annulation salaire
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'DELETE',
+        table: 'salaires',
+        idEnregistrement: salaireId,
+        details:
+          `Annulation paiement salaire : ` +
+          `${selectedEmploye?.nom} - ` +
+          `${montant.toLocaleString()} FCFA`
+      });
       setShowAnnulationModal(false);
       await loadEmployes();
       setSuccessMessage(`Annulation du paiement de ${montant.toLocaleString()} FCFA effectuée`);
@@ -306,7 +331,23 @@ const GestionSalaires = () => {
           <Card withBorder radius="lg" shadow="sm" p="md">
             <Group justify="flex-end">
               <Tooltip label="Actualiser les données">
-                <ActionIcon variant="light" onClick={loadEmployes} size="lg" radius="md">
+                <ActionIcon
+                  variant="light"
+                  onClick={async () => {
+
+                    await loadEmployes();
+
+                    await journaliserAction({
+                      utilisateur: 'Utilisateur',
+                      action: 'UPDATE',
+                      table: 'gestion_salaires',
+                      idEnregistrement: 'REFRESH',
+                      details: 'Actualisation des données salaires'
+                    });
+
+                  }}
+
+                  size="lg" radius="md">
                   <IconRefresh size={18} />
                 </ActionIcon>
               </Tooltip>

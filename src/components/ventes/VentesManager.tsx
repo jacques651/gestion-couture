@@ -1,6 +1,7 @@
 // src/components/ventes/VentesManager.tsx
 import React, { useState, useEffect } from 'react';
 import { Vente } from '../../database/db';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack, Card, Title, Text, Group, Button, TextInput, NumberInput,
   Divider, Box, Modal, Select, Avatar, Tooltip, ActionIcon,
@@ -9,7 +10,8 @@ import {
 } from '@mantine/core';
 import {
   IconShoppingBag, IconTrash, IconPlus, IconSearch, IconRefresh,
-  IconFileInvoice, IconReceipt, IconEye, IconList, IconEdit, IconX, IconUser
+  IconFileInvoice, IconReceipt, IconEye, IconList, IconEdit, IconX, IconUser,
+  IconCheck
 } from '@tabler/icons-react';
 import { getDb, getNextVenteCode, getVentes, getVenteDetails, getVenteWithDetails, updateVenteComplete } from '../../database/db';
 import { notifications } from '@mantine/notifications';
@@ -20,7 +22,7 @@ import ModalRecu from '../paiements/ModalRecu';
 // ========== TYPES ==========
 interface Client {
   id(id: any): unknown;
-  profil: string; telephone_id: string; nom_prenom: string; adresse?: string; email?: string; 
+  profil: string; telephone_id: string; nom_prenom: string; adresse?: string; email?: string;
 }
 interface Article { id: number; code_article: string; modele: string; modele_id: number; taille: string; taille_id: number; couleur: string; couleur_id: number; texture: string | null; prix_vente: number; quantite_stock: number; emplacement: string | null; est_disponible: number; }
 interface Matiere { id: number; code_matiere: string; designation: string; unite: string; prix_vente: number; stock_actuel: number; }
@@ -60,6 +62,14 @@ const VentesManager: React.FC = () => {
   const [montantCommande, setMontantCommande] = useState(0);
   const [quantiteCommande, setQuantiteCommande] = useState(1);
   const [observation, setObservation] = useState('');
+  const [dateRendezVous, setDateRendezVous] =
+    useState('');
+
+  const [heureRendezVous, setHeureRendezVous] =
+    useState('');
+
+  const [typeRendezVous, setTypeRendezVous] =
+    useState('essayage');
   const [dateCommande, setDateCommande] = useState(new Date().toISOString().split('T')[0]);
   const [showFormulaireClient, setShowFormulaireClient] = useState(false);
   const [showFacture, setShowFacture] = useState(false);
@@ -77,13 +87,69 @@ const VentesManager: React.FC = () => {
 
   // ========== FONCTIONS (toutes les fonctions restent identiques) ==========
   const loadVentes = async () => { try { setLoading(true); setVentes(await getVentes()); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); } };
-  const handleAnnulerVente = async (venteId: number, codeVente: string) => { if (!confirm(`Annuler la vente "${codeVente}" ?`)) return; try { setLoading(true); const db = await getDb(); const details = await db.select<any[]>(`SELECT * FROM vente_details WHERE vente_id = ?`, [venteId]); for (const d of details) { if (d.article_id) await db.execute(`UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?`, [d.quantite, d.article_id]); if (d.matiere_id) await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?`, [d.quantite, d.matiere_id]); } await db.execute(`UPDATE ventes SET statut = 'ANNULEE' WHERE id = ?`, [venteId]); notifications.show({ title: 'Succès', message: `Vente ${codeVente} annulée`, color: 'green' }); await loadVentes(); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); } };
-  const handleDeleteVente = async () => { if (!deleteVenteId) return; try { setLoading(true); const db = await getDb(); const details = await db.select<any[]>(`SELECT * FROM vente_details WHERE vente_id = ?`, [deleteVenteId]); for (const d of details) { if (d.article_id) await db.execute(`UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?`, [d.quantite, d.article_id]); if (d.matiere_id) await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?`, [d.quantite, d.matiere_id]); } await db.execute(`DELETE FROM vente_details WHERE vente_id = ?`, [deleteVenteId]); await db.execute(`DELETE FROM ventes WHERE id = ?`, [deleteVenteId]); notifications.show({ title: 'Succès', message: `Vente ${deleteVenteCode} supprimée`, color: 'green' }); setDeleteVenteModalOpen(false); setDeleteVenteId(null); setDeleteVenteCode(''); await loadVentes(); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); } };
-  const loadFormData = async () => { try { const db = await getDb(); setClients(await db.select<Client[]>(`SELECT telephone_id, nom_prenom, adresse, email FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db.select<Article[]>(`SELECT a.id, a.code_article, a.prix_vente, a.quantite_stock, a.est_disponible, m.designation as modele, m.id as modele_id, t.libelle as taille, t.id as taille_id, c.nom_couleur as couleur, c.id as couleur_id, tx.nom_texture as texture FROM articles a LEFT JOIN modeles_tenues m ON a.modele_id = m.id LEFT JOIN tailles t ON a.taille_id = t.id LEFT JOIN couleurs c ON a.couleur_id = c.id LEFT JOIN textures tx ON a.texture_id = tx.id WHERE a.est_actif = 1 AND a.est_disponible = 1 AND a.quantite_stock > 0 ORDER BY m.designation, t.ordre, c.nom_couleur`)); setMatieres(await db.select<Matiere[]>(`SELECT id, code_matiere, designation, unite, stock_actuel FROM matieres WHERE est_supprime = 0 AND stock_actuel > 0 ORDER BY designation`)); setModeles(await db.select(`SELECT id, designation, categorie FROM modeles_tenues WHERE est_actif = 1`)); setCouleurs(await db.select(`SELECT id, nom_couleur, code_hex FROM couleurs WHERE est_actif = 1`)); setTailles(await db.select(`SELECT id, libelle, code_taille FROM tailles WHERE est_actif = 1`)); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } };
+  const handleAnnulerVente = async (venteId: number, codeVente: string) => {
+    if (!
+      globalThis.confirm(`Annuler la vente "${codeVente}" ?`)) return; try {
+        setLoading(true); const db = await getDb(); const details = await db.select<any[]>(`SELECT * FROM vente_details WHERE vente_id = ?`, [venteId]); for (const d of details) { if (d.article_id) await db.execute(`UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?`, [d.quantite, d.article_id]); if (d.matiere_id) await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?`, [d.quantite, d.matiere_id]); } await db.execute(`UPDATE ventes SET statut = 'ANNULEE' WHERE id = ?`, [venteId]); // Journalisation annulation vente
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'UPDATE',
+          table: 'ventes',
+          idEnregistrement: venteId,
+          details:
+            `Annulation vente : ${codeVente}`
+        });
+        notifications.show({ title: 'Succès', message: `Vente ${codeVente} annulée`, color: 'green' }); await loadVentes();
+      } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); }
+  };
+  const handleDeleteVente = async () => {
+    if (!deleteVenteId) return; try {
+      setLoading(true); const db = await getDb(); const details = await db.select<any[]>(`SELECT * FROM vente_details WHERE vente_id = ?`, [deleteVenteId]); for (const d of details) { if (d.article_id) await db.execute(`UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?`, [d.quantite, d.article_id]); if (d.matiere_id) await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?`, [d.quantite, d.matiere_id]); } await db.execute(`DELETE FROM vente_details WHERE vente_id = ?`, [deleteVenteId]); await db.execute(`DELETE FROM ventes WHERE id = ?`, [deleteVenteId]); // Journalisation suppression vente
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'DELETE',
+        table: 'ventes',
+        idEnregistrement: deleteVenteId,
+        details:
+          `Suppression vente : ${deleteVenteCode}`
+      });
+
+      notifications.show({ title: 'Succès', message: `Vente ${deleteVenteCode} supprimée`, color: 'green' }); setDeleteVenteModalOpen(false); setDeleteVenteId(null); setDeleteVenteCode(''); await loadVentes();
+    } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); }
+  };
+  const loadFormData = async () => {
+    try {
+      const db = await getDb(); setClients(await db.select<Client[]>(`SELECT
+  id,
+  profil,
+  telephone_id,
+  nom_prenom,
+  adresse,
+  email
+FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db.select<Article[]>(`SELECT a.id, a.code_article, a.prix_vente, a.quantite_stock, a.est_disponible, m.designation as modele, m.id as modele_id, t.libelle as taille, t.id as taille_id, c.nom_couleur as couleur, c.id as couleur_id, tx.nom_texture as texture FROM articles a LEFT JOIN modeles_tenues m ON a.modele_id = m.id LEFT JOIN tailles t ON a.taille_id = t.id LEFT JOIN couleurs c ON a.couleur_id = c.id LEFT JOIN textures tx ON a.texture_id = tx.id WHERE a.est_actif = 1 AND a.est_disponible = 1 AND a.quantite_stock > 0 ORDER BY m.designation, t.ordre, c.nom_couleur`)); setMatieres(await db.select<Matiere[]>(`SELECT id, code_matiere, designation, unite, stock_actuel FROM matieres WHERE est_supprime = 0 AND stock_actuel > 0 ORDER BY designation`)); setModeles(await db.select(`SELECT id, designation, categorie FROM modeles_tenues WHERE est_actif = 1`)); setCouleurs(await db.select(`SELECT id, nom_couleur, code_hex FROM couleurs WHERE est_actif = 1`)); setTailles(await db.select(`SELECT id, libelle, code_taille FROM tailles WHERE est_actif = 1`));
+    } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); }
+  };
   const generateCode = async () => { try { setCodeVente(await getNextVenteCode()); } catch { setCodeVente(`VTE-${Date.now()}`); } };
   const handleViewDetails = async (vente: Vente) => { setSelectedVente(vente); try { setDetails(await getVenteDetails(vente.id)); setDetailsModalOpen(true); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } };
   const handleEditVente = async (vente: Vente) => { try { setLoading(true); const vc = await getVenteWithDetails(vente.id); setEditVenteData({ id: vc.id, code_vente: vc.code_vente, type_vente: vc.type_vente, date_vente: vc.date_vente?.split('T')[0] || new Date().toISOString().split('T')[0], client_id: vc.client_id, client_nom: vc.client_nom, observation: vc.observation || '', montant_total: vc.montant_total, montant_regle: vc.montant_regle, lignes: (vc.details || []).map((d: any) => ({ id: d.id, designation: d.designation, quantite: d.quantite, prix_unitaire: d.prix_unitaire, total: d.total, article_id: d.article_id, matiere_id: d.matiere_id, taille_libelle: d.taille_libelle })) }); setEditModalOpen(true); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); } };
-  const handleSaveEditVente = async () => { if (!editVenteData) return; setEditLoading(true); try { const newTotal = (editVenteData.lignes || []).reduce((s: number, l: LigneEdit) => s + (l.quantite * l.prix_unitaire), 0); await updateVenteComplete(editVenteData.id, { client_id: editVenteData.client_id, client_nom: editVenteData.client_nom, date_vente: editVenteData.date_vente, observation: editVenteData.observation, type_vente: editVenteData.type_vente, montant_total: newTotal, montant_regle: editVenteData.montant_regle, details: editVenteData.lignes }); notifications.show({ title: 'Succès', message: 'Vente modifiée', color: 'green' }); setEditModalOpen(false); setEditVenteData(null); await loadVentes(); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setEditLoading(false); } };
+  const handleSaveEditVente = async () => {
+    if (!editVenteData) return; setEditLoading(true); try {
+      const newTotal = (editVenteData.lignes || []).reduce((s: number, l: LigneEdit) => s + (l.quantite * l.prix_unitaire), 0); await updateVenteComplete(editVenteData.id, { client_id: editVenteData.client_id, client_nom: editVenteData.client_nom, date_vente: editVenteData.date_vente, observation: editVenteData.observation, type_vente: editVenteData.type_vente, montant_total: newTotal, montant_regle: editVenteData.montant_regle, details: editVenteData.lignes }); notifications.show({ title: 'Succès', message: 'Vente modifiée', color: 'green' });
+
+      // Journalisation modification vente
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'UPDATE',
+        table: 'ventes',
+        idEnregistrement: editVenteData.id,
+        details:
+          `Modification vente : ${editVenteData.code_vente} - ` +
+          `${newTotal.toLocaleString()} FCFA`
+      });
+      setEditModalOpen(false); setEditVenteData(null); await loadVentes();
+    } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setEditLoading(false); }
+  };
+
   const handleAddEditLigne = () => setEditVenteData({ ...editVenteData, lignes: [...(editVenteData?.lignes || []), { designation: '', quantite: 1, prix_unitaire: 0, total: 0 }] });
   const handleEditLigneChange = (i: number, f: string, v: any) => { const nl = [...(editVenteData?.lignes || [])]; nl[i][f] = v; nl[i].total = (nl[i].quantite || 0) * (nl[i].prix_unitaire || 0); setEditVenteData({ ...editVenteData, lignes: nl }); };
   const handleRemoveEditLigne = (i: number) => { const nl = [...(editVenteData?.lignes || [])]; nl.splice(i, 1); setEditVenteData({ ...editVenteData, lignes: nl }); };
@@ -94,64 +160,138 @@ const VentesManager: React.FC = () => {
   const handleAjouterMatiereAuPanier = (matiere: Matiere) => { const ex = panier.findIndex(item => item.produitId === matiere.id && item.type_produit === 'matiere'); if (ex >= 0) { if (panier[ex].quantite + 1 > matiere.stock_actuel) { notifications.show({ title: 'Erreur', message: 'Stock insuffisant', color: 'red' }); return; } const up = [...panier]; up[ex].quantite += 1; up[ex].total = up[ex].prixUnitaire * up[ex].quantite; setPanier(up); notifications.show({ title: 'Mis à jour', message: `${matiere.designation} : ${up[ex].quantite} unité(s)`, color: 'green' }); } else { setPanier([...panier, { id: `${Date.now()}-${Math.random()}`, produitId: matiere.id, designation: matiere.designation, quantite: 1, prixUnitaire: matiere.prix_vente, total: matiere.prix_vente, type_produit: 'matiere' }]); notifications.show({ title: 'Ajouté', message: `${matiere.designation} x1`, color: 'green' }); } };
   const handleSupprimerPanier = (id: string) => setPanier(panier.filter(item => item.id !== id));
   const handleGenererFacture = () => { if (panier.length === 0) { notifications.show({ title: 'Erreur', message: 'Ajoutez des articles à la commande', color: 'red' }); return; } setFactureData({ client: { nom_prenom: clientNom || (clientId ? clients.find(c => c.telephone_id === clientId)?.nom_prenom : 'Client'), telephone_id: clientTelephone || clientId || '' }, lignes: panier.map(item => ({ designation: item.designation, quantite: item.quantite, prix_unitaire: item.prixUnitaire, total: item.total })), total_general: totalPanier, avance: 0, reste: totalPanier, numero: codeVente, date_commande: dateCommande }); setShowFacture(true); };
- const handleSubmitVente = async () => {
-  if (panier.length === 0) {
-    notifications.show({ title: 'Erreur', message: 'Ajoutez des articles au panier', color: 'red' });
-    return;
-  }
-  setLoading(true);
-  try {
-    const db = await getDb();
-    let finalClientId = null;
-    let finalClientNom = 'Client comptoir';
-
-    if (venteType === 'commande') {
-      if (clientId) {
-        // clientId est maintenant l'ID numérique du client (pas le téléphone)
-        finalClientId = parseInt(clientId);
-        const client = clients.find(c => String(c.id) === clientId || c.telephone_id === clientId);
-        finalClientNom = client?.nom_prenom || clientNom || 'Client';
-      } else {
-        finalClientNom = clientNom || 'Client';
-      }
-    } else {
-      finalClientNom = clientNomSimple || 'Client comptoir';
+  const handleSubmitVente = async () => {
+    if (panier.length === 0) {
+      notifications.show({ title: 'Erreur', message: 'Ajoutez des articles au panier', color: 'red' });
+      return;
     }
+    setLoading(true);
+    try {
+      const db = await getDb();
+      let finalClientId = null;
+      let finalClientNom = 'Client comptoir';
 
-    const statut = venteType === 'commande' ? 'EN_ATTENTE' : 'PAYEE';
-    const montantRegle = venteType === 'commande' ? 0 : totalPanier;
+      if (venteType === 'commande') {
+        if (clientId) {
+          // clientId est maintenant l'ID numérique du client (pas le téléphone)
+          finalClientId = parseInt(clientId);
+          const client = clients.find(c => String(c.id) === clientId || c.telephone_id === clientId);
+          finalClientNom = client?.nom_prenom || clientNom || 'Client';
+        } else {
+          finalClientNom = clientNom || 'Client';
+        }
+      } else {
+        finalClientNom = clientNomSimple || 'Client comptoir';
+      }
 
-    const r = await db.execute(
-      `INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom, mode_paiement, montant_total, montant_regle, statut, observation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [codeVente, venteType, dateCommande, finalClientId, finalClientNom, 'Espèces', totalPanier, montantRegle, statut, observation]
-    );
+      const statut = venteType === 'commande' ? 'EN_ATTENTE' : 'PAYEE';
+      const montantRegle = venteType === 'commande' ? 0 : totalPanier;
 
-    const vId = Number(r.lastInsertId);
-    if (!vId || isNaN(vId)) throw new Error("Impossible de récupérer l'ID de la vente");
+      const r = await db.execute(
+        `INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom, mode_paiement, montant_total, montant_regle, statut, observation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
-    for (const item of panier) {
-      await db.execute(
-        `INSERT INTO vente_details (vente_id, article_id, matiere_id, designation, quantite, prix_unitaire, total, taille_libelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [vId, item.type_produit === 'article' && item.produitId > 0 ? item.produitId : null, item.type_produit === 'matiere' ? item.produitId : null, item.designation, item.quantite, item.prixUnitaire, item.total, item.taille || null]
+        [codeVente, venteType, dateCommande, finalClientId, finalClientNom, 'Espèces', totalPanier, montantRegle, statut, observation]
       );
-      if (venteType !== 'commande') {
-        if (item.type_produit === 'article') {
-          await db.execute(`UPDATE articles SET quantite_stock = quantite_stock - ? WHERE id = ?`, [item.quantite, item.produitId]);
-        } else if (item.type_produit === 'matiere') {
-          await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.produitId]);
+      // =========================
+      // RECUPERER ID VENTE
+      // =========================
+      const venteInserted =
+        await db.select<{ id: number }[]>(
+          `
+    SELECT id
+    FROM ventes
+    WHERE code_vente = ?
+    ORDER BY id DESC
+    LIMIT 1
+    `,
+          [codeVente]
+        );
+
+      const venteId =
+        venteInserted[0]?.id;
+
+      // =========================
+      // CREER RENDEZ-VOUS
+      // =========================
+      if (
+        venteType === 'commande' &&
+        venteId &&
+        clientId &&
+        dateRendezVous
+      ) {
+
+        await db.execute(
+          `
+    INSERT INTO rendezvous_commandes (
+
+      vente_id,
+      client_id,
+
+      type_rendezvous,
+
+      date_rendezvous,
+
+      heure_rendezvous,
+
+      statut
+
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    `,
+          [
+            venteId,
+
+            Number(clientId),
+
+            typeRendezVous,
+
+            dateRendezVous,
+
+            heureRendezVous || null,
+
+            'planifie'
+          ]
+        );
+      }
+
+      const vId = Number(r.lastInsertId);
+      if (!vId || isNaN(vId)) throw new Error("Impossible de récupérer l'ID de la vente");
+
+      for (const item of panier) {
+        await db.execute(
+          `INSERT INTO vente_details (vente_id, article_id, matiere_id, designation, quantite, prix_unitaire, total, taille_libelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [vId, item.type_produit === 'article' && item.produitId > 0 ? item.produitId : null, item.type_produit === 'matiere' ? item.produitId : null, item.designation, item.quantite, item.prixUnitaire, item.total, item.taille || null]
+        );
+        if (venteType !== 'commande') {
+          if (item.type_produit === 'article') {
+            await db.execute(`UPDATE articles SET quantite_stock = quantite_stock - ? WHERE id = ?`, [item.quantite, item.produitId]);
+          } else if (item.type_produit === 'matiere') {
+            await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.produitId]);
+          }
         }
       }
-    }
 
-    notifications.show({ title: 'Succès', message: `Vente ${codeVente} enregistrée`, color: 'green' });
-    setVenteIdForRecu(vId);
-    setShowRecu(true);
-  } catch (err: any) {
-    notifications.show({ title: 'Erreur', message: err.message || String(err), color: 'red' });
-  } finally {
-    setLoading(false);
-  }
-};
+      notifications.show({ title: 'Succès', message: `Vente ${codeVente} enregistrée`, color: 'green' });
+      // Journalisation création vente
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'CREATE',
+        table: 'ventes',
+        idEnregistrement: vId,
+        details:
+          `Création vente : ${codeVente} - ` +
+          `${finalClientNom} - ` +
+          `${totalPanier.toLocaleString()} FCFA`
+      });
+
+      setVenteIdForRecu(vId);
+      setShowRecu(true);
+    } catch (err: any) {
+      notifications.show({ title: 'Erreur', message: err.message || String(err), color: 'red' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const submitVenteAvecPaiement = async (_montantRegle: number, _mode: string) => { /* garder l'existant */ };
   const resetForm = () => { setVenteType('commande'); setClientId(null); setClientNom(''); setClientTelephone(''); setClientNomSimple(''); setClientTelephoneSimple(''); setPanier([]); setSelectedArticle(null); setMontantCommande(0); setQuantiteCommande(1); setObservation(''); setProduitCommande(''); setSearchProduitTerm(''); generateCode(); };
@@ -161,16 +301,119 @@ const VentesManager: React.FC = () => {
   const filteredVentes = ventes.filter(v => v.code_vente.toLowerCase().includes(searchTerm.toLowerCase()) || (v.client_nom && v.client_nom.toLowerCase().includes(searchTerm.toLowerCase())));
   const paginatedVentes = filteredVentes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filteredVentes.length / itemsPerPage);
-const clientOptions = clients.map(c => ({
-  value: String(c.id),  // Utilise l'ID numérique maintenant
-  label: `${c.nom_prenom} (${c.profil === 'principal' ? 'Moi' : c.profil || 'Moi'}) - ${c.telephone_id}`,
-}));
-  useEffect(() => { loadVentes(); }, []);
+
+  const handleTerminerRendezVous =
+    async (id: number) => {
+
+      try {
+
+        const db = await getDb();
+
+        await db.execute(
+          `
+        UPDATE rendezvous_commandes
+        SET statut = 'termine'
+        WHERE id = ?
+        `,
+          [id]
+        );
+
+        loadRendezVous();
+
+      } catch (err) {
+
+        console.error(err);
+      }
+    };
+
+  const handleAnnulerRendezVous =
+    async (id: number) => {
+
+      try {
+
+        const db = await getDb();
+
+        await db.execute(
+          `
+        UPDATE rendezvous_commandes
+        SET statut = 'annule'
+        WHERE id = ?
+        `,
+          [id]
+        );
+
+        loadRendezVous();
+
+      } catch (err) {
+
+        console.error(err);
+      }
+    };
+  const [rendezVous, setRendezVous] =
+    useState<any[]>([]);
+
+  const loadRendezVous = async () => {
+
+    try {
+
+      const db = await getDb();
+
+      const rows =
+        await db.select<any[]>(
+          `
+        SELECT
+
+          r.id,
+
+          r.date_rendezvous,
+
+          r.heure_rendezvous,
+
+          r.type_rendezvous,
+
+          r.statut,
+
+          c.nom_prenom,
+
+          v.code_vente
+
+        FROM rendezvous_commandes r
+
+        LEFT JOIN clients c
+          ON c.id = r.client_id
+
+        LEFT JOIN ventes v
+          ON v.id = r.vente_id
+
+        ORDER BY
+          r.date_rendezvous ASC,
+          r.heure_rendezvous ASC
+        `
+        );
+
+      setRendezVous(rows);
+
+    } catch (err) {
+
+      console.error(err);
+    }
+  };
+  const clientOptions = clients.map(c => ({
+    value: String(c.id),  // Utilise l'ID numérique maintenant
+    label: `${c.nom_prenom} (${c.profil === 'principal' ? 'Moi' : c.profil || 'Moi'}) - ${c.telephone_id}`,
+  }));
+  useEffect(() => {
+
+    loadVentes();
+
+    loadRendezVous();
+
+  }, []);
 
   // ========== RENDU ==========
 
   // SOUS-MODALS (en dehors de la condition)
-  if (showFormulaireClient) return <FormulaireClient onBack={() => setShowFormulaireClient(false)} onSuccess={(cid, cnom) => { setShowFormulaireClient(false); (async () => { const db = await getDb(); setClients(await db.select<Client[]>(`SELECT telephone_id, nom_prenom, adresse, email FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); if (cid) { setClientId(cid); setClientNom(cnom || ''); } })(); }} />;
+  if (showFormulaireClient) return <FormulaireClient onBack={() => setShowFormulaireClient(false)} onSuccess={(cid, cnom) => { setShowFormulaireClient(false); (async () => { const db = await getDb(); setClients(await db.select<Client[]>(`SELECT telephone_id, nom_prenom, adresse, email FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); if (cid) { setClientId(String(cid)); setClientNom(cnom || ''); } })(); }} />;
   if (showFacture && factureData) return <ModalFacture vente={factureData} onClose={() => setShowFacture(false)} onConfirmPaiement={(m, mode) => { submitVenteAvecPaiement(m, mode); }} onRefresh={loadVentes} />;
   if (showRecu && venteIdForRecu) return <ModalRecu commande={{ id: venteIdForRecu }} onClose={() => { setShowRecu(false); setVenteIdForRecu(null); backToList(); }} />;
 
@@ -187,8 +430,144 @@ const clientOptions = clients.map(c => ({
         <Card withBorder radius="lg" shadow="sm" p="lg">
           <Group mb="md"><TextInput placeholder="Rechercher par code ou client..." leftSection={<IconSearch size={16} />} value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ flex: 1 }} /><Tooltip label="Actualiser"><ActionIcon variant="light" onClick={loadVentes} size="lg"><IconRefresh size={18} /></ActionIcon></Tooltip></Group>
           <LoadingOverlay visible={loading} />
+
+          <Card
+            withBorder
+            radius="lg"
+            shadow="sm"
+            p="md"
+            mb="md"
+          >
+
+            <Title order={5} mb="sm">
+              📅 Rendez-vous
+            </Title>
+
+            <Table striped highlightOnHover>
+
+              <Table.Thead>
+
+                <Table.Tr>
+
+                  <Table.Th>Date</Table.Th>
+
+                  <Table.Th>Heure</Table.Th>
+
+                  <Table.Th>Client</Table.Th>
+
+                  <Table.Th>Commande</Table.Th>
+
+                  <Table.Th>Type</Table.Th>
+
+                  <Table.Th>Statut</Table.Th>
+
+
+                  <Table.Th>
+                    Actions
+                  </Table.Th>
+
+                </Table.Tr>
+
+              </Table.Thead>
+
+              <Table.Tbody>
+
+                {rendezVous.map((r) => (
+
+                  <Table.Tr key={r.id}>
+
+                    <Table.Td>
+                      {r.date_rendezvous}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {r.heure_rendezvous || '-'}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {r.nom_prenom}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {r.code_vente}
+                    </Table.Td>
+
+                    <Table.Td>
+
+                      <Badge color="blue">
+
+                        {r.type_rendezvous}
+
+                      </Badge>
+
+                    </Table.Td>
+
+                    <Table.Td>
+
+                      <Badge
+                        color={
+                          r.statut === 'planifie'
+                            ? 'orange'
+                            : r.statut === 'termine'
+                              ? 'green'
+                              : 'red'
+                        }
+                      >
+                        {r.statut}
+                      </Badge>
+
+                    </Table.Td>
+
+                    <Table.Td>
+
+                      <Group gap={4}>
+
+                        <Tooltip label="Terminer">
+
+                          <ActionIcon
+                            color="green"
+                            variant="light"
+                            onClick={() =>
+                              handleTerminerRendezVous(r.id)
+                            }
+                          >
+                            <IconCheck size={16} />
+                          </ActionIcon>
+
+                        </Tooltip>
+
+                        <Tooltip label="Annuler">
+
+                          <ActionIcon
+                            color="red"
+                            variant="light"
+                            onClick={() =>
+                              handleAnnulerRendezVous(r.id)
+                            }
+                          >
+                            <IconX size={16} />
+                          </ActionIcon>
+
+                        </Tooltip>
+
+                      </Group>
+
+                    </Table.Td>
+
+                  </Table.Tr>
+
+                ))}
+
+              </Table.Tbody>
+
+            </Table>
+
+          </Card>
+
           <Table striped highlightOnHover>
-            <Table.Thead><Table.Tr><Table.Th>Code</Table.Th><Table.Th>Type</Table.Th><Table.Th>Date</Table.Th><Table.Th>Client</Table.Th><Table.Th>Total</Table.Th><Table.Th>Réglé</Table.Th><Table.Th>Reste</Table.Th><Table.Th>Statut</Table.Th><Table.Th style={{ textAlign: 'center' }}>Actions</Table.Th></Table.Tr></Table.Thead>
+            <Table.Thead><Table.Tr><Table.Th>Code</Table.Th><Table.Th>Type</Table.Th><Table.Th>Date</Table.Th><Table.Th>Client</Table.Th><Table.Th>Total</Table.Th><Table.Th>Réglé</Table.Th><Table.Th>Reste</Table.Th><Table.Th>Statut</Table.Th><Table.Th>
+              Actions
+            </Table.Th><Table.Th style={{ textAlign: 'center' }}>Actions</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>
               {paginatedVentes.length === 0 ? <Table.Tr><Table.Td colSpan={10} style={{ textAlign: 'center' }}>Aucune vente trouvée</Table.Td></Table.Tr> :
                 paginatedVentes.map((vente) => {
@@ -298,6 +677,74 @@ const clientOptions = clients.map(c => ({
       <Card withBorder radius="lg" shadow="sm" p="md"><Group justify="space-between" mb="sm"><Title order={5}>👤 Client</Title><SegmentedControl value={venteType} onChange={(val) => { setVenteType(val as VenteType); setPanier([]); }} data={[{ value: 'commande', label: 'Sur mesure' }, { value: 'pret_a_porter', label: 'Prêt-à-porter' }, { value: 'matiere', label: 'Matière' }]} size="xs" color="#1b365d" /></Group><Divider mb="sm" />{venteType === 'commande' ? <Stack gap="xs"><Select label="Sélectionnez le client" placeholder="Rechercher..." data={clientOptions} value={clientId} onChange={setClientId} searchable clearable size="sm" radius="md" leftSection={<IconUser size={16} />} /><SimpleGrid cols={2} spacing="xs"><TextInput label="Nom complet" value={clientNom} onChange={(e) => setClientNom(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} size="sm" radius="md" /></SimpleGrid><Button variant="subtle" size="compact-xs" leftSection={<IconPlus size={12} />} onClick={() => setShowFormulaireClient(true)}>Nouveau client</Button></Stack> : <SimpleGrid cols={2} spacing="xs"><TextInput label="Nom client (optionnel)" value={clientNomSimple} onChange={(e) => setClientNomSimple(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone (optionnel)" value={clientTelephoneSimple} onChange={(e) => setClientTelephoneSimple(e.target.value)} size="sm" radius="md" /></SimpleGrid>}</Card>
       {(venteType === 'pret_a_porter' || venteType === 'matiere') && <Card withBorder radius="lg" shadow="sm" p="md"><Group justify="space-between" mb="sm"><Title order={5}>📦 {venteType === 'pret_a_porter' ? 'Articles disponibles' : 'Matières disponibles'}</Title><Group gap="xs"><TextInput placeholder="Rechercher..." leftSection={<IconSearch size={14} />} value={searchProduitTerm} onChange={(e) => setSearchProduitTerm(e.target.value)} size="xs" radius="md" style={{ width: 200 }} /><Tooltip label="Actualiser"><ActionIcon variant="light" onClick={loadFormData} size="sm" radius="md"><IconRefresh size={14} /></ActionIcon></Tooltip></Group></Group><ScrollArea h={350} offsetScrollbars><Table striped highlightOnHover style={{ fontSize: 12 }}><Table.Thead style={{ backgroundColor: '#1b365d', position: 'sticky', top: 0, zIndex: 1 }}><Table.Tr><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px' }}>Désignation</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50, textAlign: 'center' }}>Taille</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 80 }}>Couleur</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 80, textAlign: 'right' }}>Prix vente</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50, textAlign: 'center' }}>Stock</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50 }}></Table.Th></Table.Tr></Table.Thead><Table.Tbody>{venteType === 'pret_a_porter' ? articles.filter(a => a.modele.toLowerCase().includes(searchProduitTerm.toLowerCase()) || a.couleur.toLowerCase().includes(searchProduitTerm.toLowerCase()) || a.taille.toLowerCase().includes(searchProduitTerm.toLowerCase())).map(article => { const mm = modeles?.find(m => m.designation === article.modele); const cc = couleurs?.find(c => c.nom_couleur === article.couleur); const tt = tailles?.find(t => t.libelle === article.taille); return (<Table.Tr key={article.id}><Table.Td style={{ padding: '4px 8px' }}><Text size="xs" fw={600}>{article.modele}</Text>{mm && <Text size="10px" c="dimmed">{mm.categorie}</Text>}</Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" variant="light" color="blue">{tt?.code_taille || article.taille}</Badge></Table.Td><Table.Td style={{ padding: '4px 8px' }}><Group gap={6} wrap="nowrap"><Box w={12} h={12} style={{ backgroundColor: cc?.code_hex || '#ccc', borderRadius: '50%', border: '1px solid rgba(0,0,0,0.2)' }} /><Text size="xs">{article.couleur}</Text></Group></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" fw={600} c="green">{article.prix_vente.toLocaleString()} FCFA</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" color={article.quantite_stock < 5 ? 'orange' : 'green'}>{article.quantite_stock}</Badge></Table.Td><Table.Td style={{ padding: '4px 8px' }}><ActionIcon variant="light" color="blue" size="sm" onClick={() => { setSelectedArticle(article); setQuantiteCmd(1); setShowQuantiteModal(true); }}><IconPlus size={14} /></ActionIcon></Table.Td></Table.Tr>); }) : matieres.filter(m => m.designation.toLowerCase().includes(searchProduitTerm.toLowerCase())).map(matiere => (<Table.Tr key={matiere.id}><Table.Td colSpan={3} style={{ padding: '4px 8px' }}><Text size="xs" fw={600}>{matiere.designation}</Text><Text size="10px" c="dimmed">{matiere.code_matiere} - {matiere.unite}</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" c="dimmed">-</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" color={matiere.stock_actuel < 5 ? 'orange' : 'green'}>{matiere.stock_actuel}</Badge></Table.Td><Table.Td style={{ padding: '4px 8px' }}><ActionIcon variant="light" color="blue" size="sm" onClick={() => handleAjouterMatiereAuPanier(matiere)}><IconPlus size={14} /></ActionIcon></Table.Td></Table.Tr>))}</Table.Tbody></Table></ScrollArea></Card>}
       {venteType === 'commande' && <Card withBorder radius="lg" shadow="sm" p="md"><Title order={5} mb="sm">📝 Ajouter un article à la commande</Title><Group align="flex-end" gap="xs" mb="sm"><TextInput placeholder="Désignation" value={produitCommande} onChange={(e) => setProduitCommande(e.target.value)} size="sm" radius="md" style={{ flex: 2 }} /><NumberInput placeholder="Qté" value={quantiteCommande} onChange={(val) => setQuantiteCommande(Number(val) || 1)} min={1} size="sm" radius="md" style={{ width: 70 }} /><NumberInput placeholder="Prix unitaire" value={montantCommande} onChange={(val) => setMontantCommande(Number(val) || 0)} min={0} step={500} size="sm" radius="md" style={{ width: 130 }} rightSection={<Text size="xs">FCFA</Text>} /><ActionIcon variant="filled" color="#1b365d" size="lg" radius="md" onClick={() => { if (!produitCommande || montantCommande <= 0) { notifications.show({ title: 'Erreur', message: 'Désignation et prix requis', color: 'red' }); return; } setPanier([...panier, { id: `${Date.now()}`, produitId: 0, designation: produitCommande, quantite: quantiteCommande, prixUnitaire: montantCommande, total: quantiteCommande * montantCommande, type_produit: 'article' }]); setProduitCommande(''); setMontantCommande(0); setQuantiteCommande(1); }}><IconPlus size={18} /></ActionIcon></Group></Card>}
+      <Card
+        withBorder
+        radius="lg"
+        shadow="sm"
+        p="md"
+      >
+
+        <Title order={5} mb="sm">
+          📅 Rendez-vous
+        </Title>
+
+        <SimpleGrid
+          cols={{ base: 1, sm: 3 }}
+          spacing="md"
+        >
+
+          <TextInput
+            label="Date"
+            type="date"
+            value={dateRendezVous}
+            onChange={(e) =>
+              setDateRendezVous(
+                e.target.value
+              )
+            }
+            radius="md"
+          />
+
+          <TextInput
+            label="Heure"
+            type="time"
+            value={heureRendezVous}
+            onChange={(e) =>
+              setHeureRendezVous(
+                e.target.value
+              )
+            }
+            radius="md"
+          />
+
+          <Select
+            label="Type"
+            value={typeRendezVous}
+            onChange={(v) =>
+              setTypeRendezVous(
+                v || 'essayage'
+              )
+            }
+            data={[
+              {
+                value: 'essayage',
+                label: 'Essayage'
+              },
+              {
+                value: 'livraison',
+                label: 'Livraison'
+              },
+              {
+                value: 'retrait',
+                label: 'Retrait'
+              }
+            ]}
+            radius="md"
+          />
+
+        </SimpleGrid>
+
+      </Card>
       {panier.length > 0 && <Card withBorder radius="lg" shadow="sm" p="md"><Title order={5} mb="sm">🛒 Produits sélectionnés ({panier.length})</Title><ScrollArea h={250} offsetScrollbars><Table striped highlightOnHover style={{ fontSize: 12 }}><Table.Thead style={{ backgroundColor: '#1b365d', position: 'sticky', top: 0, zIndex: 1 }}><Table.Tr><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px' }}>Désignation</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 90, textAlign: 'right' }}>Prix unitaire</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50, textAlign: 'center' }}>Qté</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 100, textAlign: 'right' }}>Total</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 40 }}></Table.Th></Table.Tr></Table.Thead><Table.Tbody>{panier.map((item, idx) => (<Table.Tr key={`${item.id}-${idx}`}><Table.Td style={{ padding: '4px 8px' }}><Text size="xs" fw={500}>{item.designation}</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs">{item.prixUnitaire.toLocaleString()} FCFA</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Text size="xs" fw={600}>{item.quantite}</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" fw={600} c="green">{item.total.toLocaleString()} FCFA</Text></Table.Td><Table.Td style={{ padding: '4px 8px' }}><ActionIcon color="red" size="xs" variant="subtle" onClick={() => handleSupprimerPanier(item.id)}><IconTrash size={12} /></ActionIcon></Table.Td></Table.Tr>))}</Table.Tbody></Table></ScrollArea></Card>}
       <Card withBorder radius="lg" shadow="sm" p="md"><SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md" mb="md"><Box><Text size="xs" c="dimmed">Nb d'articles</Text><Text fw={700} size="lg">{panier.length}</Text></Box><Box><Text size="xs" c="dimmed">Nb de pièces</Text><Text fw={700} size="lg">{panier.reduce((sum, item) => sum + item.quantite, 0)}</Text></Box><Box><Text size="xs" c="dimmed">Montant Total</Text><Text fw={700} size="lg" c="blue">{totalPanier.toLocaleString()} FCFA</Text></Box><Box><Text size="xs" c="dimmed">Date</Text><TextInput type="date" value={dateCommande} onChange={(e) => setDateCommande(e.target.value)} size="xs" radius="md" /></Box></SimpleGrid><Divider mb="md" /><Textarea label="Observation" placeholder="Notes..." value={observation} onChange={(e) => setObservation(e.target.value)} rows={2} size="sm" radius="md" mb="md" />{venteType === 'commande' ? <Stack gap="sm"><Button onClick={handleGenererFacture} size="md" radius="md" variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }} leftSection={<IconFileInvoice size={18} />} fullWidth disabled={panier.length === 0}>Générer la facture</Button><Button onClick={handleSubmitVente} loading={loading} size="md" radius="md" variant="gradient" gradient={{ from: 'green', to: 'teal' }} leftSection={<IconReceipt size={18} />} fullWidth disabled={panier.length === 0}>Enregistrer la commande</Button></Stack> : <Button onClick={handleSubmitVente} loading={loading} size="md" radius="md" variant="gradient" gradient={{ from: 'green', to: 'teal' }} leftSection={<IconReceipt size={18} />} fullWidth disabled={panier.length === 0}>Finaliser la vente</Button>}</Card>
       <Modal opened={showQuantiteModal} onClose={() => { setShowQuantiteModal(false); setSelectedArticle(null); setQuantiteCmd(1); }} title="Quantité" size="sm" centered radius="md"><Stack gap="md">{selectedArticle && <Paper p="sm" withBorder radius="md" bg="gray.0"><Text size="sm" fw={600}>{selectedArticle.modele} - {selectedArticle.taille} - {selectedArticle.couleur}</Text><Group justify="space-between" mt={4}><Text size="xs" c="dimmed">Stock : {selectedArticle.quantite_stock}</Text><Text size="xs" c="dimmed">Prix : {selectedArticle.prix_vente.toLocaleString()} FCFA</Text></Group></Paper>}<NumberInput label="Quantité à ajouter" value={quantiteCmd} onChange={(val) => setQuantiteCmd(typeof val === 'number' ? Math.max(1, val) : 1)} min={1} max={selectedArticle?.quantite_stock || 1} size="sm" radius="md" autoFocus /><Group justify="flex-end" gap="xs"><Button variant="subtle" size="xs" onClick={() => { setShowQuantiteModal(false); setSelectedArticle(null); }}>Annuler</Button><Button size="xs" onClick={() => { setShowQuantiteModal(false); handleAjouterAuPanier(); }}>Ajouter au panier</Button></Group></Stack></Modal>

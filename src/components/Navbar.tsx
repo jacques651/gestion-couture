@@ -1,5 +1,5 @@
-// src/components/Navbar.tsx
 import React, { useState } from 'react';
+
 import {
   Stack,
   Text,
@@ -46,6 +46,7 @@ import {
   IconHistory,
 } from '@tabler/icons-react';
 import { Role } from '../types/auth';
+import { journaliserAction } from '../services/journal';
 
 // Types
 export interface NavItemProps {
@@ -382,6 +383,14 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
             />
 
+            <NavItem
+              label="Rendez-vous"
+              path="/rendezvous"
+              icon={<IconShoppingBag size={18} color="white" stroke={1.5} />}
+              roles={allUsers}
+              userRole={userRole}
+            />
+
           </NavSection>
 
           {/* ================= SECTION FINANCES ================= */}
@@ -535,22 +544,20 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
         <Divider color={theme.colors.adminBlue?.[6]} mb="md" />
         {onLogout && (
           <Box
-            onClick={onLogout}
-            style={{
-              cursor: 'pointer',
-              padding: '8px 12px',
-              borderRadius: theme.radius.md,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              transition: 'all 0.2s ease',
-              marginBottom: '10px',
-            }}
-            onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
-              e.currentTarget.style.backgroundColor = theme.colors.adminBlue?.[6] || '#3a6a8a';
-            }}
-            onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
+            onClick={async () => {
+
+              await journaliserAction({
+                utilisateur: userName || 'Utilisateur',
+                action: 'LOGOUT',
+                table: 'auth',
+                idEnregistrement: userRole || 'unknown',
+                details:
+                  `Déconnexion utilisateur : ` +
+                  `${userName || 'Inconnu'}`
+              });
+
+              onLogout();
+
             }}
           >
             <IconLogout size={18} stroke={1.5} />

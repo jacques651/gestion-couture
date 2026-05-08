@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+
 import {
   Stack,
   Card,
@@ -132,7 +133,8 @@ const ListePaiements: React.FC = () => {
   useEffect(() => { chargerPaiements(); }, []);
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Supprimer ce paiement ?')) return;
+    if (!
+globalThis.confirm('Supprimer ce paiement ?')) return;
     setError('');
     const db = await getDb();
     try {

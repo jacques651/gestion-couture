@@ -54,10 +54,12 @@ const Header: React.FC<HeaderProps> = ({
   const handleReset = async () => {
     if (isResetting) return;
 
-    const confirm1 = window.confirm("⚠️ Supprimer TOUTES les données ?");
+    const confirm1 = 
+globalThis.confirm("⚠️ Supprimer TOUTES les données ?");
     if (!confirm1) return;
 
-    const confirm2 = window.confirm("Cette action est irréversible. Confirmer ?");
+    const confirm2 = 
+globalThis.confirm("Cette action est irréversible. Confirmer ?");
     if (!confirm2) return;
 
     try {
@@ -66,7 +68,7 @@ const Header: React.FC<HeaderProps> = ({
       await resetAllData();
 
       alert("Base réinitialisée avec succès !");
-      window.location.reload();
+      location.reload();
 
     } catch (error) {
       console.error(error);

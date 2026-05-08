@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+
 import {
   Stack,
   Card,
@@ -40,6 +41,7 @@ import {
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
 import FormulaireTypeMesure from './FormulaireTypeMesure';
+import { journaliserAction } from '../../services/journal';
 
 interface TypeMesure {
   id: number;
@@ -76,9 +78,21 @@ const ConfigurationMesures: React.FC = () => {
   }, []);
 
   const supprimerType = async (id: number, nom: string) => {
-    if (!window.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
+    if (!
+globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
     const db = await getDb();
     await db.execute("UPDATE types_mesures SET est_active = 0 WHERE id = ?", [id]);
+
+    // Journalisation suppression
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'DELETE',
+      table: 'types_mesures',
+      idEnregistrement: id,
+      details:
+        `Suppression type mesure : ${nom}`
+    });
+
     await chargerTypes();
     setSuccessMessage(`Type "${nom}" supprimé avec succès`);
     setShowSuccess(true);
@@ -98,16 +112,39 @@ const ConfigurationMesures: React.FC = () => {
       "UPDATE types_mesures SET ordre_affichage = ? WHERE id = ?",
       [nouvelOrdre, id]
     );
+
+    // Journalisation ordre
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'types_mesures',
+      idEnregistrement: id,
+      details:
+        `Modification ordre affichage : ${direction}`
+    });
+
     await chargerTypes();
     setSuccessMessage(`Ordre mis à jour avec succès`);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
+
     setRecherche('');
-    chargerTypes();
+
+    await chargerTypes();
+
     setCurrentPage(1);
+
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'types_mesures',
+      idEnregistrement: 'REFRESH',
+      details:
+        'Actualisation liste types mesures'
+    });
   };
 
   const typesFiltres = types.filter(t =>

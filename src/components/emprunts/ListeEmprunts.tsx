@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -135,6 +136,21 @@ const ListeEmprunts: React.FC = () => {
        VALUES (?, ?, DATE('now'))`,
       [form.employe_id, form.montant]
     );
+
+    // Journalisation ajout emprunt
+    const employe = employes.find(
+      e => e.id === form.employe_id
+    );
+
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'CREATE',
+      table: 'emprunts',
+      idEnregistrement: form.employe_id,
+      details:
+        `Ajout emprunt : ${employe?.nom_prenom} - ` +
+        `${form.montant.toLocaleString()} FCFA`
+    });
     setIsModalOpen(false);
     setForm({ employe_id: 0, montant: 0 });
     await fetchEmprunts();
@@ -156,6 +172,21 @@ const ListeEmprunts: React.FC = () => {
        WHERE id = ? AND deduit = 0`,
       [form.employe_id, form.montant, editingEmprunt.id]
     );
+
+    // Journalisation modification emprunt
+    const employe = employes.find(
+      e => e.id === form.employe_id
+    );
+
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'emprunts',
+      idEnregistrement: editingEmprunt.id,
+      details:
+        `Modification emprunt : ${employe?.nom_prenom} - ` +
+        `${form.montant.toLocaleString()} FCFA`
+    });
     setIsEditModalOpen(false);
     setEditingEmprunt(null);
     setForm({ employe_id: 0, montant: 0 });
@@ -169,6 +200,15 @@ const ListeEmprunts: React.FC = () => {
     if (!deleteId) return;
     const db = await getDb();
     await db.execute(`DELETE FROM emprunts WHERE id = ? AND deduit = 0`, [deleteId]);
+
+    // Journalisation suppression emprunt
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'DELETE',
+      table: 'emprunts',
+      idEnregistrement: deleteId,
+      details: `Suppression emprunt ID : ${deleteId}`
+    });
     setDeleteId(null);
     await fetchEmprunts();
     setSuccessMessage(`Emprunt supprimé avec succès`);
@@ -198,13 +238,23 @@ const ListeEmprunts: React.FC = () => {
   };
 
   const handleReset = async () => {
-    if (!window.confirm("⚠️ Réinitialiser tous les emprunts déduits ?\nCela annulera les déductions et les liens avec les salaires.")) return;
+    if (!
+      globalThis.confirm("⚠️ Réinitialiser tous les emprunts déduits ?\nCela annulera les déductions et les liens avec les salaires.")) return;
     const db = await getDb();
     await db.execute(`
       UPDATE emprunts 
       SET deduit = 0, salaire_id = NULL, date_deduction = NULL
       WHERE deduit = 1
     `);
+
+    // Journalisation réinitialisation
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'emprunts',
+      idEnregistrement: 'RESET',
+      details: 'Réinitialisation des emprunts déduits'
+    });
     await fetchEmprunts();
     setRecherche('');
     setFiltre('tous');
@@ -216,7 +266,18 @@ const ListeEmprunts: React.FC = () => {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: 'Liste_Emprunts'
+    documentTitle: 'Liste_Emprunts',
+    onAfterPrint: async () => {
+
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'CREATE',
+        table: 'impression_emprunts',
+        idEnregistrement: 'PRINT',
+        details: 'Impression liste des emprunts'
+      });
+
+    }
   });
 
   const handleExcel = () => {
@@ -232,6 +293,16 @@ const ListeEmprunts: React.FC = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Emprunts');
     XLSX.writeFile(wb, `emprunts_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    // Journalisation export Excel
+    journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'CREATE',
+      table: 'export_excel',
+      idEnregistrement: 'EXCEL',
+      details: 'Export Excel des emprunts'
+    });
+
     setSuccessMessage("Export Excel réussi");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
@@ -246,7 +317,7 @@ const ListeEmprunts: React.FC = () => {
     doc.text('Liste des emprunts', 105, 20, { align: 'center' });
     doc.setFontSize(10);
     doc.text(`Généré le : ${new Date().toLocaleString('fr-FR')}`, 105, 32, { align: 'center' });
-    
+
     autoTable(doc, {
       head: [['Employé', 'Montant (FCFA)', 'Date emprunt', 'Statut', 'Date déduction']],
       body: emprunts.map(e => [
@@ -262,6 +333,16 @@ const ListeEmprunts: React.FC = () => {
       alternateRowStyles: { fillColor: [245, 245, 245] }
     });
     doc.save(`emprunts_${new Date().toISOString().split('T')[0]}.pdf`);
+
+    // Journalisation export PDF
+    journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'CREATE',
+      table: 'export_pdf',
+      idEnregistrement: 'PDF',
+      details: 'Export PDF des emprunts'
+    });
+
     setSuccessMessage("Export PDF réussi");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
@@ -556,7 +637,12 @@ const ListeEmprunts: React.FC = () => {
                                   size="md"
                                   variant="subtle"
                                   color="red"
-                                  onClick={() => openDeleteConfirm(e.id, e.deduit)}
+                                  onClick={() =>
+                                    openDeleteConfirm(
+                                      e.id,
+                                      e.deduit
+                                    )
+                                  }
                                   disabled={e.deduit === 1}
                                 >
                                   <IconTrash size={18} />

@@ -1354,7 +1354,6 @@ const initDatabase = async (db: Database) => {
 )`);
 
   // 10. Clients
-  // Dans initDatabase, modifie la création de la table clients :
   await db.execute(`CREATE TABLE IF NOT EXISTS clients (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   telephone_id TEXT NOT NULL,
@@ -1370,15 +1369,27 @@ const initDatabase = async (db: Database) => {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_clients_telephone ON clients(telephone_id)`);
 
   // 11. Mesures clients
-  // 11. Mesures clients - SANS clé étrangère (car telephone_id n'est plus unique)
+
   await db.execute(`CREATE TABLE IF NOT EXISTS mesures_clients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id TEXT NOT NULL,
+    client_id INTEGER NOT NULL,
     type_mesure_id INTEGER NOT NULL,
     valeur REAL NOT NULL,
     date_mesure DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
     FOREIGN KEY (type_mesure_id) REFERENCES types_mesures(id)
 )`);
+
+  await db.execute(`
+  CREATE INDEX IF NOT EXISTS idx_mesures_client
+  ON mesures_clients(client_id)
+`);
+
+  await db.execute(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_mesure_unique
+  ON mesures_clients(client_id, type_mesure_id)
+`);
 
   // 12. Matières
   await db.execute(`CREATE TABLE IF NOT EXISTS matieres (
@@ -1448,7 +1459,6 @@ const initDatabase = async (db: Database) => {
     WHERE a.est_actif = 1`);
 
   // 15. Ventes
-  // 15. Ventes
   await db.execute(`CREATE TABLE IF NOT EXISTS ventes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code_vente TEXT UNIQUE NOT NULL,
@@ -1480,6 +1490,18 @@ const initDatabase = async (db: Database) => {
     FOREIGN KEY (vente_id) REFERENCES ventes(id) ON DELETE CASCADE,
     FOREIGN KEY (matiere_id) REFERENCES matieres(id),
     FOREIGN KEY (article_id) REFERENCES articles(id)
+  )`);
+
+  await db.execute(`CREATE TABLE IF NOT EXISTS rendezvous_commandes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vente_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    type_rendezvous TEXT NOT NULL,
+    date_rendezvous TEXT NOT NULL,
+    heure_rendezvous TEXT,
+    statut TEXT DEFAULT 'planifie',
+    observation TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   // 17. Employés
@@ -1633,7 +1655,18 @@ const initDatabase = async (db: Database) => {
   await db.execute(`CREATE TABLE IF NOT EXISTS journal_modifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   utilisateur TEXT NOT NULL DEFAULT 'Admin',
-  action TEXT NOT NULL CHECK(action IN ('CREATE', 'UPDATE', 'DELETE')),
+ action TEXT NOT NULL CHECK(
+  action IN (
+    'CREATE',
+    'UPDATE',
+    'DELETE',
+    'LOGIN',
+    'LOGOUT',
+    'IMPORT',
+    'EXPORT',
+    'PRINT'
+  )
+),
   table_concernee TEXT NOT NULL,
   id_enregistrement TEXT,
   details TEXT,
@@ -1792,8 +1825,8 @@ const seedDefaultData = async (db: Database) => {
     }
     console.log("✅ Couleurs par défaut créées");
   }
-
-  // Types de mesures par défaut
+  // Mesures d'exemple pour première utilisation.
+  // Le couturier peut ensuite personnaliser complètement ses mesures.
   const mesuresCount = await db.select<{ count: number }[]>("SELECT COUNT(*) as count FROM types_mesures");
   if (mesuresCount[0].count === 0) {
     const mesures = [

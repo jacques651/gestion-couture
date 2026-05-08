@@ -160,7 +160,8 @@ const GestionPaiements: React.FC<Props> = ({ commandeId, totalCommande, onPaieme
   // DELETE
   // ======================
   const remove = async (id: number) => {
-    if (!confirm("Supprimer ce paiement ?")) return;
+    if (!
+globalThis.confirm("Supprimer ce paiement ?")) return;
 
     const db = await getDb();
 

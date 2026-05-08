@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { journaliserAction } from "../../services/journal";
 import {
   Stack, Card, Title, Text, Group, Button, TextInput, Textarea,
   Divider, Paper, Alert, Modal, Box, SimpleGrid,
@@ -20,17 +21,29 @@ interface TypeMesure {
 }
 
 interface Client {
+  id?: number;
+
   telephone_id: string;
+
   nom_prenom: string;
+
   profil?: string;
+
   adresse?: string;
+
   email?: string;
+
   observations?: string;
 }
 
 interface Props {
   clientEdit?: Client;
-  onSuccess: (clientId?: string, clientNom?: string) => void;
+
+  onSuccess: (
+    clientId?: number,
+    clientNom?: string
+  ) => void;
+
   onBack: () => void;
 }
 
@@ -70,7 +83,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
     setTypesMesures(result);
   };
 
-  const loadMesuresClient = async (clientId: string) => {
+  const loadMesuresClient = async (clientId: number) => {
     const result = await selectSafe<{ type_mesure_id: number; valeur: number }>(
       `SELECT type_mesure_id, valeur FROM mesures_clients WHERE client_id = ?`, [clientId]
     );
@@ -83,7 +96,10 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
   useEffect(() => {
     if (clientEdit) {
       setClient({ ...clientEdit, profil: clientEdit.profil || 'principal' });
-      if (clientEdit.telephone_id) loadMesuresClient(clientEdit.telephone_id);
+      if (clientEdit.id)
+        loadMesuresClient(
+          clientEdit.id!
+        );
     }
   }, [clientEdit]);
 
@@ -103,30 +119,189 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
   };
 
   const saveData = async () => {
-    if (!validateForm()) return;
-    setSaving(true);
-    try {
-      await executeSafe(
-        `INSERT OR REPLACE INTO clients (telephone_id, nom_prenom, profil, adresse, email, observations, date_enregistrement)
-         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
-        [client.telephone_id, client.nom_prenom, client.profil || 'principal', client.adresse || null, client.email || null, client.observations || null]
-      );
-      await executeSafe(`DELETE FROM mesures_clients WHERE client_id = ?`, [client.telephone_id]);
-      const types = await selectSafe<{ id: number }>(`SELECT id FROM types_mesures WHERE est_active = 1`);
-      const validIds = new Set(types.map(t => t.id));
-      for (const typeIdStr in mesures) {
-        const typeId = Number(typeIdStr);
-        const valeur = mesures[typeId];
-        if (valeur === undefined || valeur === 0 || valeur === null) continue;
-        if (!validIds.has(typeId)) continue;
-        await executeSafe(`INSERT INTO mesures_clients (client_id, type_mesure_id, valeur, date_mesure) VALUES (?, ?, ?, datetime('now'))`, [client.telephone_id, typeId, valeur]);
-      }
-      setShowSuccess(true);
-      setTimeout(() => { setShowSuccess(false); onSuccess(client.telephone_id, client.nom_prenom); }, 2000);
-    } catch (e) { console.error(e); alert("❌ Erreur lors de l'enregistrement"); }
-    finally { setSaving(false); }
-  };
 
+    if (!validateForm()) return;
+
+    setSaving(true);
+
+    try {
+
+      const isUpdate = !!clientEdit;
+
+      // =========================
+      // CLIENT
+      // =========================
+      await executeSafe(
+        `
+      INSERT OR REPLACE INTO clients (
+        telephone_id,
+        nom_prenom,
+        profil,
+        adresse,
+        email,
+        observations,
+        date_enregistrement
+      )
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      `,
+        [
+          client.telephone_id,
+          client.nom_prenom,
+          client.profil || 'principal',
+          client.adresse || null,
+          client.email || null,
+          client.observations || null
+        ]
+      );
+
+      // =========================
+      // RECUPERER LE VRAI ID
+      // =========================
+      const insertedClient: { id: number }[] =
+        await selectSafe<{ id: number }>(
+          `
+    SELECT id
+    FROM clients
+    WHERE telephone_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+    `,
+          [client.telephone_id]
+        );
+
+      const realClientId: number | undefined =
+        insertedClient[0]?.id;
+
+      if (!realClientId) {
+
+        throw new Error(
+          "Impossible de récupérer l'ID client"
+        );
+      }
+
+      // =========================
+      // SUPPRIMER ANCIENNES MESURES
+      // =========================
+      await executeSafe(
+        `
+      DELETE FROM mesures_clients
+      WHERE client_id = ?
+      `,
+        [realClientId]
+      );
+
+      // =========================
+      // TYPES VALIDES
+      // =========================
+      const types =
+        await selectSafe<{ id: number }>(
+          `
+        SELECT id
+        FROM types_mesures
+        WHERE est_active = 1
+        `
+        );
+
+      const validIds =
+        new Set(types.map(t => t.id));
+
+      // =========================
+      // INSERT MESURES
+      // =========================
+      for (const typeIdStr in mesures) {
+
+        const typeId = Number(typeIdStr);
+
+        const valeur =
+          mesures[typeId];
+
+        if (
+          valeur === undefined ||
+          valeur === null ||
+          valeur === 0
+        ) {
+          continue;
+        }
+
+        if (!validIds.has(typeId)) {
+          continue;
+        }
+
+        await executeSafe(
+          `
+        INSERT INTO mesures_clients (
+          client_id,
+          type_mesure_id,
+          valeur,
+          date_mesure
+        )
+        VALUES (?, ?, ?, datetime('now'))
+        `,
+          [
+            realClientId,
+            typeId,
+            valeur
+          ]
+        );
+      }
+
+      // =========================
+      // JOURNAL CLIENT
+      // =========================
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: isUpdate
+          ? 'UPDATE'
+          : 'CREATE',
+        table: 'clients',
+        idEnregistrement: realClientId,
+        details: isUpdate
+          ? `Modification client : ${client.nom_prenom}`
+          : `Création client : ${client.nom_prenom}`
+      });
+
+      // =========================
+      // JOURNAL MESURES
+      // =========================
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'UPDATE',
+        table: 'mesures_clients',
+        idEnregistrement: realClientId,
+        details:
+          `Mise à jour des mesures : ${client.nom_prenom}`
+      });
+
+      // =========================
+      // SUCCES
+      // =========================
+      setShowSuccess(true);
+
+      setTimeout(() => {
+
+        setShowSuccess(false);
+
+        onSuccess(
+          realClientId,
+          client.nom_prenom
+        );
+
+      }, 2000);
+
+    } catch (e) {
+
+      console.error(e);
+
+      globalThis.alert(
+        "❌ Erreur lors de l'enregistrement"
+      );
+
+    } finally {
+
+      setSaving(false);
+
+    }
+  };
 
   return (
     <Container size="lg" p={0}>
