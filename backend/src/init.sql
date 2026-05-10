@@ -25,3 +25,15 @@ CREATE TABLE IF NOT EXISTS mesures_clients (
   valeur NUMERIC(10,2),
   date_mesure TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS modeles_tenues (
+    id SERIAL PRIMARY KEY,
+    code_modele VARCHAR(50) UNIQUE NOT NULL,
+    designation TEXT NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    categorie VARCHAR(30) NOT NULL,
+    est_actif INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

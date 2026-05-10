@@ -1,6 +1,14 @@
 // components/referentiels/ModelesTenuesManager.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getModelesTenues, ModeleTenue, getDb } from '../../database/db';
+import { ModeleTenue }
+  from '../../database/db';
+
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 import {
   Box, Container, Stack, Card, Title, Text, Button, Group, Modal,
   TextInput, LoadingOverlay, Alert, Badge, ActionIcon, Tooltip,
@@ -65,7 +73,8 @@ const ModelesTenuesManager: React.FC = () => {
   const loadModeles = async () => {
     try {
       setLoading(true); setError(null);
-      const data = await getModelesTenues(true, filterCategorie || undefined);
+      const data = await apiGet("/modeles");
+
       setModeles(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -143,43 +152,110 @@ const ModelesTenuesManager: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSave = async () => {
-    try {
-      setSaving(true); setError(null);
-      if (!formData.designation.trim()) throw new Error('La désignation est requise');
-      if (!formData.categorie) throw new Error('La catégorie est requise');
+const handleSave = async () => {
 
-      const db = await getDb();
-      if (editingModele) {
-        await db.execute(
-          `UPDATE modeles_tenues SET designation = ?, description = ?, image_url = ?, categorie = ?, est_actif = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [formData.designation, formData.description, formData.image_url, formData.categorie, formData.est_actif, editingModele.id]
+  try {
+
+    setSaving(true);
+
+    setError(null);
+
+    if (!formData.designation.trim()) {
+      throw new Error(
+        'La désignation est requise'
+      );
+    }
+
+    if (!formData.categorie) {
+      throw new Error(
+        'La catégorie est requise'
+      );
+    }
+
+    if (editingModele) {
+
+      await apiPut(
+        `/modeles/${editingModele.id}`,
+        {
+          designation: formData.designation,
+          description: formData.description,
+          image_url: formData.image_url,
+          categorie: formData.categorie,
+          est_actif: formData.est_actif
+        }
+      );
+
+    } else {
+
+      const code =
+        formData.code_modele ||
+        generateCodeModele(
+          formData.categorie,
+          modeles.map(
+            m => m.code_modele
+          )
         );
-      } else {
-        const code = formData.code_modele || generateCodeModele(formData.categorie, modeles.map(m => m.code_modele));
-        await db.execute(
-          `INSERT INTO modeles_tenues (code_modele, designation, description, image_url, categorie, est_actif) VALUES (?, ?, ?, ?, ?, ?)`,
-          [code, formData.designation, formData.description, formData.image_url, formData.categorie, formData.est_actif]
-        );
-      }
-      closeModal(); resetForm(); await loadModeles();
-    } catch (err: any) {
-      setError(err.message || "Erreur lors de l'enregistrement");
-    } finally { setSaving(false); }
-  };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    try {
-      setSaving(true); setError(null);
-      const db = await getDb();
-      await db.execute(`UPDATE modeles_tenues SET est_actif = 0 WHERE id = ?`, [deleteId]);
-      closeDeleteModalHandler(); await loadModeles();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la suppression');
-    } finally { setSaving(false); }
-  };
+      await apiPost(
+        "/modeles",
+        {
+          code_modele: code,
+          designation: formData.designation,
+          description: formData.description,
+          image_url: formData.image_url,
+          categorie: formData.categorie,
+          est_actif: formData.est_actif
+        }
+      );
+    }
 
+    closeModal();
+
+    resetForm();
+
+    await loadModeles();
+
+  } catch (err: any) {
+
+    setError(
+      err.message ||
+      "Erreur lors de l'enregistrement"
+    );
+
+  } finally {
+
+    setSaving(false);
+  }
+};
+const handleDelete = async () => {
+
+  if (!deleteId) return;
+
+  try {
+
+    setSaving(true);
+
+    setError(null);
+
+    await apiDelete(
+      `/modeles/${deleteId}`
+    );
+
+    closeDeleteModalHandler();
+
+    await loadModeles();
+
+  } catch (err: any) {
+
+    setError(
+      err.message || 'Erreur lors de la suppression'
+    );
+
+  } finally {
+
+    setSaving(false);
+  }
+};
   if (loading && modeles.length === 0) {
     return (
       <Center style={{ height: '50vh' }}>

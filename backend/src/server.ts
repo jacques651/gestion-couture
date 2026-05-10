@@ -6,6 +6,7 @@ import path from "path";
 
 import { pool } from "./db";
 import clientsRoutes from "./routes/clients";
+import modelesRoutes from "./routes/modeles";
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/clients", clientsRoutes);
+app.use("/modeles", modelesRoutes);
 
 async function initDatabase() {
   try {
