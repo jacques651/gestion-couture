@@ -150,5 +150,90 @@ router.put("/:telephone_id", async (req, res) => {
     });
   }
 });
+/**
+ * GET TYPES MESURES
+ */
+router.get("/types/mesures", async (_, res) => {
+
+  try {
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        nom,
+        unite
+      FROM types_mesures
+      WHERE est_active = 1
+      ORDER BY ordre_affichage, nom
+      `
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Erreur récupération types mesures"
+    });
+  }
+});
+
+
+/**
+ * GET MESURES CLIENT
+ */
+router.get("/:telephone_id/mesures", async (req, res) => {
+
+  try {
+
+    const { telephone_id } = req.params;
+
+    const clientResult = await pool.query(
+      `
+      SELECT id
+      FROM clients
+      WHERE telephone_id = $1
+      `,
+      [telephone_id]
+    );
+
+    if (clientResult.rows.length === 0) {
+      return res.json([]);
+    }
+
+    const clientId = clientResult.rows[0].id;
+
+    const result = await pool.query(
+      `
+      SELECT
+        mc.type_mesure_id,
+        mc.valeur,
+        tm.nom,
+        tm.unite
+      FROM mesures_clients mc
+      JOIN types_mesures tm
+        ON tm.id = mc.type_mesure_id
+      WHERE mc.client_id = $1
+      ORDER BY tm.ordre_affichage
+      `,
+      [clientId]
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Erreur récupération mesures"
+    });
+  }
+});
+
+
 
 export default router;

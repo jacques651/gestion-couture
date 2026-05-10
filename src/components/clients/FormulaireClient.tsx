@@ -11,8 +11,8 @@ import {
   IconDeviceFloppy, IconRefresh,
 } from '@tabler/icons-react';
 import FormulaireTypeMesure from "../parametres/FormulaireTypeMesure";
-import { selectSafe } from "../../database/db";
-import { apiPost, apiPut } from '../../services/api';
+import { apiGet, apiPost, apiPut } from '../../services/api';
+
 
 // ================= TYPES =================
 interface TypeMesure {
@@ -78,16 +78,15 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
   };
 
   const loadTypes = async () => {
-    const result = await selectSafe<TypeMesure>(
-      `SELECT id, nom, unite FROM types_mesures WHERE est_active = 1 ORDER BY ordre_affichage, nom`
-    );
+    const result = await apiGet("/clients/types/mesures");
     setTypesMesures(result);
   };
 
   const loadMesuresClient = async (clientId: number) => {
-    const result = await selectSafe<{ type_mesure_id: number; valeur: number }>(
-      `SELECT type_mesure_id, valeur FROM mesures_clients WHERE client_id = ?`, [clientId]
-    );
+    const result: {
+  type_mesure_id: number;
+  valeur: number;
+}[] = [];
     const formatted: Record<number, number | undefined> = {};
     result.forEach((m) => { formatted[m.type_mesure_id] = m.valeur; });
     setMesures(formatted);

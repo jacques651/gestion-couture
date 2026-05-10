@@ -9,3 +9,19 @@ CREATE TABLE IF NOT EXISTS clients (
     observations TEXT,
     est_supprime INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS types_mesures (
+  id SERIAL PRIMARY KEY,
+  nom TEXT NOT NULL,
+  unite TEXT,
+  ordre_affichage INTEGER DEFAULT 0,
+  est_active INTEGER DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS mesures_clients (
+  id SERIAL PRIMARY KEY,
+  client_id INTEGER REFERENCES clients(id),
+  type_mesure_id INTEGER REFERENCES types_mesures(id),
+  valeur NUMERIC(10,2),
+  date_mesure TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
