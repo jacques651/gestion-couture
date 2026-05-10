@@ -36,3 +36,20 @@ export async function apiDelete(endpoint: string) {
 
   return response.json();
 }
+
+export async function apiPut(endpoint: string, data: any) {
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error("Erreur API");
+  }
+
+  return response.json();
+}

@@ -100,4 +100,55 @@ router.delete("/:telephone_id", async (req, res) => {
   }
 });
 
+/**
+ * UPDATE CLIENT
+ */
+router.put("/:telephone_id", async (req, res) => {
+
+  try {
+
+    const { telephone_id } = req.params;
+
+    const {
+      nom_prenom,
+      profil,
+      adresse,
+      email,
+      observations
+    } = req.body;
+
+    const result = await pool.query(
+      `
+      UPDATE clients
+      SET
+        nom_prenom = $1,
+        profil = $2,
+        adresse = $3,
+        email = $4,
+        observations = $5
+      WHERE telephone_id = $6
+      RETURNING *
+      `,
+      [
+        nom_prenom,
+        profil,
+        adresse,
+        email,
+        observations,
+        telephone_id
+      ]
+    );
+
+    res.json(result.rows[0]);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Erreur modification client"
+    });
+  }
+});
+
 export default router;

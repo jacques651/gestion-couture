@@ -12,7 +12,7 @@ import {
 } from '@tabler/icons-react';
 import FormulaireTypeMesure from "../parametres/FormulaireTypeMesure";
 import { selectSafe } from "../../database/db";
-import { apiPost } from '../../services/api';
+import { apiPost, apiPut } from '../../services/api';
 
 // ================= TYPES =================
 interface TypeMesure {
@@ -132,14 +132,28 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
       // =========================
       // CLIENT
       // =========================
-      await apiPost("/clients", {
-        telephone_id: client.telephone_id,
-        nom_prenom: client.nom_prenom,
-        profil: client.profil || "principal",
-        adresse: client.adresse || null,
-        email: client.email || null,
-        observations: client.observations || null
-      });
+      if (isUpdate) {
+
+        await apiPut(`/clients/${client.telephone_id}`, {
+          nom_prenom: client.nom_prenom,
+          profil: client.profil || "principal",
+          adresse: client.adresse || null,
+          email: client.email || null,
+          observations: client.observations || null
+        });
+
+      } else {
+
+        await apiPost("/clients", {
+          telephone_id: client.telephone_id,
+          nom_prenom: client.nom_prenom,
+          profil: client.profil || "principal",
+          adresse: client.adresse || null,
+          email: client.email || null,
+          observations: client.observations || null
+        });
+
+      }
 
       // =========================
       // RECUPERER LE VRAI ID
@@ -314,7 +328,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
                 <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                   <TextInput
                     label="Téléphone" placeholder="75 11 81 61"
-                    value={client.telephone_id}
+                    value={client.telephone_id || ""}
                     onChange={(e) => handleClientChange('telephone_id', e.target.value)}
                     leftSection={<IconPhone size={16} />}
                     size="sm" required radius="md"
@@ -322,7 +336,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
                   />
                   <TextInput
                     label="Nom complet" placeholder="KORGO Jacques"
-                    value={client.nom_prenom}
+                    value={client.nom_prenom || ""}
                     onChange={(e) => handleClientChange('nom_prenom', e.target.value)}
                     leftSection={<IconUser size={16} />}
                     size="sm" required radius="md"
@@ -347,14 +361,14 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm" mt="sm">
                   <TextInput
                     label="Adresse" placeholder="Adresse complète"
-                    value={client.adresse}
+                    value={client.adresse || ""}
                     onChange={(e) => handleClientChange('adresse', e.target.value)}
                     leftSection={<IconMapPin size={16} />}
                     size="sm" radius="md"
                   />
                   <TextInput
                     label="Email" placeholder="jacques@example.com"
-                    value={client.email}
+                    value={client.email || ""}
                     onChange={(e) => handleClientChange('email', e.target.value)}
                     leftSection={<IconAt size={16} />}
                     size="sm" type="email" radius="md"
@@ -365,7 +379,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
                 {/* Ligne 3 : Observations */}
                 <Textarea
                   label="Observations" placeholder="Notes..."
-                  value={client.observations}
+                  value={client.observations || ""}
                   onChange={(e) => handleClientChange('observations', e.target.value)}
                   size="sm" rows={2} mt="sm" radius="md"
                 />
@@ -456,6 +470,8 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
 };
 
 export default FormulaireClient;
+
+
 
 
 
