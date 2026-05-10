@@ -65,6 +65,10 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
     observations: "",
   });
 
+  const isUpdateMode = Boolean(
+    clientEdit?.telephone_id
+  );
+
   const [mesures, setMesures] = useState<Record<number, number | undefined>>({});
 
   const validateForm = (): boolean => {
@@ -82,13 +86,19 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
     setTypesMesures(result);
   };
 
-  const loadMesuresClient = async (clientId: number) => {
-    const result: {
-  type_mesure_id: number;
-  valeur: number;
-}[] = [];
+  const loadMesuresClient = async () => {
+    if (!clientEdit?.telephone_id) {
+      return;
+    }
+
+    const result = await apiGet(
+      `/clients/${clientEdit.telephone_id}/mesures`
+    );
     const formatted: Record<number, number | undefined> = {};
-    result.forEach((m) => { formatted[m.type_mesure_id] = m.valeur; });
+    result.forEach((m: {
+      type_mesure_id: number;
+      valeur: number;
+    }) => { formatted[m.type_mesure_id] = m.valeur; });
     setMesures(formatted);
   };
 
@@ -98,7 +108,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
       setClient({ ...clientEdit, profil: clientEdit.profil || 'principal' });
       if (clientEdit.id)
         loadMesuresClient(
-          clientEdit.id!
+
         );
     }
   }, [clientEdit]);
@@ -126,14 +136,15 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
 
     try {
 
-      const isUpdate = !!clientEdit;
-
+      const isUpdate = isUpdateMode;
+      console.log("MODE UPDATE =", isUpdate);
+      console.log("CLIENT EDIT =", clientEdit);
       // =========================
       // CLIENT
       // =========================
-      if (isUpdate) {
+      if (clientEdit?.telephone_id) {
 
-        await apiPut(`/clients/${client.telephone_id}`, {
+        await apiPut(`/clients/${clientEdit.telephone_id}`, {
           nom_prenom: client.nom_prenom,
           profil: client.profil || "principal",
           adresse: client.adresse || null,
@@ -240,7 +251,27 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
       //       ]
       //     );
       //   }
+      // =========================
+      // SAUVEGARDE MESURES POSTGRESQL
+      // =========================
 
+      const mesuresPayload = Object.entries(mesures)
+        .filter(([_, valeur]) =>
+          valeur !== undefined &&
+          valeur !== null &&
+          Number(valeur) > 0
+        )
+        .map(([type_mesure_id, valeur]) => ({
+          type_mesure_id: Number(type_mesure_id),
+          valeur: Number(valeur)
+        }));
+
+      await apiPost(
+        `/clients/${client.telephone_id}/mesures`,
+        {
+          mesures: mesuresPayload
+        }
+      );
       // =========================
       // JOURNAL CLIENT
       // =========================
@@ -328,6 +359,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
                   <TextInput
                     label="Téléphone" placeholder="75 11 81 61"
                     value={client.telephone_id || ""}
+                    disabled={isUpdateMode}
                     onChange={(e) => handleClientChange('telephone_id', e.target.value)}
                     leftSection={<IconPhone size={16} />}
                     size="sm" required radius="md"

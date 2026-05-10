@@ -114,14 +114,9 @@ export default function ListeClientsAvecMesures() {
         return clients.map((client: any) => ({
           ...client,
           observations: client.observations || '',
-          mesures: []
+          mesures: client.mesures || []
         }));
 
-        return clients.map((client: any) => ({
-          ...client,
-          observations: client.observations || '',
-          mesures: []
-        }));
       } catch (err) {
         console.error("Erreur dans queryFn:", err);
         throw err;

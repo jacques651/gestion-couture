@@ -9,11 +9,55 @@ const router = Router();
 router.get("/", async (_, res) => {
   try {
     const result = await pool.query(`
-      SELECT *
-      FROM clients
-      WHERE est_supprime = 0
-      ORDER BY nom_prenom
-    `);
+  SELECT
+    c.id,
+    c.telephone_id,
+    c.nom_prenom,
+    c.profil,
+    c.adresse,
+    c.email,
+    c.observations,
+    c.date_enregistrement,
+    c.est_supprime,
+
+    COALESCE(
+      json_agg(
+        CASE
+          WHEN mc.id IS NOT NULL THEN
+            json_build_object(
+              'type_mesure_id', mc.type_mesure_id,
+              'nom', tm.nom,
+              'unite', tm.unite,
+              'valeur', mc.valeur
+            )
+        END
+      ),
+      '[]'
+    ) as mesures
+
+  FROM clients c
+
+  LEFT JOIN mesures_clients mc
+    ON mc.client_id = c.id
+
+  LEFT JOIN types_mesures tm
+    ON tm.id = mc.type_mesure_id
+
+  WHERE c.est_supprime = 0
+
+  GROUP BY
+    c.id,
+    c.telephone_id,
+    c.nom_prenom,
+    c.profil,
+    c.adresse,
+    c.email,
+    c.observations,
+    c.date_enregistrement,
+    c.est_supprime
+
+  ORDER BY c.nom_prenom
+`);
 
     res.json(result.rows);
   } catch (error) {
@@ -234,6 +278,80 @@ router.get("/:telephone_id/mesures", async (req, res) => {
   }
 });
 
+/**
+ * SAVE MESURES CLIENT
+ */
+router.post("/:telephone_id/mesures", async (req, res) => {
+  console.log("MESURES BODY =", req.body);
+  try {
 
+    const { telephone_id } = req.params;
+
+    const { mesures } = req.body;
+
+    const clientResult = await pool.query(
+      `
+      SELECT id
+      FROM clients
+      WHERE telephone_id = $1
+      `,
+      [telephone_id]
+    );
+
+    if (clientResult.rows.length === 0) {
+
+      return res.status(404).json({
+        error: "Client introuvable"
+      });
+    }
+
+    const clientId = clientResult.rows[0].id;
+
+    // =========================
+    // Supprimer anciennes mesures
+    // =========================
+    await pool.query(
+      `
+      DELETE FROM mesures_clients
+      WHERE client_id = $1
+      `,
+      [clientId]
+    );
+
+    // =========================
+    // Réinsertion
+    // =========================
+    for (const mesure of mesures) {
+
+      await pool.query(
+        `
+        INSERT INTO mesures_clients (
+          client_id,
+          type_mesure_id,
+          valeur
+        )
+        VALUES ($1, $2, $3)
+        `,
+        [
+          clientId,
+          mesure.type_mesure_id,
+          mesure.valeur
+        ]
+      );
+    }
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Erreur sauvegarde mesures"
+    });
+  }
+});
 
 export default router;
