@@ -1,6 +1,7 @@
 // src/database/db.ts
 import Database from "@tauri-apps/plugin-sql";
 import bcrypt from "bcryptjs";
+import { apiGet } from "../services/api";
 
 let dbInstance: Database | null = null;
 
@@ -1046,8 +1047,7 @@ export const updateStockMatiere = async (id: number, quantite: number, type: 'ad
 // ================= TABLES PRINCIPALES - CLIENTS =================
 
 export const getClients = async (): Promise<Client[]> => {
-  const db = await getDb();
-  return db.select('SELECT * FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom');
+  return await apiGet("/clients");
 };
 
 export const getClientById = async (telephone_id: string): Promise<Client | null> => {

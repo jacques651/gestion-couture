@@ -43,6 +43,7 @@ import {
   IconShoppingCart,
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
+import { apiGet } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -100,57 +101,26 @@ export default function ListeClientsAvecMesures() {
         const db = await getDb();
         if (!db) throw new Error("Base de données non initialisée");
 
-        const clients = await db.select<Client[]>(
-          `SELECT id, telephone_id, nom_prenom, profil, adresse, email, observations, date_enregistrement
-   FROM clients 
-   WHERE est_supprime = 0 OR est_supprime IS NULL
-   ORDER BY nom_prenom`
-        );
-        console.log("👤 clients =", clients);
+        const clients = await apiGet("/clients");
+
+
+
+
+
+
 
         if (clients.length === 0) return [];
 
-        const ids = clients.map(c => c.id);
-        const placeholders = ids.map(() => '?').join(',');
-        const mesuresRows = await db.select<Array<{ client_id: number; nom: string; valeur: number; unite: string | null }>>(
-          `SELECT mc.client_id, tm.nom, mc.valeur, tm.unite
-           FROM mesures_clients mc
-           JOIN types_mesures tm ON tm.id = mc.type_mesure_id
-           WHERE mc.client_id IN (${placeholders})
-           ORDER BY tm.ordre_affichage, tm.nom`,
-          ids
-        );
-        console.log("📏 mesuresRows =", mesuresRows);
+        return clients.map((client: any) => ({
+  ...client,
+  observations: client.observations || '',
+  mesures: []
+}));
 
-        const mesuresParClient = new Map<number, Mesure[]>();
-
-        mesuresRows.forEach((row: any) => {
-          const clientId = Number(row.client_id);
-
-          if (!mesuresParClient.has(clientId)) {
-            mesuresParClient.set(clientId, []);
-          }
-
-          mesuresParClient.get(clientId)!.push({
-            nom: row.nom,
-            valeur: row.valeur,
-            unite: row.unite
-          });
-        });
-
-        console.log("🧪 Exemple client:", clients[0]);
-        console.log("🧪 Exemple mesures:", mesuresRows[0]);
-
-        console.log(
-          "🔍 Recherche mesures pour client:",
-          clients[0].id,
-          mesuresParClient.get(clients[0].id!)
-        );
-
-        return clients.map(client => ({
+        return clients.map((client: any) => ({
           ...client,
           observations: client.observations || '',
-          mesures: mesuresParClient.get(client.id!) || []
+          mesures: []
         }));
       } catch (err) {
         console.error("Erreur dans queryFn:", err);
@@ -725,3 +695,9 @@ export default function ListeClientsAvecMesures() {
     </Box>
   );
 }
+
+
+
+
+
+
