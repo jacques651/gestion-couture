@@ -43,7 +43,7 @@ import {
   IconShoppingCart,
 } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
-import { apiGet } from '../../services/api';
+import { apiGet, apiDelete } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -112,10 +112,10 @@ export default function ListeClientsAvecMesures() {
         if (clients.length === 0) return [];
 
         return clients.map((client: any) => ({
-  ...client,
-  observations: client.observations || '',
-  mesures: []
-}));
+          ...client,
+          observations: client.observations || '',
+          mesures: []
+        }));
 
         return clients.map((client: any) => ({
           ...client,
@@ -165,48 +165,10 @@ export default function ListeClientsAvecMesures() {
 
   const deleteMutation = useMutation({
 
-    mutationFn: async (id: string) => {
+    mutationFn: async (telephone_id: string) => {
 
-      const db = await getDb();
+      await apiDelete(`/clients/${telephone_id}`);
 
-      if (!db) {
-        throw new Error(
-          "Base de données non disponible"
-        );
-      }
-
-      // =========================
-      // Récupérer le client
-      // =========================
-      const clients =
-        await db.select<Client[]>(
-          `
-        SELECT
-          nom_prenom,
-          telephone_id
-        FROM clients
-        WHERE telephone_id = ?
-        `,
-          [id]
-        );
-
-      const client = clients[0];
-
-      // =========================
-      // Suppression logique
-      // =========================
-      await db.execute(
-        `
-      UPDATE clients
-      SET est_supprime = 1
-      WHERE telephone_id = ?
-      `,
-        [id]
-      );
-
-      // =========================
-      // Journalisation
-      // =========================
       await journaliserAction({
 
         utilisateur: 'Utilisateur',
@@ -215,12 +177,12 @@ export default function ListeClientsAvecMesures() {
 
         table: 'clients',
 
-        idEnregistrement: id,
+        idEnregistrement: telephone_id,
 
         details:
-          `Suppression client : ${client?.nom_prenom || id
-          }`
+          `Suppression client : ${telephone_id}`
       });
+
     },
 
     // =========================
@@ -256,6 +218,7 @@ export default function ListeClientsAvecMesures() {
       );
     }
   });
+
   const viderListeMutation = useMutation({
     mutationFn: async () => {
       const db = await getDb();
@@ -695,6 +658,9 @@ export default function ListeClientsAvecMesures() {
     </Box>
   );
 }
+
+
+
 
 
 

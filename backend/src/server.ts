@@ -53,3 +53,30 @@ app.listen(PORT, async () => {
 
   await initDatabase();
 });
+app.delete("/clients/:telephone_id", async (req, res) => {
+  try {
+    const { telephone_id } = req.params;
+
+    await pool.query(
+      `
+      UPDATE clients
+      SET est_supprime = 1
+      WHERE telephone_id = $1
+      `,
+      [telephone_id]
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      error: "Erreur suppression client"
+    });
+  }
+});

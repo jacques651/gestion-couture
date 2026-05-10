@@ -25,3 +25,14 @@ export async function apiPost(endpoint: string, data: any) {
 
   return response.json();
 }
+export async function apiDelete(endpoint: string) {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Erreur API");
+  }
+
+  return response.json();
+}
