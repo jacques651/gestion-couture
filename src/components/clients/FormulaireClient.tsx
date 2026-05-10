@@ -11,7 +11,8 @@ import {
   IconDeviceFloppy, IconRefresh,
 } from '@tabler/icons-react';
 import FormulaireTypeMesure from "../parametres/FormulaireTypeMesure";
-import { executeSafe, selectSafe } from "../../database/db";
+import { selectSafe } from "../../database/db";
+import { apiPost } from '../../services/api';
 
 // ================= TYPES =================
 interface TypeMesure {
@@ -131,119 +132,101 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
       // =========================
       // CLIENT
       // =========================
-      await executeSafe(
-        `
-      INSERT OR REPLACE INTO clients (
-        telephone_id,
-        nom_prenom,
-        profil,
-        adresse,
-        email,
-        observations,
-        date_enregistrement
-      )
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-      `,
-        [
-          client.telephone_id,
-          client.nom_prenom,
-          client.profil || 'principal',
-          client.adresse || null,
-          client.email || null,
-          client.observations || null
-        ]
-      );
+      await apiPost("/clients", {
+        telephone_id: client.telephone_id,
+        nom_prenom: client.nom_prenom,
+        profil: client.profil || "principal",
+        adresse: client.adresse || null,
+        email: client.email || null,
+        observations: client.observations || null
+      });
 
       // =========================
       // RECUPERER LE VRAI ID
       // =========================
-      const insertedClient: { id: number }[] =
-        await selectSafe<{ id: number }>(
-          `
-    SELECT id
-    FROM clients
-    WHERE telephone_id = ?
-    ORDER BY id DESC
-    LIMIT 1
-    `,
-          [client.telephone_id]
-        );
+      //   const insertedClient: { id: number }[] =
+      //     await selectSafe<{ id: number }>(
+      //       `
+      // SELECT id
+      // FROM clients
+      // WHERE telephone_id = ?
+      // ORDER BY id DESC
+      // LIMIT 1
+      // `,
+      //       [client.telephone_id]
+      //     );
 
-      const realClientId: number | undefined =
-        insertedClient[0]?.id;
+      //     insertedClient[0]?.id;
 
-      if (!realClientId) {
 
-        throw new Error(
-          "Impossible de récupérer l'ID client"
-        );
-      }
+      //     throw new Error(
+      //       "Impossible de récupérer l'ID client"
+      //     );
+      //   }
 
-      // =========================
-      // SUPPRIMER ANCIENNES MESURES
-      // =========================
-      await executeSafe(
-        `
-      DELETE FROM mesures_clients
-      WHERE client_id = ?
-      `,
-        [realClientId]
-      );
+      //   // =========================
+      //   // SUPPRIMER ANCIENNES MESURES
+      //   // =========================
+      //   await executeSafe(
+      //     `
+      //   DELETE FROM mesures_clients
+      //   WHERE client_id = ?
+      //   `,
+      //   );
 
-      // =========================
-      // TYPES VALIDES
-      // =========================
-      const types =
-        await selectSafe<{ id: number }>(
-          `
-        SELECT id
-        FROM types_mesures
-        WHERE est_active = 1
-        `
-        );
+      //   // =========================
+      //   // TYPES VALIDES
+      //   // =========================
+      //   const types =
+      //     await selectSafe<{ id: number }>(
+      //       `
+      //     SELECT id
+      //     FROM types_mesures
+      //     WHERE est_active = 1
+      //     `
+      //     );
 
-      const validIds =
-        new Set(types.map(t => t.id));
+      //   const validIds =
+      //     new Set(types.map(t => t.id));
 
-      // =========================
-      // INSERT MESURES
-      // =========================
-      for (const typeIdStr in mesures) {
+      //   // =========================
+      //   // INSERT MESURES
+      //   // =========================
+      //   for (const typeIdStr in mesures) {
 
-        const typeId = Number(typeIdStr);
+      //     const typeId = Number(typeIdStr);
 
-        const valeur =
-          mesures[typeId];
+      //     const valeur =
+      //       mesures[typeId];
 
-        if (
-          valeur === undefined ||
-          valeur === null ||
-          valeur === 0
-        ) {
-          continue;
-        }
+      //     if (
+      //       valeur === undefined ||
+      //       valeur === null ||
+      //       valeur === 0
+      //     ) {
+      //       continue;
+      //     }
 
-        if (!validIds.has(typeId)) {
-          continue;
-        }
+      //     if (!validIds.has(typeId)) {
+      //       continue;
+      //     }
 
-        await executeSafe(
-          `
-        INSERT INTO mesures_clients (
-          client_id,
-          type_mesure_id,
-          valeur,
-          date_mesure
-        )
-        VALUES (?, ?, ?, datetime('now'))
-        `,
-          [
-            realClientId,
-            typeId,
-            valeur
-          ]
-        );
-      }
+      //     await executeSafe(
+      //       `
+      //     INSERT INTO mesures_clients (
+      //       client_id,
+      //       type_mesure_id,
+      //       valeur,
+      //       date_mesure
+      //     )
+      //     VALUES (?, ?, ?, datetime('now'))
+      //     `,
+      //       [
+      //         typeId,
+      //         valeur
+      //       ]
+      //     );
+      //   }
 
       // =========================
       // JOURNAL CLIENT
@@ -254,7 +237,6 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
           ? 'UPDATE'
           : 'CREATE',
         table: 'clients',
-        idEnregistrement: realClientId,
         details: isUpdate
           ? `Modification client : ${client.nom_prenom}`
           : `Création client : ${client.nom_prenom}`
@@ -267,7 +249,6 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
         utilisateur: 'Utilisateur',
         action: 'UPDATE',
         table: 'mesures_clients',
-        idEnregistrement: realClientId,
         details:
           `Mise à jour des mesures : ${client.nom_prenom}`
       });
@@ -282,7 +263,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
         setShowSuccess(false);
 
         onSuccess(
-          realClientId,
+          0,
           client.nom_prenom
         );
 
@@ -475,3 +456,7 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
 };
 
 export default FormulaireClient;
+
+
+
+
