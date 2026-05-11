@@ -69,8 +69,11 @@ const ImportClientsExcel:
     ] = useState<any[]>([]);
 
     const [
+
 ,
+
       setColonnesExcel
+
     ] = useState<string[]>([]);
 
     const [
@@ -86,8 +89,11 @@ const ImportClientsExcel:
     ] = useState(0);
 
     const [
+
 ,
+
       setImportResult
+
     ] = useState<any>(null);
 
     const [
@@ -103,7 +109,12 @@ const ImportClientsExcel:
     ] = useState('');
 
     const [
-      defaultProfil    ] = useState('principal');
+
+      defaultProfil
+
+    ] = useState(
+      'principal'
+    );
 
     /**
      * Charger mesures
@@ -188,10 +199,17 @@ const ImportClientsExcel:
             rawRows.length < 2
           ) {
 
-            alert(
-              "Fichier invalide"
-            );
+            notifications.show({
 
+              title:
+                'Erreur',
+
+              message:
+                'Fichier invalide',
+
+              color:
+                'red'
+            });
             return;
           }
 
@@ -351,9 +369,17 @@ const ImportClientsExcel:
 
           console.error(error);
 
-          alert(
-            "Erreur lecture fichier"
-          );
+          notifications.show({
+
+  title:
+    'Erreur',
+
+  message:
+    'Erreur lecture fichier',
+
+  color:
+    'red'
+});
 
         } finally {
 

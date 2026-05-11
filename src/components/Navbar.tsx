@@ -483,9 +483,15 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
             />
             <NavItem
-              label="Configuration réseau"
-              path="/config-reseau"
-              icon={<IconNetwork size={18} color="white" stroke={1.5} />}
+              label="Configuration serveur"
+              path="/config-serveur"
+              icon={
+                <IconNetwork
+                  size={18}
+                  color="white"
+                  stroke={1.5}
+                />
+              }
               roles={adminOnly}
               userRole={userRole}
             />

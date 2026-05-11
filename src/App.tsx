@@ -1,434 +1,998 @@
-// src/App.tsx
-import { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, BrowserRouter, useNavigate } from 'react-router-dom';
-import { AppShell, Loader, Center, MantineProvider, Button } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { theme } from './theme';
-import Navbar from './components/Navbar';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css';
-import AssistantIA from './components/AssistantIA';
+import React from 'react';
 
+import {
+  Stack,
+  Card,
+  Title,
+  Text,
+  Button,
+  Group,
+  ThemeIcon,
+  Divider,
+  Alert,
+  SimpleGrid,
+  Box,
+  Container,
+  Avatar,
+  Badge,
+  Paper,
+  Grid,
+} from '@mantine/core';
 
-// ==================== AUTH ====================
-const Login = lazy(() => import('./components/auth/Login'));
+import {
+  IconHeadset,
+  IconMail,
+  IconPhone,
+  IconClock,
+  IconBrandWhatsapp,
+  IconMailForward,
+  IconBuildingStore,
+  IconMessageCircle,
+  IconHelpCircle,
+  IconCheck,
+  IconExternalLink,
+} from '@tabler/icons-react';
 
-// ==================== DASHBOARD ====================
-const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
+import {
+  useNavigate
+} from 'react-router-dom';
 
-// ==================== CLIENTS ====================
-const ListeClientsAvecMesures = lazy(() => import('./components/clients/ListeClientsAvecMesures'));
+const APP_VERSION =
+  '1.0.0';
 
-// ==================== STOCK & INVENTAIRE ====================
-const MatieresManager = lazy(() => import('./components/stock/MatieresManager'));
-const ArticlesManager = lazy(() => import('./components/stock/ArticlesManager'));
-const ModelesTenuesManager = lazy(() => import('./components/stock/ModelesTenuesManager'));
-const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
+const SupportTechnique:
+React.FC = () => {
 
-// ==================== VENTES ====================
-const VentesManager = lazy(() => import('./components/ventes/VentesManager'));
+  const navigate =
+    useNavigate();
 
-// ==================== FACTURES & REÇUS ====================
-const FacturesRecus = lazy(() => import('./components/factures/FacturesReçus'));
-// ==================== RENDEZ-VOUS ====================
-const SuiviRendezVous = lazy(() => import('./components/rendezvous/SuiviRendezVous'));
+  const supportOptions = [
 
+    {
+      icon:
+        IconPhone,
 
+      title:
+        "Support Téléphonique",
 
-// ==================== FINANCES ====================
-const BilanFinancier = lazy(() => import('./components/finances/BilanFinancier'));
-const JournalCaisse = lazy(() => import('./components/finances/JournalCaisse'));
-const ListeDepenses = lazy(() => import('./components/depenses/ListeDepenses'));
-const GestionSalaires = lazy(() => import('./components/finances/GestionSalaires'));
-const HistoriqueSalaires = lazy(() => import('./components/finances/HistoriqueSalaires'));
+      description:
+        "Appelez-nous pour une assistance immédiate",
 
-// ==================== RESSOURCES HUMAINES ====================
-const ListeEmployes = lazy(() => import('./components/employes/ListeEmployes'));
-const ListeEmprunts = lazy(() => import('./components/emprunts/ListeEmprunts'));
-const ListePrestationsRealisees = lazy(() => import('./components/prestations/ListePrestationsRealisees'));
+      contact:
+        "+226 75 11 81 61",
 
-// ==================== RÉFÉRENTIELS ====================
-const TaillesManager = lazy(() => import('./components/referentiels/TaillesManager'));
-const CouleursManager = lazy(() => import('./components/referentiels/CouleursManager'));
-const TexturesManager = lazy(() => import('./components/referentiels/TexturesManager'));
-const CategoriesMatieresManager = lazy(() => import('./components/referentiels/CategoriesMatieresManager'));
-const ListeTypesPrestations = lazy(() => import('./components/prestations/ListeTypesPrestations'));
-const ConfigurationMesures = lazy(() => import('./components/parametres/ConfigurationMesures'));
+      contact2:
+        "+226 72 44 24 85",
 
-// ==================== PARAMÈTRES ====================
-const ParametresAtelier = lazy(() => import('./components/parametres/ParametresAtelier'));
-const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtilisateurs'));
-const JournalModifications = lazy(() => import('./components/parametres/JournalModifications'));
-// ==================== OUTILS ====================
-const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
-const ConfigurationReseau = lazy(() => import('./components/ConfigurationReseau'));
-const ExportImportConfiguration = lazy(() => import('./components/ExportImportConfiguration'));
+      action:
+        "tel:+22675118161",
 
-// ==================== SUPPORT & AIDE ====================
-const SupportTechnique = lazy(() => import('./components/support/SupportTechnique'));
-const ExportSupport = lazy(() => import('./components/support/ExportSupport'));
-const GuideUtilisation = lazy(() => import('./components/support/GuideUtilisation'));
+      color:
+        "blue",
 
-// ==================== COMPOSANTS ====================
-const LoadingFallback = () => (
-  <Center style={{ height: '100vh' }}>
-    <Loader size="xl" variant="dots" />
-  </Center>
-);
+      gradient: {
 
-function RouteGuard({ children, roles, fonctionnalite }: { children: React.ReactNode; roles?: string[]; fonctionnalite?: string }) {
-  const { user, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  const [hasAccess, setHasAccess] = useState(true);
-  const [checking, setChecking] = useState(true);
+        from:
+          'blue',
 
-  useEffect(() => {
-    const check = async () => {
-      if (fonctionnalite && user?.role !== 'admin') {
-        const { getPermissions } = await import('./database/db');
-        const perms = await getPermissions(user?.id || 0);
-        const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
-        setHasAccess(p?.lecture === 1);
-      }
-      setChecking(false);
-    };
-    if (isAuthenticated) check();
-    else setChecking(false);
-  }, [fonctionnalite, user, isAuthenticated]);
+        to:
+          'cyan'
+      },
+    },
 
-  if (!isAuthenticated) return <Login />;
-  if (checking) return <LoadingFallback />;
-  if (!hasAccess) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2>⛔ Accès non autorisé</h2>
-          <p>Vous n'avez pas les permissions nécessaires.</p>
-          <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-        </div>
-      </Center>
-    );
-  }
-  if (roles && user && !roles.includes(user.role)) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2>⛔ Accès non autorisé</h2>
-          <p>Vous n'avez pas les permissions nécessaires.</p>
-          <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-        </div>
-      </Center>
-    );
-  }
-  return <>{children}</>;
-}
+    {
+      icon:
+        IconBrandWhatsapp,
 
-// ==================== APP AUTHENTIFIÉE ====================
-function AuthenticatedApp() {
-  const { user, logout, isAuthenticated, loading } = useAuth();
-  const navigate = useNavigate();
+      title:
+        "Support WhatsApp",
 
- useEffect(() => {
+      description:
+        "Support instantané par message",
 
-  console.log(
-    '✅ API PostgreSQL prête'
-  );
+      contact:
+        "+226 75 11 81 61",
 
-}, []);
-  const handleLogout = () => {
+      contact2:
+        "+226 72 44 24 85",
 
-    const confirmed =
-      globalThis.confirm(
-        "Voulez-vous vous déconnecter ?"
-      );
+      action:
+        "https://wa.me/22675118161",
 
-    if (!confirmed) return;
+      color:
+        "green",
 
-    logout();
+      gradient: {
 
-    navigate('/login');
-  };
+        from:
+          'green',
 
-  const handleSetPage = (page: string) => {
-    const routeMap: Record<string, string> = {
-      dashboard: '/',
-      clients: '/clients',
-      types_mesures: '/types-mesures',
-      articles: '/articles',
-      matieres: '/matieres',
-      mouvements_stock: '/mouvements-stock',
-      tailles: '/tailles',
-      couleurs: '/couleurs',
-      textures: '/textures',
-      modeles_tenues: '/modeles-tenues',
-      categories_matieres: '/categories-matieres',
-      ListeTypesPrestations: '/ListeTypesPrestations',
-      atelier: '/atelier',
-      ventes: '/ventes',
-      factures_recus: '/factures-recus',
-      depenses: '/depenses',
-      bilan: '/bilan',
-      journal: '/journal',
-      employes: '/employes',
-      prestations_realisees: '/prestations-realisees',
-      salaires: '/salaires',
-      emprunts: '/emprunts',
-      utilisateurs: '/utilisateurs',
-      config_reseau: '/config-reseau',
-      import_export: '/import-export',
-      export_config: '/export-config',
-      journal_modifications: '/journal-modifications',
-      aide: '/aide',
-      support: '/support',
-      SuiviRendezVous: '/SuiviRendezVous',
-      export_support: '/export-support',
-    };
-    navigate(routeMap[page] || '/');
-  };
+        to:
+          'teal'
+      },
+    },
 
-  if (loading) return <LoadingFallback />;
-  if (!isAuthenticated) return <Login />;
+    {
+      icon:
+        IconMail,
+
+      title:
+        "Support Email",
+
+      description:
+        "Envoyez-nous un email détaillé",
+
+      contact:
+        "jacqueskorgo5@gmail.com",
+
+      contact2:
+        "",
+
+      action:
+        "mailto:jacqueskorgo5@gmail.com",
+
+      color:
+        "red",
+
+      gradient: {
+
+        from:
+          'red',
+
+        to:
+          'orange'
+      },
+    },
+  ];
+
+  const faqs = [
+
+    {
+      question:
+        "Comment créer une commande ?",
+
+      answer:
+
+        "Allez dans Commandes → Nouvelle commande, renseignez le client et les produits.",
+    },
+
+    {
+      question:
+        "Comment exporter les données support ?",
+
+      answer:
+
+        "Allez dans Support & Aide → Export support PostgreSQL.",
+    },
+
+    {
+      question:
+        "Comment ajouter un employé ?",
+
+      answer:
+
+        "Allez dans Ressources Humaines → Employés → Ajouter un employé.",
+    },
+
+    {
+      question:
+        "Comment générer une facture ?",
+
+      answer:
+
+        "Allez dans Factures & Reçus → Cliquez sur Facture pour la commande souhaitée.",
+    },
+  ];
 
   return (
-    <AppShell
-      padding="md"
-      navbar={{ width: 280, breakpoint: 'sm' }}
-      styles={{ main: { height: '100%', overflow: 'auto', backgroundColor: '#f5f7fa' } }}
-    >
-      <AppShell.Navbar>
-        <Navbar userRole={user?.role} userName={user?.nom} onLogout={handleLogout} onNavigate={handleSetPage} />
-      </AppShell.Navbar>
-      <AppShell.Main>
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes>
-            {/* DASHBOARD */}
-            <Route path="/" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <Dashboard setPage={handleSetPage} />
-              </RouteGuard>
-            } />
 
-            {/* CLIENTS */}
-            <Route path="/clients" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <ListeClientsAvecMesures />
-              </RouteGuard>
-            } />
-            <Route path="/types-mesures" element={
-              <RouteGuard roles={['admin']}>
-                <ConfigurationMesures />
-              </RouteGuard>
-            } />
+    <Box p="md">
 
-            {/* STOCK & INVENTAIRE */}
-            <Route path="/articles" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <ArticlesManager />
-              </RouteGuard>
-            } />
-            <Route path="/matieres" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <MatieresManager />
-              </RouteGuard>
-            } />
-            <Route path="/mouvements-stock" element={
-              <RouteGuard roles={['admin']}>
-                <MouvementsStock />
-              </RouteGuard>
-            } />
+      <Container size="xl">
 
-            {/* RÉFÉRENTIELS */}
-            <Route path="/tailles" element={
-              <RouteGuard roles={['admin']}>
-                <TaillesManager />
-              </RouteGuard>
-            } />
-            <Route path="/couleurs" element={
-              <RouteGuard roles={['admin']}>
-                <CouleursManager />
-              </RouteGuard>
-            } />
-            <Route path="/textures" element={
-              <RouteGuard roles={['admin']}>
-                <TexturesManager />
-              </RouteGuard>
-            } />
-            <Route path="/modeles-tenues" element={
-              <RouteGuard roles={['admin']}>
-                <ModelesTenuesManager />
-              </RouteGuard>
-            } />
-            <Route path="/categories-matieres" element={
-              <RouteGuard roles={['admin']}>
-                <CategoriesMatieresManager />
-              </RouteGuard>
-            } />
-            <Route path="/ListeTypesPrestations" element={
-              <RouteGuard roles={['admin']}>
-                <ListeTypesPrestations />
-              </RouteGuard>
-            } />
-            <Route path="/atelier" element={
-              <RouteGuard roles={['admin']}>
-                <ParametresAtelier />
-              </RouteGuard>
-            } />
+        <Stack gap="lg">
 
-            {/* VENTES */}
-            <Route path="/ventes" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <VentesManager />
-              </RouteGuard>
-            } />
+          {/* HEADER */}
+          <Card
+            withBorder
+            radius="lg"
+            p="xl"
 
-            {/* FACTURES & REÇUS */}
-            <Route path="/factures-recus" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <FacturesRecus />
-              </RouteGuard>
-            } />
+            style={{
 
-            {/* RENDEZ-VOUS */}
-            <Route path="/rendezvous" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <SuiviRendezVous />
-              </RouteGuard>
-            } />
+              background:
 
-            {/* FINANCES */}
-            <Route path="/depenses" element={
-              <RouteGuard roles={['admin']}>
-                <ListeDepenses />
-              </RouteGuard>
-            } />
-            <Route path="/bilan" element={
-              <RouteGuard roles={['admin', 'caissier']}>
-                <BilanFinancier />
-              </RouteGuard>
-            } />
-            <Route path="/journal" element={
-              <RouteGuard roles={['admin', 'caissier']}>
-                <JournalCaisse />
-              </RouteGuard>
-            } />
+                'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)'
+            }}
+          >
 
-            {/* RESSOURCES HUMAINES */}
-            <Route path="/employes" element={
-              <RouteGuard roles={['admin']}>
-                <ListeEmployes />
-              </RouteGuard>
-            } />
-            <Route path="/prestations-realisees" element={
-              <RouteGuard roles={['admin']}>
-                <ListePrestationsRealisees />
-              </RouteGuard>
-            } />
-            <Route path="/salaires" element={
-              <RouteGuard roles={['admin']}>
-                <GestionSalaires />
-              </RouteGuard>
-            } />
-            <Route path="/historiques-salaires" element={
-              <RouteGuard roles={['admin']}>
-                <HistoriqueSalaires />
-              </RouteGuard>
-            } />
-            <Route path="/emprunts" element={
-              <RouteGuard roles={['admin']}>
-                <ListeEmprunts />
-              </RouteGuard>
-            } />
+            <Group
+              justify="space-between"
+              align="center"
+            >
 
-            {/* PARAMÈTRES */}
-            <Route path="/utilisateurs" element={
-              <RouteGuard roles={['admin']}>
-                <ListeUtilisateurs />
-              </RouteGuard>
-            } />
-            <Route path="/config-reseau" element={
-              <RouteGuard roles={['admin']}>
-                <ConfigurationReseau />
-              </RouteGuard>
-            } />
-            <Route path="/import-export" element={
-              <RouteGuard roles={['admin']}>
-                <ImportClientsExcel />
-              </RouteGuard>
-            } />
-            <Route path="/export-config" element={
-              <RouteGuard roles={['admin']}>
-                <ExportImportConfiguration />
-              </RouteGuard>
-            } />
+              <Group gap="md">
 
-            <Route path="/journal-modifications" element={
-              <RouteGuard roles={['admin']}>
-                <JournalModifications />
-              </RouteGuard>
-            } />
+                <Avatar
+                  size={60}
+                  radius="md"
 
-            {/* SUPPORT */}
-            <Route path="/aide" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <GuideUtilisation />
-              </RouteGuard>
-            } />
-            <Route path="/support" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
-                <SupportTechnique onNavigate={handleSetPage} />
-              </RouteGuard>
-            } />
-            <Route path="/export-support" element={
-              <RouteGuard roles={['admin']}>
-                <ExportSupport />
-              </RouteGuard>
-            } />
+                  style={{
 
-            {/* 404 */}
-            <Route path="*" element={
-              <Center style={{ height: '50vh' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <h2>🔍 404 - Page non trouvée</h2>
-                  <p>La page que vous recherchez n'existe pas.</p>
-                  <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-                </div>
-              </Center>
-            } />
-          </Routes>
-        </Suspense>
-        <AssistantIA />
-      </AppShell.Main>
-    </AppShell>
+                    backgroundColor:
+                      'rgba(255,255,255,0.2)'
+                  }}
+                >
+
+                  <IconHeadset
+                    size={30}
+                    color="black"
+                  />
+
+                </Avatar>
+
+                <Box>
+
+                  <Title
+                    order={1}
+                    c="white"
+                    size="h2"
+                  >
+
+                    Support Technique
+
+                  </Title>
+
+                  <Text
+                    c="gray.3"
+                    size="sm"
+                  >
+
+                    Besoin d'aide ?
+                    Notre équipe est là pour vous assister
+
+                  </Text>
+
+                  <Group
+                    gap="xs"
+                    mt={8}
+                  >
+
+                    <Badge
+                      size="sm"
+                      variant="white"
+                      color="blue"
+                    >
+
+                      Assistance rapide
+
+                    </Badge>
+
+                    <Badge
+                      size="sm"
+                      variant="white"
+                      color="blue"
+                    >
+
+                      Support gratuit
+
+                    </Badge>
+
+                    <Badge
+                      size="sm"
+                      variant="white"
+                      color="blue"
+                    >
+
+                      Réponse sous 24h
+
+                    </Badge>
+
+                  </Group>
+
+                </Box>
+
+              </Group>
+
+              <ThemeIcon
+                size={60}
+                radius="md"
+                variant="white"
+
+                style={{
+                  opacity: 0.9
+                }}
+              >
+
+                <IconHelpCircle
+                  size={35}
+                  color="#1b365d"
+                />
+
+              </ThemeIcon>
+
+            </Group>
+
+          </Card>
+
+          {/* SUPPORT OPTIONS */}
+          <Grid>
+
+            {supportOptions.map(
+
+              (option, index) => (
+
+                <Grid.Col
+                  key={index}
+                  span={{
+                    base: 12,
+                    md: 4
+                  }}
+                >
+
+                  <Card
+                    withBorder
+                    radius="lg"
+                    p="xl"
+                    h="100%"
+                    shadow="sm"
+
+                    style={{
+
+                      transition:
+
+                        'transform 0.2s, box-shadow 0.2s',
+
+                      cursor:
+                        'pointer',
+                    }}
+
+                    onMouseEnter={(e) => {
+
+                      e.currentTarget.style.transform =
+                        'translateY(-5px)';
+
+                      e.currentTarget.style.boxShadow =
+                        '0 10px 20px rgba(0,0,0,0.1)';
+                    }}
+
+                    onMouseLeave={(e) => {
+
+                      e.currentTarget.style.transform =
+                        'translateY(0)';
+
+                      e.currentTarget.style.boxShadow =
+                        'none';
+                    }}
+                  >
+
+                    <Stack
+                      align="center"
+                      gap="md"
+                    >
+
+                      <ThemeIcon
+                        size={70}
+                        radius="xl"
+                        variant="gradient"
+                        gradient={option.gradient}
+                      >
+
+                        <option.icon size={35} />
+
+                      </ThemeIcon>
+
+                      <Stack
+                        align="center"
+                        gap={4}
+                      >
+
+                        <Title
+                          order={3}
+                          size="h4"
+                          ta="center"
+                        >
+
+                          {option.title}
+
+                        </Title>
+
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                          ta="center"
+                        >
+
+                          {option.description}
+
+                        </Text>
+
+                      </Stack>
+
+                      <Divider w="100%" />
+
+                      <Stack
+                        align="center"
+                        gap={4}
+                        w="100%"
+                      >
+
+                        <Text
+                          fw={600}
+                          size="sm"
+                        >
+
+                          Contact :
+
+                        </Text>
+
+                        <Text
+                          size="md"
+                          fw={700}
+                          c={option.color}
+                        >
+
+                          {option.contact}
+
+                        </Text>
+
+                        {option.contact2 && (
+
+                          <Text
+                            size="md"
+                            fw={700}
+                            c={option.color}
+                          >
+
+                            {option.contact2}
+
+                          </Text>
+                        )}
+
+                      </Stack>
+
+                      <Button
+                        component="a"
+                        href={option.action}
+                        target="_blank"
+                        variant="gradient"
+                        gradient={option.gradient}
+                        fullWidth
+                        size="md"
+                        radius="md"
+                        leftSection={
+                          <option.icon size={18} />
+                        }
+                        rightSection={
+                          <IconExternalLink size={14} />
+                        }
+                      >
+
+                        Contacter
+
+                      </Button>
+
+                    </Stack>
+
+                  </Card>
+
+                </Grid.Col>
+              )
+            )}
+
+          </Grid>
+
+          {/* FAQ */}
+          <Card
+            withBorder
+            radius="lg"
+            p="xl"
+            shadow="sm"
+          >
+
+            <Group mb="md">
+
+              <ThemeIcon
+                size="lg"
+                radius="md"
+                color="blue"
+                variant="light"
+              >
+
+                <IconHelpCircle size={20} />
+
+              </ThemeIcon>
+
+              <Title
+                order={3}
+                size="h4"
+              >
+
+                Foire Aux Questions (FAQ)
+
+              </Title>
+
+            </Group>
+
+            <Divider mb="md" />
+
+            <SimpleGrid
+              cols={{
+                base: 1,
+                md: 2
+              }}
+              spacing="md"
+            >
+
+              {faqs.map(
+
+                (faq, index) => (
+
+                  <Paper
+                    key={index}
+                    p="md"
+                    radius="md"
+                    withBorder
+                    bg="gray.0"
+                  >
+
+                    <Group
+                      gap="xs"
+                      mb={8}
+                    >
+
+                      <IconHelpCircle
+                        size={16}
+                        color="#1b365d"
+                      />
+
+                      <Text
+                        fw={600}
+                        size="sm"
+                      >
+
+                        {faq.question}
+
+                      </Text>
+
+                    </Group>
+
+                    <Text
+                      size="sm"
+                      c="dimmed"
+                      pl="lg"
+                    >
+
+                      {faq.answer}
+
+                    </Text>
+
+                  </Paper>
+                )
+              )}
+
+            </SimpleGrid>
+
+          </Card>
+
+          {/* EXPORT */}
+          <Alert
+            icon={
+              <IconMailForward size={20} />
+            }
+
+            color="blue"
+
+            variant="light"
+
+            radius="lg"
+
+            p="lg"
+          >
+
+            <Group
+              justify="space-between"
+              align="center"
+            >
+
+              <Box>
+
+                <Text
+                  fw={700}
+                  size="md"
+                >
+
+                  Besoin d'un export support ?
+
+                </Text>
+
+                <Text
+                  size="sm"
+                  mt={4}
+                >
+
+                  Utilisez l'option
+                  "Export support PostgreSQL"
+                  pour générer un package
+                  diagnostic sécurisé.
+
+                </Text>
+
+              </Box>
+
+              <Button
+                variant="gradient"
+
+                gradient={{
+                  from: 'blue',
+                  to: 'cyan'
+                }}
+
+                onClick={() =>
+
+                  navigate(
+                    '/export-support'
+                  )
+                }
+
+                leftSection={
+                  <IconMailForward size={16} />
+                }
+
+                radius="md"
+              >
+
+                Exporter maintenant
+
+              </Button>
+
+            </Group>
+
+          </Alert>
+
+          {/* INFOS */}
+          <Grid>
+
+            {/* HORAIRES */}
+            <Grid.Col
+              span={{
+                base: 12,
+                md: 6
+              }}
+            >
+
+              <Card
+                withBorder
+                radius="lg"
+                p="xl"
+                h="100%"
+                shadow="sm"
+              >
+
+                <Group mb="md">
+
+                  <ThemeIcon
+                    size="lg"
+                    radius="md"
+                    color="teal"
+                    variant="light"
+                  >
+
+                    <IconClock size={20} />
+
+                  </ThemeIcon>
+
+                  <Title
+                    order={3}
+                    size="h4"
+                  >
+
+                    Horaires d'assistance
+
+                  </Title>
+
+                </Group>
+
+                <Divider mb="md" />
+
+                <Stack gap="sm">
+
+                  <Group justify="space-between">
+
+                    <Group gap="xs">
+
+                      <IconClock
+                        size={16}
+                        color="#1b365d"
+                      />
+
+                      <Text size="sm">
+
+                        Lundi - Vendredi
+
+                      </Text>
+
+                    </Group>
+
+                    <Badge
+                      size="md"
+                      variant="light"
+                      color="green"
+                    >
+
+                      9h00 - 18h00
+
+                    </Badge>
+
+                  </Group>
+
+                  <Group justify="space-between">
+
+                    <Group gap="xs">
+
+                      <IconClock
+                        size={16}
+                        color="#1b365d"
+                      />
+
+                      <Text size="sm">
+
+                        Samedi
+
+                      </Text>
+
+                    </Group>
+
+                    <Badge
+                      size="md"
+                      variant="light"
+                      color="orange"
+                    >
+
+                      9h00 - 13h00
+
+                    </Badge>
+
+                  </Group>
+
+                  <Group justify="space-between">
+
+                    <Group gap="xs">
+
+                      <IconClock
+                        size={16}
+                        color="#1b365d"
+                      />
+
+                      <Text size="sm">
+
+                        Dimanche & Jours fériés
+
+                      </Text>
+
+                    </Group>
+
+                    <Badge
+                      size="md"
+                      variant="light"
+                      color="red"
+                    >
+
+                      Fermé
+
+                    </Badge>
+
+                  </Group>
+
+                </Stack>
+
+                <Divider my="md" />
+
+                <Alert
+                  icon={
+                    <IconMessageCircle size={16} />
+                  }
+
+                  color="blue"
+
+                  variant="light"
+                >
+
+                  <Text size="xs">
+
+                    En dehors des heures,
+                    laissez-nous un message,
+                    nous vous répondrons
+                    dans les plus brefs délais.
+
+                  </Text>
+
+                </Alert>
+
+              </Card>
+
+            </Grid.Col>
+
+            {/* ABOUT */}
+            <Grid.Col
+              span={{
+                base: 12,
+                md: 6
+              }}
+            >
+
+              <Card
+                withBorder
+                radius="lg"
+                p="xl"
+                h="100%"
+                shadow="sm"
+              >
+
+                <Group mb="md">
+
+                  <ThemeIcon
+                    size="lg"
+                    radius="md"
+                    color="violet"
+                    variant="light"
+                  >
+
+                    <IconHeadset size={20} />
+
+                  </ThemeIcon>
+
+                  <Title
+                    order={3}
+                    size="h4"
+                  >
+
+                    À propos du support
+
+                  </Title>
+
+                </Group>
+
+                <Divider mb="md" />
+
+                <Stack gap="sm">
+
+                  <Group gap="xs">
+
+                    <IconCheck
+                      size={16}
+                      color="green"
+                    />
+
+                    <Text size="sm">
+
+                      Support technique inclus
+                      avec votre licence
+
+                    </Text>
+
+                  </Group>
+
+                  <Group gap="xs">
+
+                    <IconCheck
+                      size={16}
+                      color="green"
+                    />
+
+                    <Text size="sm">
+
+                      Mises à jour gratuites à vie
+
+                    </Text>
+
+                  </Group>
+
+                  <Group gap="xs">
+
+                    <IconCheck
+                      size={16}
+                      color="green"
+                    />
+
+                    <Text size="sm">
+
+                      Formation incluse sur demande
+
+                    </Text>
+
+                  </Group>
+
+                  <Group gap="xs">
+
+                    <IconCheck
+                      size={16}
+                      color="green"
+                    />
+
+                    <Text size="sm">
+
+                      Assistance prioritaire
+                      pour les urgences
+
+                    </Text>
+
+                  </Group>
+
+                </Stack>
+
+                <Divider my="md" />
+
+                <Alert
+                  icon={
+                    <IconBuildingStore size={16} />
+                  }
+
+                  color="teal"
+
+                  variant="light"
+                >
+
+                  <Text
+                    size="xs"
+                    fw={600}
+                    ta="center"
+                  >
+
+                    KO-SOFT Couture
+                    - Solution complète
+                    pour atelier de couture
+
+                  </Text>
+
+                </Alert>
+
+              </Card>
+
+            </Grid.Col>
+
+          </Grid>
+
+          {/* FOOTER */}
+          <Card
+            withBorder
+            radius="lg"
+            p="md"
+            ta="center"
+            bg="gray.0"
+          >
+
+            <Text
+              size="xs"
+              c="dimmed"
+            >
+
+              © {new Date().getFullYear()}
+              KO-SOFT Couture
+              - Tous droits réservés
+
+            </Text>
+
+            <Text
+              size="xs"
+              c="dimmed"
+              mt={4}
+            >
+
+              Application de gestion professionnelle
+              pour atelier de couture
+              - Version {APP_VERSION}
+
+            </Text>
+
+          </Card>
+
+        </Stack>
+
+      </Container>
+
+    </Box>
   );
-}
+};
 
-// ==================== QUERY CLIENT ====================
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,
-      retry: 1,
-      refetchOnWindowFocus: false
-    }
-  },
-});
-
-// ==================== APP PRINCIPALE ====================
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="light">
-        <Notifications position="top-right" zIndex={1000} />
-        <BrowserRouter>
-          <AuthProvider>
-            <AuthenticatedApp />
-          </AuthProvider>
-        </BrowserRouter>
-      </MantineProvider>
-    </QueryClientProvider>
-  );
-}
-
-export default App;
+export default SupportTechnique;

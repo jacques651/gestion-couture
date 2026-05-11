@@ -1,14 +1,17 @@
 import React from 'react';
-import { 
-  Stack, 
-  Card, 
-  Title, 
-  Text, 
-  Button, 
-  Group, 
-  ThemeIcon, 
-  Divider, 
-  Alert, 
+import {
+  useNavigate
+} from 'react-router-dom';
+import {
+  Stack,
+  Card,
+  Title,
+  Text,
+  Button,
+  Group,
+  ThemeIcon,
+  Divider,
+  Alert,
   SimpleGrid,
   Box,
   Container,
@@ -17,12 +20,12 @@ import {
   Paper,
   Grid,
 } from '@mantine/core';
-import { 
-  IconHeadset, 
-  IconMail, 
-  IconPhone, 
-  IconClock, 
-  IconBrandWhatsapp, 
+import {
+  IconHeadset,
+  IconMail,
+  IconPhone,
+  IconClock,
+  IconBrandWhatsapp,
   IconMailForward,
   IconBuildingStore,
   IconMessageCircle,
@@ -31,11 +34,11 @@ import {
   IconExternalLink,
 } from '@tabler/icons-react';
 
-interface SupportTechniqueProps {
-  onNavigate?: (page: string) => void;
-}
 
-const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
+const navigate =
+  useNavigate();
+const SupportTechnique:
+React.FC = ({ }) => {
   const supportOptions = [
     {
       icon: IconPhone,
@@ -68,6 +71,8 @@ const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
       gradient: { from: 'red', to: 'orange' },
     },
   ];
+  const APP_VERSION =
+    '1.0.0';
 
   const faqs = [
     {
@@ -121,10 +126,10 @@ const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
           <Grid>
             {supportOptions.map((option, index) => (
               <Grid.Col key={index} span={{ base: 12, md: 4 }}>
-                <Card 
-                  withBorder 
-                  radius="lg" 
-                  p="xl" 
+                <Card
+                  withBorder
+                  radius="lg"
+                  p="xl"
                   h="100%"
                   shadow="sm"
                   style={{
@@ -144,7 +149,7 @@ const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
                     <ThemeIcon size={70} radius="xl" variant="gradient" gradient={option.gradient}>
                       <option.icon size={35} />
                     </ThemeIcon>
-                    
+
                     <Stack align="center" gap={4}>
                       <Title order={3} size="h4" ta="center">{option.title}</Title>
                       <Text size="xs" c="dimmed" ta="center">{option.description}</Text>
@@ -203,9 +208,9 @@ const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
           </Card>
 
           {/* Section Export */}
-          <Alert 
-            icon={<IconMailForward size={20} />} 
-            color="blue" 
+          <Alert
+            icon={<IconMailForward size={20} />}
+            color="blue"
             variant="light"
             radius="lg"
             p="lg"
@@ -214,13 +219,15 @@ const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
               <Box>
                 <Text fw={700} size="md">Besoin d'exporter votre base de données ?</Text>
                 <Text size="sm" mt={4}>
-                  Utilisez l'option "Exporter pour support" dans le menu pour nous envoyer votre base de données.
+                  Utilisez l'option "Export support PostgreSQL" pour générer un package diagnostic sécurisé.
                 </Text>
               </Box>
               <Button
                 variant="gradient"
                 gradient={{ from: 'blue', to: 'cyan' }}
-                onClick={() => onNavigate?.('export_support')}
+                onClick={() =>
+  navigate('/export-support')
+}
                 leftSection={<IconMailForward size={16} />}
                 radius="md"
               >
@@ -313,7 +320,7 @@ const SupportTechnique: React.FC<SupportTechniqueProps> = ({ onNavigate }) => {
               © {new Date().getFullYear()} KO-SOFT Couture - Tous droits réservés
             </Text>
             <Text size="xs" c="dimmed" mt={4}>
-              Application de gestion professionnelle pour atelier de couture - Version 1.0.0
+              Application de gestion professionnelle pour atelier de couture - Version {APP_VERSION}
             </Text>
           </Card>
         </Stack>
