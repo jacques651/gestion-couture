@@ -4,6 +4,7 @@ import { Table, Button, Group, Badge, ActionIcon, Stack, Title, Card, Text, Tool
 import { IconPlus, IconEdit, IconTrash, IconRefresh } from '@tabler/icons-react';
 import { getDb } from '../../database/db';
 import { notifications } from '@mantine/notifications';
+import { apiGet, apiPost, apiPut } from '../../services/api';
 
 interface CategorieMatiere {
   id: number;
@@ -27,50 +28,140 @@ export const ListeCategoriesMatieres: React.FC = () => {
   });
 
   const loadData = async () => {
-    setLoading(true);
-    const db = await getDb();
-    try {
-      const data = await db.select<CategorieMatiere[]>('SELECT * FROM categories_matieres ORDER BY nom_categorie');
-      setCategories(data);
-    } catch (error) {
-      console.error(error);
-      notifications.show({ title: 'Erreur', message: 'Erreur de chargement', color: 'red' });
-    } finally {
-      setLoading(false);
-    }
-  };
+
+  setLoading(true);
+
+  try {
+
+    const data =
+      await apiGet(
+        "/categories-matieres"
+      );
+
+    setCategories(data);
+
+  } catch (error) {
+
+    console.error(error);
+
+    notifications.show({
+      title: 'Erreur',
+      message:
+        'Erreur de chargement',
+      color: 'red'
+    });
+
+  } finally {
+
+    setLoading(false);
+  }
+};
 
   useEffect(() => { loadData(); }, []);
 
-  const handleSave = async () => {
-    if (!formData.code_categorie || !formData.nom_categorie) {
-      notifications.show({ title: 'Erreur', message: 'Code et nom sont requis', color: 'red' });
-      return;
+const handleSave = async () => {
+
+  if (
+    !formData.code_categorie
+    || !formData.nom_categorie
+  ) {
+
+    notifications.show({
+      title: 'Erreur',
+
+      message:
+        'Code et nom sont requis',
+
+      color: 'red'
+    });
+
+    return;
+  }
+
+  try {
+
+    if (editing) {
+
+      await apiPut(
+        `/categories-matieres/${editing.id}`,
+        {
+          code_categorie:
+            formData.code_categorie,
+
+          nom_categorie:
+            formData.nom_categorie,
+
+          description:
+            formData.description || null,
+
+          couleur_affichage:
+            '#1b365d',
+
+          est_active:
+            formData.est_actif ? 1 : 0
+        }
+      );
+
+      notifications.show({
+        title: 'Succès',
+
+        message:
+          'Catégorie modifiée',
+
+        color: 'green'
+      });
+
+    } else {
+
+      await apiPost(
+        "/categories-matieres",
+        {
+          code_categorie:
+            formData.code_categorie,
+
+          nom_categorie:
+            formData.nom_categorie,
+
+          description:
+            formData.description || null,
+
+          couleur_affichage:
+            '#1b365d',
+
+          est_active:
+            formData.est_actif ? 1 : 0
+        }
+      );
+
+      notifications.show({
+        title: 'Succès',
+
+        message:
+          'Catégorie créée',
+
+        color: 'green'
+      });
     }
 
-    const db = await getDb();
-    try {
-      if (editing) {
-        await db.execute(`
-          UPDATE categories_matieres 
-          SET code_categorie = ?, nom_categorie = ?, description = ?, est_actif = ? 
-          WHERE id = ?
-        `, [formData.code_categorie, formData.nom_categorie, formData.description || null, formData.est_actif ? 1 : 0, editing.id]);
-        notifications.show({ title: 'Succès', message: 'Catégorie modifiée', color: 'green' });
-      } else {
-        await db.execute(`
-          INSERT INTO categories_matieres (code_categorie, nom_categorie, description, est_actif) 
-          VALUES (?, ?, ?, ?)
-        `, [formData.code_categorie, formData.nom_categorie, formData.description || null, formData.est_actif ? 1 : 0]);
-        notifications.show({ title: 'Succès', message: 'Catégorie créée', color: 'green' });
-      }
-      setModalOpened(false);
-      loadData();
-    } catch (error) {
-      console.error(error);
-      notifications.show({ title: 'Erreur', message: 'Erreur lors de l\'enregistrement', color: 'red' });
-    }
-  };
+    setModalOpened(false);
+
+    loadData();
+
+  } catch (error: any) {
+
+    console.error(error);
+
+    notifications.show({
+      title: 'Erreur',
+
+      message:
+        error.message ||
+        "Erreur lors de l'enregistrement",
+
+      color: 'red'
+    });
+  }
+};
 
   const handleDelete = async (id: number, nom: string) => {
     if (

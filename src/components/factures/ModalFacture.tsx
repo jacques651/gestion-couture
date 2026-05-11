@@ -24,7 +24,10 @@ import {
   IconX,
   IconCash,
 } from '@tabler/icons-react';
-import { getDb, ConfigurationAtelier } from '../../database/db';
+import {
+  apiGet
+}
+  from "../../services/api";
 
 interface LigneFacture {
   designation: string;
@@ -34,6 +37,22 @@ interface LigneFacture {
   type: 'article' | 'matiere' | 'prestation';
 }
 
+interface ConfigurationAtelier {
+
+  id?: number;
+
+  nom_atelier?: string;
+
+  adresse?: string;
+
+  telephone?: string;
+
+  ifu?: string;
+
+  logo_base64?: string;
+
+  message_facture_defaut?: string;
+}
 interface VenteFacture {
   id?: number;
   code_vente?: string;
@@ -82,45 +101,78 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
   }, [reste]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const db = await getDb();
-        const conf = await db.select<ConfigurationAtelier[]>(`
-          SELECT * FROM atelier WHERE id = 1
-        `);
-        setAtelier(conf[0] || null);
 
-        if ((!lignes || lignes.length === 0) && vente.id) {
-          const details = await db.select<any[]>(
-            `SELECT vd.*, 
-              CASE 
-                WHEN vd.article_id IS NOT NULL THEN 'article'
-                WHEN vd.matiere_id IS NOT NULL THEN 'matiere'
-                ELSE 'prestation'
-              END as type_ligne
-             FROM vente_details vd
-             WHERE vd.vente_id = ?`,
-            [vente.id]
+    const load = async () => {
+
+      try {
+
+        /**
+         * Atelier
+         */
+        const conf =
+          await apiGet(
+            "/atelier"
           );
 
-          const lignesFormatted = details.map(d => ({
-            designation: d.designation || 'Sans désignation',
-            quantite: d.quantite || 0,
-            prix_unitaire: d.prix_unitaire || 0,
-            total: d.total || 0,
-            type: d.type_ligne as LigneFacture['type']
-          }));
-          setLignes(lignesFormatted);
+        setAtelier(
+          conf
+        );
+
+        /**
+         * Détails vente
+         */
+        if (
+          (!lignes || lignes.length === 0)
+          &&
+          vente.id
+        ) {
+
+          const details =
+            await apiGet(
+              `/ventes/${vente.id}/details`
+            );
+
+          const lignesFormatted =
+            details.map((d: any) => ({
+
+              designation:
+                d.designation ||
+                "Sans désignation",
+
+              quantite:
+                d.quantite || 0,
+
+              prix_unitaire:
+                d.prix_unitaire || 0,
+
+              total:
+                d.total || 0,
+
+              type:
+                d.type_ligne
+            }));
+
+          setLignes(
+            lignesFormatted
+          );
         }
+
       } catch (e) {
-        console.error("Erreur chargement atelier", e);
+
+        console.error(
+          "Erreur chargement facture",
+          e
+        );
+
       } finally {
+
         setLoading(false);
       }
     };
-    load();
-  }, [vente.id]);
 
+    load();
+
+  }, [vente.id]);
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) return;
@@ -168,20 +220,30 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
     iframeDoc.close();
 
     iframe.onload = () => {
+
+      journaliserAction({
+
+        utilisateur:
+          'Utilisateur',
+
+        action:
+          'CREATE',
+
+        table:
+          'factures',
+
+        idEnregistrement:
+          codeVente,
+
+        details:
+          `Impression facture : ${codeVente} - ` +
+          `${vente.client_nom || 'Client inconnu'}`
+      });
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       setTimeout(() => document.body.removeChild(iframe), 1000);
     };
   };
-  journaliserAction({
-    utilisateur: 'Utilisateur',
-    action: 'CREATE',
-    table: 'factures',
-    idEnregistrement: codeVente,
-    details:
-      `Impression facture : ${codeVente} - ` +
-      `${vente.client_nom || 'Client inconnu'}`
-  });
 
   const handleConfirmerPaiement = async () => {
     if (onConfirmPaiement) {

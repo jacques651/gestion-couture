@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from './theme';
 import Navbar from './components/Navbar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { getDb } from './database/db';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
@@ -131,18 +130,13 @@ function AuthenticatedApp() {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        await getDb();
-        console.log('✅ Base de données initialisée');
-      } catch (error) {
-        console.error('❌ Erreur initialisation base:', error);
-      }
-    };
-    init();
-  }, []);
+ useEffect(() => {
 
+  console.log(
+    '✅ API PostgreSQL prête'
+  );
+
+}, []);
   const handleLogout = () => {
 
     const confirmed =

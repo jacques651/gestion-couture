@@ -26,14 +26,16 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh } from '@tabler/icons-react';
-import { 
-  getTailles, 
-  createTaille, 
-  updateTaille, 
-  deleteTaille, 
-  Taille 
+import {
+  Taille
 } from '../../database/db';
 
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 const TaillesManager: React.FC = () => {
   const [tailles, setTailles] = useState<Taille[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,12 +44,12 @@ const TaillesManager: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [editingTaille, setEditingTaille] = useState<Taille | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  
+
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
-  
+
   const itemsPerPage = 10;
-  
+
   const [formData, setFormData] = useState({
     code_taille: '',
     libelle: '',
@@ -62,7 +64,9 @@ const TaillesManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getTailles();
+      const data = await apiGet("/tailles");
+
+      setTailles(data);
       setTailles(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -114,48 +118,99 @@ const TaillesManager: React.FC = () => {
 
   // Enregistrer (création ou modification)
   const handleSave = async () => {
+
     if (!formData.code_taille.trim()) {
+
       setError('Le code est requis');
+
       return;
     }
+
     if (!formData.libelle.trim()) {
+
       setError('Le libellé est requis');
+
       return;
     }
 
     try {
+
       setError(null);
-      
+
       if (editingTaille) {
-        await updateTaille(editingTaille.id, formData);
+
+        await apiPut(
+          `/tailles/${editingTaille.id}`,
+          {
+            code_taille: formData.code_taille,
+            libelle: formData.libelle,
+            ordre: formData.ordre,
+            categorie: formData.categorie,
+            description: formData.description,
+            est_actif: formData.est_actif
+          }
+        );
+
       } else {
-        await createTaille(formData);
+
+        await apiPost(
+          "/tailles",
+          {
+            code_taille: formData.code_taille,
+            libelle: formData.libelle,
+            ordre: formData.ordre,
+            categorie: formData.categorie,
+            description: formData.description,
+            est_actif: formData.est_actif
+          }
+        );
       }
-      
+
       closeModal();
+
       await loadTailles();
+
       resetForm();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'enregistrement');
+
+      setError(
+        err.message ||
+        'Erreur lors de l’enregistrement'
+      );
+
       console.error(err);
     }
   };
-
   // Supprimer
   const handleDelete = async () => {
+
     if (!deleteId) return;
+
     try {
+
       setError(null);
-      await deleteTaille(deleteId);
+
+      await apiDelete(
+        `/tailles/${deleteId}`
+      );
+
       closeDeleteModal();
+
       setDeleteId(null);
+
       await loadTailles();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de la suppression');
+
+      setError(
+        err.message ||
+        'Erreur lors de la suppression'
+      );
+
       console.error(err);
     }
   };
-
   // Filtrage
   const filteredTailles = tailles.filter(t =>
     t.libelle.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -226,7 +281,10 @@ const TaillesManager: React.FC = () => {
 
           {/* Message d'erreur */}
           {error && (
-            <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">
+            <Alert
+              color="red"
+              radius="md"
+            >
               {error}
             </Alert>
           )}
@@ -269,12 +327,12 @@ const TaillesManager: React.FC = () => {
                           variant="light"
                           color={
                             taille.categorie === 'adulte' ? 'blue' :
-                            taille.categorie === 'enfant' ? 'green' : 'gray'
+                              taille.categorie === 'enfant' ? 'green' : 'gray'
                           }
                           size="sm"
                         >
-                          {taille.categorie === 'adulte' ? 'Adulte' : 
-                           taille.categorie === 'enfant' ? 'Enfant' : 'Universel'}
+                          {taille.categorie === 'adulte' ? 'Adulte' :
+                            taille.categorie === 'enfant' ? 'Enfant' : 'Universel'}
                         </Badge>
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center' }}>
@@ -336,9 +394,9 @@ const TaillesManager: React.FC = () => {
         opened={modalOpened}
         onClose={closeModal}
         title={
-          <Title order={3} size="h4">
+          <Text fw={700} size="lg">
             {editingTaille ? 'Modifier la taille' : 'Nouvelle taille'}
-          </Title>
+          </Text>
         }
         size="md"
         radius="md"
@@ -353,7 +411,7 @@ const TaillesManager: React.FC = () => {
             withAsterisk
             maxLength={10}
           />
-          
+
           <TextInput
             label="Libellé"
             placeholder="Ex: Extra Small, Small, Medium, Large"
@@ -362,7 +420,7 @@ const TaillesManager: React.FC = () => {
             required
             withAsterisk
           />
-          
+
           <Select
             label="Catégorie"
             data={[
@@ -373,7 +431,7 @@ const TaillesManager: React.FC = () => {
             value={formData.categorie}
             onChange={(value) => setFormData({ ...formData, categorie: value as any })}
           />
-          
+
           <NumberInput
             label="Ordre d'affichage"
             description="Plus le chiffre est petit, plus la taille apparaît en premier"
@@ -381,7 +439,7 @@ const TaillesManager: React.FC = () => {
             onChange={(value) => setFormData({ ...formData, ordre: typeof value === 'number' ? value : 0 })}
             min={0}
           />
-          
+
           <Textarea
             label="Description"
             placeholder="Description optionnelle..."
@@ -389,15 +447,15 @@ const TaillesManager: React.FC = () => {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
           />
-          
+
           <Switch
             label="Actif (visible dans les listes)"
             checked={formData.est_actif === 1}
             onChange={(e) => setFormData({ ...formData, est_actif: e.currentTarget.checked ? 1 : 0 })}
           />
-          
+
           <Divider />
-          
+
           <Group justify="flex-end">
             <Button variant="light" onClick={closeModal}>
               Annuler

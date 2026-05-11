@@ -25,7 +25,16 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh } from '@tabler/icons-react';
-import { getCouleurs, createCouleur, updateCouleur, deleteCouleur, Couleur } from '../../database/db';
+import {
+  Couleur
+} from '../../database/db';
+
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 
 const CouleursManager: React.FC = () => {
   const [couleurs, setCouleurs] = useState<Couleur[]>([]);
@@ -54,7 +63,9 @@ const CouleursManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getCouleurs();
+      const data = await apiGet("/couleurs");
+
+setCouleurs(data);
       setCouleurs(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -115,40 +126,91 @@ const CouleursManager: React.FC = () => {
     openDeleteModal();
   };
 
-  const handleSave = async () => {
-    if (!formData.nom_couleur.trim()) {
-      setError('Le nom de la couleur est requis');
-      return;
+ const handleSave = async () => {
+
+  if (!formData.nom_couleur.trim()) {
+
+    setError(
+      'Le nom de la couleur est requis'
+    );
+
+    return;
+  }
+
+  try {
+
+    setError(null);
+
+    if (editingCouleur) {
+
+      await apiPut(
+        `/couleurs/${editingCouleur.id}`,
+        {
+          nom_couleur: formData.nom_couleur,
+          code_hex: formData.code_hex,
+          code_rgb: formData.code_rgb,
+          code_cmyk: formData.code_cmyk,
+          description: formData.description,
+          est_actif: formData.est_actif
+        }
+      );
+
+    } else {
+
+      await apiPost(
+        "/couleurs",
+        {
+          nom_couleur: formData.nom_couleur,
+          code_hex: formData.code_hex,
+          code_rgb: formData.code_rgb,
+          code_cmyk: formData.code_cmyk,
+          description: formData.description,
+          est_actif: formData.est_actif
+        }
+      );
     }
 
-    try {
-      setError(null);
-      if (editingCouleur) {
-        await updateCouleur(editingCouleur.id, formData);
-      } else {
-        await createCouleur(formData);
-      }
-      closeModal();
-      await loadCouleurs();
-      resetForm();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'enregistrement');
-    }
-  };
+    closeModal();
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    try {
-      setError(null);
-      await deleteCouleur(deleteId);
-      closeDeleteModal();
-      setDeleteId(null);
-      await loadCouleurs();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de la suppression');
-    }
-  };
+    await loadCouleurs();
 
+    resetForm();
+
+  } catch (err: any) {
+
+    setError(
+      err.message ||
+      'Erreur lors de l’enregistrement'
+    );
+  }
+};
+
+ const handleDelete = async () => {
+
+  if (!deleteId) return;
+
+  try {
+
+    setError(null);
+
+    await apiDelete(
+      `/couleurs/${deleteId}`
+    );
+
+    closeDeleteModal();
+
+    setDeleteId(null);
+
+    await loadCouleurs();
+
+  } catch (err: any) {
+
+    setError(
+      err.message ||
+      'Erreur lors de la suppression'
+    );
+  }
+};
   // Filtrage
   const filteredCouleurs = couleurs.filter(c =>
     c.nom_couleur.toLowerCase().includes(searchTerm.toLowerCase())

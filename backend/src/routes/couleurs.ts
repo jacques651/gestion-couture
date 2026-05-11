@@ -12,9 +12,9 @@ router.get("/", async (_, res) => {
 
     const result = await pool.query(`
       SELECT *
-      FROM modeles_tenues
+      FROM couleurs
       WHERE est_actif = 1
-      ORDER BY designation
+      ORDER BY nom_couleur
     `);
 
     res.json(result.rows);
@@ -24,7 +24,7 @@ router.get("/", async (_, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Erreur récupération modèles"
+      error: "Erreur récupération couleurs"
     });
   }
 });
@@ -37,43 +37,33 @@ router.post("/", async (req, res) => {
   try {
 
     const {
-      designation,
+      nom_couleur,
+      code_hex,
+      code_rgb,
+      code_cmyk,
       description,
-      image_url,
-      categorie,
       est_actif
     } = req.body;
 
-    // =========================
-    // Génération code unique
-    // =========================
-    const prefix =
-      categorie
-        ?.substring(0, 3)
-        ?.toUpperCase() || "MOD";
-
-    const code_modele =
-      `${prefix}-${Date.now()}`;
-
     const result = await pool.query(
       `
-      INSERT INTO modeles_tenues (
-        code_modele,
-        designation,
+      INSERT INTO couleurs (
+        nom_couleur,
+        code_hex,
+        code_rgb,
+        code_cmyk,
         description,
-        image_url,
-        categorie,
         est_actif
       )
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
       `,
       [
-        code_modele,
-        designation,
+        nom_couleur,
+        code_hex,
+        code_rgb,
+        code_cmyk,
         description,
-        image_url,
-        categorie,
         est_actif
       ]
     );
@@ -91,12 +81,12 @@ router.post("/", async (req, res) => {
 
       return res.status(400).json({
         error:
-          "Ce modèle existe déjà"
+          "Cette couleur existe déjà"
       });
     }
 
     res.status(500).json({
-      error: "Erreur création modèle"
+      error: "Erreur création couleur"
     });
   }
 });
@@ -111,31 +101,34 @@ router.put("/:id", async (req, res) => {
     const { id } = req.params;
 
     const {
-      designation,
+      nom_couleur,
+      code_hex,
+      code_rgb,
+      code_cmyk,
       description,
-      image_url,
-      categorie,
       est_actif
     } = req.body;
 
     const result = await pool.query(
       `
-      UPDATE modeles_tenues
+      UPDATE couleurs
       SET
-        designation = $1,
-        description = $2,
-        image_url = $3,
-        categorie = $4,
-        est_actif = $5,
+        nom_couleur = $1,
+        code_hex = $2,
+        code_rgb = $3,
+        code_cmyk = $4,
+        description = $5,
+        est_actif = $6,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $6
+      WHERE id = $7
       RETURNING *
       `,
       [
-        designation,
+        nom_couleur,
+        code_hex,
+        code_rgb,
+        code_cmyk,
         description,
-        image_url,
-        categorie,
         est_actif,
         id
       ]
@@ -154,12 +147,12 @@ router.put("/:id", async (req, res) => {
 
       return res.status(400).json({
         error:
-          "Ce modèle existe déjà"
+          "Cette couleur existe déjà"
       });
     }
 
     res.status(500).json({
-      error: "Erreur modification modèle"
+      error: "Erreur modification couleur"
     });
   }
 });
@@ -175,7 +168,7 @@ router.delete("/:id", async (req, res) => {
 
     await pool.query(
       `
-      UPDATE modeles_tenues
+      UPDATE couleurs
       SET est_actif = 0
       WHERE id = $1
       `,
@@ -191,7 +184,7 @@ router.delete("/:id", async (req, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Erreur suppression modèle"
+      error: "Erreur suppression couleur"
     });
   }
 });

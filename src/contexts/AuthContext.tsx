@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import bcrypt from 'bcryptjs';
-import { getDb } from '../database/db';
+import {
+  apiGet,
+  apiPost
+} from '../services/api';
 
 
 export type Role = 'admin' | 'caissier' | 'couturier';
@@ -44,14 +47,6 @@ interface AuthContextType {
   canWrite: (fonctionnalite: string) => boolean;
 }
 
-type DbUser = {
-  id: number;
-  nom: string;
-  login: string;
-  role: string;
-  mot_de_passe_hash: string;
-  est_actif: number;
-};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -61,19 +56,44 @@ const normalizeRole = (role: string): Role => {
   return 'couturier';
 };
 
-const loadUserPermissions = async (userId: number): Promise<Record<string, Permission>> => {
+const loadUserPermissions =
+async (
+  userId: number
+): Promise<
+  Record<string, Permission>
+> => {
+
   try {
-    const db = await getDb();
-    const perms = await db.select<any[]>(
-      `SELECT fonctionnalite, lecture, ecriture FROM permissions WHERE utilisateur_id = ?`,
-      [userId]
-    );
-    const map: Record<string, Permission> = {};
+
+    const perms =
+      await apiGet(
+        `/permissions/${userId}`
+      );
+
+    const map:
+    Record<
+      string,
+      Permission
+    > = {};
+
     perms.forEach((p: any) => {
-      map[p.fonctionnalite] = { lecture: p.lecture === 1, ecriture: p.ecriture === 1 };
+
+      map[
+        p.fonctionnalite
+      ] = {
+
+        lecture:
+          p.lecture === 1,
+
+        ecriture:
+          p.ecriture === 1
+      };
     });
+
     return map;
+
   } catch {
+
     return {};
   }
 };
@@ -114,14 +134,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     init();
   }, []);
 
-  const register = async (nom: string, login: string, password: string, role: Role) => {
-    const db = await getDb();
-    const hash = bcrypt.hashSync(password, 10);
-    await db.execute(
-      `INSERT INTO utilisateurs (nom, login, mot_de_passe_hash, role, est_actif) VALUES (?, ?, ?, ?, 1)`,
-      [nom.trim(), login.trim(), hash, role]
+ const register = async (
+  nom: string,
+  login: string,
+  password: string,
+  role: Role
+) => {
+
+  const hash =
+    bcrypt.hashSync(
+      password,
+      10
     );
-  };
+
+  await apiPost(
+    "/utilisateurs",
+    {
+      nom:
+        nom.trim(),
+
+      login:
+        login.trim(),
+
+      mot_de_passe_hash:
+        hash,
+
+      role,
+
+      est_actif: 1
+    }
+  );
+};
 
   const login = async (
     loginValue: string,
@@ -133,17 +176,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
 
-      const db = await getDb();
-
-      const results = await db.select<DbUser[]>(
-        `
-      SELECT *
-      FROM utilisateurs
-      WHERE login = ?
-      AND est_actif = 1
-      `,
-        [loginValue.trim()]
-      );
+      
+const results =
+  await apiGet(
+    `/utilisateurs/login/${loginValue.trim()}`
+  );
 
       if (
         !Array.isArray(results) ||

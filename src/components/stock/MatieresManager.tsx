@@ -44,16 +44,16 @@ import {
   IconCube,
 } from '@tabler/icons-react';
 import {
-  getMatieres,
-  createMatiere,
-  updateMatiere,
-  deleteMatiere,
-  updateStockMatiere,
-  getCategoriesMatieres,
   CategorieMatiere,
   Matiere,
-  getDb,
 } from '../../database/db';
+
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 import { notifications } from '@mantine/notifications';
 
 interface FormData {
@@ -110,9 +110,12 @@ const MatieresManager: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [matieresData, categoriesData] = await Promise.all([
-        getMatieres(),
-        getCategoriesMatieres(),
+      const [
+        matieresData,
+        categoriesData
+      ] = await Promise.all([
+        apiGet("/matieres"),
+        apiGet("/categories-matieres"),
       ]);
 
       setMatieres(matieresData);
@@ -175,45 +178,102 @@ const MatieresManager: React.FC = () => {
   };
 
   const handleSave = async () => {
+
     if (!formData.designation.trim()) {
-      setError('La désignation est requise');
+
+      setError(
+        'La désignation est requise'
+      );
+
       return;
     }
+
     if (!formData.categorie_id) {
-      setError('La catégorie est requise');
+
+      setError(
+        'La catégorie est requise'
+      );
+
       return;
     }
 
     try {
+
       setSaving(true);
+
       setError(null);
+
       if (editingMatiere) {
-        await updateMatiere(editingMatiere.id, formData);
+
+        await apiPut(
+          `/matieres/${editingMatiere.id}`,
+          formData
+        );
+
       } else {
-        await createMatiere(formData);
+
+        await apiPost(
+          "/matieres",
+          formData
+        );
       }
+
       closeModal();
+
       await loadData();
+
       resetForm();
+
     } catch (err: any) {
-      setError(err.message || "Erreur lors de l'enregistrement");
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Erreur lors de l'enregistrement"
+      );
+
     } finally {
+
       setSaving(false);
     }
   };
-
   const handleStockUpdate = async () => {
-    if (!selectedMatiere || stockQuantity <= 0) return;
+
+    if (
+      !selectedMatiere ||
+      stockQuantity <= 0
+    ) return;
 
     try {
+
       setSaving(true);
+
       setError(null);
-      await updateStockMatiere(selectedMatiere.id, stockQuantity, stockAction);
+
+      await apiPut(
+        `/matieres/${selectedMatiere.id}/stock`,
+        {
+          quantite: stockQuantity,
+          action: stockAction
+        }
+      );
+
       closeStockModal();
+
       await loadData();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de la mise à jour du stock');
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        'Erreur lors de la mise à jour du stock'
+      );
+
     } finally {
+
       setSaving(false);
     }
   };
@@ -223,7 +283,9 @@ const MatieresManager: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      await deleteMatiere(deleteId);
+      await apiDelete(
+        `/matieres/${deleteId}`
+      );
       closeDeleteModalHandler();
       await loadData();
     } catch (err: any) {
@@ -387,8 +449,8 @@ const MatieresManager: React.FC = () => {
                                 {categorie && (
                                   <Badge
                                     style={{
-                                      backgroundColor: categorie.couleur_associee ? `${categorie.couleur_associee}25` : '#e5e7eb',
-                                      color: categorie.couleur_associee || '#374151',
+                                      backgroundColor: categorie.couleur_affichage ? `${categorie.couleur_affichage}25` : '#e5e7eb',
+                                      color: categorie.couleur_affichage || '#374151',
                                     }}
                                     size="md"
                                   >
@@ -450,7 +512,6 @@ const MatieresManager: React.FC = () => {
           </Card>
 
           {/* Modal formulaire matière */}
-          {/* Modal formulaire matière */}
           <Modal
             opened={modalOpened}
             onClose={closeModal}
@@ -476,7 +537,7 @@ const MatieresManager: React.FC = () => {
                     label="Catégorie"
                     placeholder="Sélectionner une catégorie"
                     data={[
-                      ...categories.filter(c => c.est_actif === 1).map(c => ({ value: String(c.id), label: c.nom_categorie })),
+                      ...categories.filter(c => c.est_active === 1).map(c => ({ value: String(c.id), label: c.nom_categorie })),
                       { value: 'autre', label: '+ Autre (créer)' },
                     ]}
                     value={formData.categorie_id === 0 && newCategorieName ? 'autre' : String(formData.categorie_id)}
@@ -509,20 +570,47 @@ const MatieresManager: React.FC = () => {
                             return;
                           }
                           try {
-                            const db = await getDb();
-                            const result = await db.execute(
-                              `INSERT INTO categories_matieres (code_categorie, nom_categorie, est_actif) VALUES (?, ?, 1)`,
-                              [`CAT-${Date.now()}`, newCategorieName.trim()]
-                            );
-                            const newId = Number(result.lastInsertId);
+                            
                             // Recharger les catégories
-                            const cats = await getCategoriesMatieres();
+                            const cats =
+                              await apiGet(
+                                "/categories-matieres"
+                              );
+
                             setCategories(cats);
-                            setFormData({ ...formData, categorie_id: newId });
+
+                            const newCategorie =
+                              cats.find(
+                                (c: any) =>
+                                  c.nom_categorie ===
+                                  newCategorieName.trim()
+                              );
+
+                            if (newCategorie) {
+
+                              setFormData({
+                                ...formData,
+                                categorie_id:
+                                  newCategorie.id
+                              });
+                            }
+
                             setNewCategorieName('');
-                            notifications.show({ title: 'Succès', message: 'Catégorie créée', color: 'green' });
+
+                            notifications.show({
+                              title: 'Succès',
+                              message: 'Catégorie créée',
+                              color: 'green'
+                            });
+
                           } catch (err: any) {
-                            notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
+
+                            notifications.show({
+                              title: 'Erreur',
+                              message:
+                                err.message,
+                              color: 'red'
+                            });
                           }
                         }}
                       >

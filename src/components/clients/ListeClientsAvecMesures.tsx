@@ -42,7 +42,6 @@ import {
   IconInfoCircle,
   IconShoppingCart,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import { apiGet, apiDelete } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
@@ -96,36 +95,49 @@ export default function ListeClientsAvecMesures() {
     isError
   } = useQuery<ClientAvecMesures[]>({
     queryKey: ['clients_avec_mesures'],
+
     queryFn: async () => {
+
       try {
-        const db = await getDb();
-        if (!db) throw new Error("Base de données non initialisée");
 
-        const clients = await apiGet("/clients");
+        const clients =
+          await apiGet(
+            "/clients"
+          );
 
+        if (!clients?.length) {
 
+          return [];
+        }
 
+        return clients.map(
+          (client: any) => ({
+            ...client,
 
+            observations:
+              client.observations || '',
 
-
-
-        if (clients.length === 0) return [];
-
-        return clients.map((client: any) => ({
-          ...client,
-          observations: client.observations || '',
-          mesures: client.mesures || []
-        }));
+            mesures:
+              client.mesures || []
+          })
+        );
 
       } catch (err) {
-        console.error("Erreur dans queryFn:", err);
+
+        console.error(
+          "Erreur dans queryFn:",
+          err
+        );
+
         throw err;
       }
     },
-    retry: 1,
-    staleTime: 1000 * 60 * 5,
-  });
 
+    retry: 1,
+
+    staleTime:
+      1000 * 60 * 5,
+  });
   const tousNomsMesures = useMemo(() => {
     const noms = new Set<string>();
     for (const client of clientsAvecMesures) {
@@ -216,31 +228,35 @@ export default function ListeClientsAvecMesures() {
 
   const viderListeMutation = useMutation({
     mutationFn: async () => {
-      const db = await getDb();
 
-      if (!db) {
-        throw new Error("Base de données non disponible");
-      }
+  // Suppression mesures
+  await apiDelete(
+    "/mesures-clients/all"
+  );
 
-      // Supprimer d'abord les mesures
-      await db.execute(`DELETE FROM mesures_clients`);
+  // Suppression clients
+  await apiDelete(
+    "/clients/all"
+  );
 
-      // Puis les clients
-      await db.execute(`DELETE FROM clients`);
+  // Journalisation
+  await journaliserAction({
+    utilisateur:
+      'Utilisateur',
 
-      // Réinitialiser les IDs auto increment
-      await db.execute(`DELETE FROM sqlite_sequence WHERE name='clients'`);
-      await db.execute(`DELETE FROM sqlite_sequence WHERE name='mesures_clients'`);
+    action:
+      'DELETE',
 
-      // Journalisation
-      await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'DELETE',
-        table: 'clients',
-        idEnregistrement: 'ALL',
-        details: 'Vidage complet de la liste des clients et mesures'
-      });
-    },
+    table:
+      'clients',
+
+    idEnregistrement:
+      'ALL',
+
+    details:
+      'Vidage complet de la liste des clients et mesures'
+  });
+},
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -562,7 +578,7 @@ export default function ListeClientsAvecMesures() {
                               ))}
                               <Table.Td style={{ padding: '6px 4px' }}>
                                 <Group gap={4} justify="center" wrap="nowrap">
-                                  <Tooltip label="Ajouter/modifier les mesures">
+                                  <Tooltip label="Détails des mesures">
                                     <ActionIcon variant="light" color="blue" size="sm" onClick={() => handleVoir(client)}>
                                       <IconRuler size={14} />
                                     </ActionIcon>

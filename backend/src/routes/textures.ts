@@ -12,9 +12,9 @@ router.get("/", async (_, res) => {
 
     const result = await pool.query(`
       SELECT *
-      FROM modeles_tenues
+      FROM textures
       WHERE est_actif = 1
-      ORDER BY designation
+      ORDER BY nom_texture
     `);
 
     res.json(result.rows);
@@ -24,7 +24,7 @@ router.get("/", async (_, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Erreur récupération modèles"
+      error: "Erreur récupération textures"
     });
   }
 });
@@ -37,43 +37,30 @@ router.post("/", async (req, res) => {
   try {
 
     const {
-      designation,
+      nom_texture,
       description,
-      image_url,
-      categorie,
+      densite,
+      composition,
       est_actif
     } = req.body;
 
-    // =========================
-    // Génération code unique
-    // =========================
-    const prefix =
-      categorie
-        ?.substring(0, 3)
-        ?.toUpperCase() || "MOD";
-
-    const code_modele =
-      `${prefix}-${Date.now()}`;
-
     const result = await pool.query(
       `
-      INSERT INTO modeles_tenues (
-        code_modele,
-        designation,
+      INSERT INTO textures (
+        nom_texture,
         description,
-        image_url,
-        categorie,
+        densite,
+        composition,
         est_actif
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
       `,
       [
-        code_modele,
-        designation,
+        nom_texture,
         description,
-        image_url,
-        categorie,
+        densite,
+        composition,
         est_actif
       ]
     );
@@ -91,12 +78,12 @@ router.post("/", async (req, res) => {
 
       return res.status(400).json({
         error:
-          "Ce modèle existe déjà"
+          "Cette texture existe déjà"
       });
     }
 
     res.status(500).json({
-      error: "Erreur création modèle"
+      error: "Erreur création texture"
     });
   }
 });
@@ -111,31 +98,31 @@ router.put("/:id", async (req, res) => {
     const { id } = req.params;
 
     const {
-      designation,
+      nom_texture,
       description,
-      image_url,
-      categorie,
+      densite,
+      composition,
       est_actif
     } = req.body;
 
     const result = await pool.query(
       `
-      UPDATE modeles_tenues
+      UPDATE textures
       SET
-        designation = $1,
+        nom_texture = $1,
         description = $2,
-        image_url = $3,
-        categorie = $4,
+        densite = $3,
+        composition = $4,
         est_actif = $5,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $6
       RETURNING *
       `,
       [
-        designation,
+        nom_texture,
         description,
-        image_url,
-        categorie,
+        densite,
+        composition,
         est_actif,
         id
       ]
@@ -154,12 +141,12 @@ router.put("/:id", async (req, res) => {
 
       return res.status(400).json({
         error:
-          "Ce modèle existe déjà"
+          "Cette texture existe déjà"
       });
     }
 
     res.status(500).json({
-      error: "Erreur modification modèle"
+      error: "Erreur modification texture"
     });
   }
 });
@@ -175,7 +162,7 @@ router.delete("/:id", async (req, res) => {
 
     await pool.query(
       `
-      UPDATE modeles_tenues
+      UPDATE textures
       SET est_actif = 0
       WHERE id = $1
       `,
@@ -191,7 +178,7 @@ router.delete("/:id", async (req, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Erreur suppression modèle"
+      error: "Erreur suppression texture"
     });
   }
 });

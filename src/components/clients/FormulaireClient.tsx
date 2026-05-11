@@ -139,121 +139,65 @@ const FormulaireClient: React.FC<Props> = ({ clientEdit, onSuccess, onBack }) =>
       const isUpdate = isUpdateMode;
       console.log("MODE UPDATE =", isUpdate);
       console.log("CLIENT EDIT =", clientEdit);
+
+      
       // =========================
       // CLIENT
       // =========================
-      if (clientEdit?.telephone_id) {
+      if (clientEdit?.id) {
 
-        await apiPut(`/clients/${clientEdit.telephone_id}`, {
-          nom_prenom: client.nom_prenom,
-          profil: client.profil || "principal",
-          adresse: client.adresse || null,
-          email: client.email || null,
-          observations: client.observations || null
-        });
+        await apiPut(
+
+          `/clients/${clientEdit.id}`,
+
+          {
+            telephone_id:
+              client.telephone_id,
+
+            nom_prenom:
+              client.nom_prenom,
+
+            profil:
+              client.profil || "principal",
+
+            adresse:
+              client.adresse || null,
+
+            email:
+              client.email || null,
+
+            observations:
+              client.observations || null
+          }
+        );
 
       } else {
 
-        await apiPost("/clients", {
-          telephone_id: client.telephone_id,
-          nom_prenom: client.nom_prenom,
-          profil: client.profil || "principal",
-          adresse: client.adresse || null,
-          email: client.email || null,
-          observations: client.observations || null
-        });
+        await apiPost(
 
+          "/clients",
+
+          {
+            telephone_id:
+              client.telephone_id,
+
+            nom_prenom:
+              client.nom_prenom,
+
+            profil:
+              client.profil || "principal",
+
+            adresse:
+              client.adresse || null,
+
+            email:
+              client.email || null,
+
+            observations:
+              client.observations || null
+          }
+        );
       }
-
-      // =========================
-      // RECUPERER LE VRAI ID
-      // =========================
-      //   const insertedClient: { id: number }[] =
-      //     await selectSafe<{ id: number }>(
-      //       `
-      // SELECT id
-      // FROM clients
-      // WHERE telephone_id = ?
-      // ORDER BY id DESC
-      // LIMIT 1
-      // `,
-      //       [client.telephone_id]
-      //     );
-
-      //     insertedClient[0]?.id;
-
-
-      //     throw new Error(
-      //       "Impossible de récupérer l'ID client"
-      //     );
-      //   }
-
-      //   // =========================
-      //   // SUPPRIMER ANCIENNES MESURES
-      //   // =========================
-      //   await executeSafe(
-      //     `
-      //   DELETE FROM mesures_clients
-      //   WHERE client_id = ?
-      //   `,
-      //   );
-
-      //   // =========================
-      //   // TYPES VALIDES
-      //   // =========================
-      //   const types =
-      //     await selectSafe<{ id: number }>(
-      //       `
-      //     SELECT id
-      //     FROM types_mesures
-      //     WHERE est_active = 1
-      //     `
-      //     );
-
-      //   const validIds =
-      //     new Set(types.map(t => t.id));
-
-      //   // =========================
-      //   // INSERT MESURES
-      //   // =========================
-      //   for (const typeIdStr in mesures) {
-
-      //     const typeId = Number(typeIdStr);
-
-      //     const valeur =
-      //       mesures[typeId];
-
-      //     if (
-      //       valeur === undefined ||
-      //       valeur === null ||
-      //       valeur === 0
-      //     ) {
-      //       continue;
-      //     }
-
-      //     if (!validIds.has(typeId)) {
-      //       continue;
-      //     }
-
-      //     await executeSafe(
-      //       `
-      //     INSERT INTO mesures_clients (
-      //       client_id,
-      //       type_mesure_id,
-      //       valeur,
-      //       date_mesure
-      //     )
-      //     VALUES (?, ?, ?, datetime('now'))
-      //     `,
-      //       [
-      //         typeId,
-      //         valeur
-      //       ]
-      //     );
-      //   }
-      // =========================
-      // SAUVEGARDE MESURES POSTGRESQL
-      // =========================
 
       const mesuresPayload = Object.entries(mesures)
         .filter(([_, valeur]) =>

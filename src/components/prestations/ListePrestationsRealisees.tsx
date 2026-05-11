@@ -46,7 +46,6 @@ import {
   IconTrendingUp,
   IconReceipt,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import FormulairePrestationRealisee from './FormulairePrestationRealisee';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -54,6 +53,7 @@ import autoTable from 'jspdf-autotable';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { useReactToPrint } from 'react-to-print';
+import { apiDelete, apiGet } from '../../services/api';
 
 interface Prestation {
   id: number;
@@ -81,24 +81,76 @@ const ListePrestationsRealisees: React.FC = () => {
   const printRef = useRef<HTMLDivElement>(null);
 
   const chargerPrestations = async () => {
-    setLoading(true);
-    const db = await getDb();
+    setLoading(true)
 
-    const result = await db.select<Prestation[]>(`
-      SELECT 
-        pr.id,
-        pr.employe_id,
-        pr.date_prestation,
-        pr.designation,
-        pr.valeur,
-        pr.nombre,
-        pr.total,
-        e.nom_prenom as employe_nom
-      FROM prestations_realisees pr
-      JOIN employes e ON pr.employe_id = e.id
-      WHERE e.est_supprime = 0
-      ORDER BY pr.date_prestation DESC
-    `);
+  const prestationsData =
+  await apiGet(
+    "/prestations-realisees"
+  );
+
+const employesData =
+  await apiGet(
+    "/employes"
+  );
+
+const result: Prestation[] =
+
+  prestationsData
+
+    .map((pr: any) => {
+
+      const employe =
+        employesData.find(
+          (e: any) =>
+            e.id === pr.employe_id
+        );
+
+      return {
+
+        id:
+          pr.id,
+
+        employe_id:
+          pr.employe_id,
+
+        date_prestation:
+          pr.date_prestation,
+
+        designation:
+          pr.designation,
+
+        valeur:
+          pr.valeur,
+
+        nombre:
+          pr.nombre,
+
+        total:
+          pr.total,
+
+        employe_nom:
+          employe?.nom_prenom || ''
+      };
+    })
+
+    .filter(
+      (pr: any) =>
+        pr.employe_nom !== ''
+    )
+
+    .sort(
+      (a: any, b: any) =>
+
+        new Date(
+          b.date_prestation
+        ).getTime()
+
+        -
+
+        new Date(
+          a.date_prestation
+        ).getTime()
+    );
 
     setPrestations(result || []);
     setLoading(false);
@@ -263,8 +315,9 @@ const ListePrestationsRealisees: React.FC = () => {
   const supprimer = async (id: number, designation: string) => {
     if (!
 globalThis.confirm(`Supprimer la prestation "${designation}" ?`)) return;
-    const db = await getDb();
-    await db.execute("DELETE FROM prestations_realisees WHERE id = ?", [id]);
+   await apiDelete(
+  `/prestations-realisees/${id}`
+);
     await chargerPrestations();
     setSuccessMessage(`Prestation "${designation}" supprimée avec succès`);
     setShowSuccess(true);

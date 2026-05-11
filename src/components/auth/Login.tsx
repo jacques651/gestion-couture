@@ -27,7 +27,9 @@ import {
   IconBuildingStore,
   IconArrowRight,
 } from "@tabler/icons-react";
-import { getDb } from "../../database/db";
+import {
+  apiGet
+} from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   sauvegarderSession
@@ -67,35 +69,68 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    const checkUserTable = async () => {
-      try {
-        const db = await getDb();
-        const result = await db.select<any[]>("SELECT id FROM utilisateurs LIMIT 1");
-        setIsFirstUser(result.length === 0);
-      } catch (err) {
-        console.error("Erreur vérification utilisateurs:", err);
-        setIsFirstUser(false);
-      }
-    };
-    checkUserTable();
-  }, []);
 
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const db = await getDb();
-        const conf = await db.select<ConfigurationAtelier[]>(
-          "SELECT * FROM atelier WHERE id = 1"
+  const checkUserTable =
+  async () => {
+
+    try {
+
+      const users =
+        await apiGet(
+          "/utilisateurs"
         );
-        setConfig(conf[0] || null);
-      } catch (err) {
-        console.error("Erreur chargement configuration:", err);
-      } finally {
-        setLoadingConfig(false);
-      }
-    };
-    loadConfig();
-  }, []);
+
+      setIsFirstUser(
+        users.length === 0
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Erreur vérification utilisateurs:",
+        err
+      );
+
+      setIsFirstUser(false);
+    }
+  };
+
+  checkUserTable();
+
+}, []);
+
+ useEffect(() => {
+
+  const loadConfig =
+  async () => {
+
+    try {
+
+      const conf =
+        await apiGet(
+          "/atelier"
+        );
+
+      setConfig(
+        conf[0] || null
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Erreur chargement configuration:",
+        err
+      );
+
+    } finally {
+
+      setLoadingConfig(false);
+    }
+  };
+
+  loadConfig();
+
+}, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

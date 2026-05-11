@@ -21,19 +21,31 @@ router.get("/", async (_, res) => {
     c.est_supprime,
 
     COALESCE(
-      json_agg(
-        CASE
-          WHEN mc.id IS NOT NULL THEN
-            json_build_object(
-              'type_mesure_id', mc.type_mesure_id,
-              'nom', tm.nom,
-              'unite', tm.unite,
-              'valeur', mc.valeur
-            )
-        END
-      ),
-      '[]'
-    ) as mesures
+
+  json_agg(
+
+    json_build_object(
+
+      'type_mesure_id',
+      mc.type_mesure_id,
+
+      'nom',
+      tm.nom,
+
+      'unite',
+      tm.unite,
+
+      'valeur',
+      mc.valeur
+    )
+
+  ) FILTER (
+    WHERE mc.id IS NOT NULL
+  ),
+
+  '[]'
+
+) as mesures
 
   FROM clients c
 
@@ -43,7 +55,7 @@ router.get("/", async (_, res) => {
   LEFT JOIN types_mesures tm
     ON tm.id = mc.type_mesure_id
 
-  WHERE c.est_supprime = 0
+  WHERE COALESCE(c.est_supprime, 0) = 0
 
   GROUP BY
     c.id,

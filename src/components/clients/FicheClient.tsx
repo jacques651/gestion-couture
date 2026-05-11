@@ -24,7 +24,7 @@ import {
   IconRuler,
   IconNotes,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import { apiGet } from '../../services/api';
 
 interface FicheClientProps {
   client: any;
@@ -37,20 +37,41 @@ const FicheClient: React.FC<FicheClientProps> = ({ client, mesures, onBack }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const chargerInfosAtelier = async () => {
-      try {
-        const db = await getDb();
-        const res = await db.select<any[]>("SELECT * FROM atelier WHERE id = 1");
-        if (res.length > 0) setConfig(res[0]);
-      } catch (err) {
-        console.error("Erreur config atelier:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    chargerInfosAtelier();
-  }, []);
 
+  const chargerInfosAtelier =
+  async () => {
+
+    try {
+
+      const res =
+        await apiGet(
+          "/atelier"
+        );
+
+      if (
+        res &&
+        res.length > 0
+      ) {
+
+        setConfig(res[0]);
+      }
+
+    } catch (err) {
+
+      console.error(
+        "Erreur config atelier:",
+        err
+      );
+
+    } finally {
+
+      setLoading(false);
+    }
+  };
+
+  chargerInfosAtelier();
+
+}, []);
   if (loading) {
     return (
       <Card withBorder radius="md" p="lg" pos="relative">

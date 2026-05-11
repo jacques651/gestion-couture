@@ -24,7 +24,16 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh } from '@tabler/icons-react';
-import { getTextures, createTexture, updateTexture, deleteTexture, Texture } from '../../database/db';
+import {
+  Texture
+} from '../../database/db';
+
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 
 const TexturesManager: React.FC = () => {
   const [textures, setTextures] = useState<Texture[]>([]);
@@ -52,7 +61,9 @@ const TexturesManager: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getTextures();
+      const data = await apiGet("/textures");
+
+      setTextures(data);
       setTextures(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -99,39 +110,88 @@ const TexturesManager: React.FC = () => {
   };
 
   const handleSave = async () => {
+
     if (!formData.nom_texture.trim()) {
-      setError('Le nom de la texture est requis');
+
+      setError(
+        'Le nom de la texture est requis'
+      );
+
       return;
     }
 
     try {
+
       setError(null);
+
       if (editingTexture) {
-        await updateTexture(editingTexture.id, formData);
+
+        await apiPut(
+          `/textures/${editingTexture.id}`,
+          {
+            nom_texture: formData.nom_texture,
+            description: formData.description,
+            densite: formData.densite,
+            composition: formData.composition,
+            est_actif: formData.est_actif
+          }
+        );
+
       } else {
-        await createTexture(formData);
+
+        await apiPost(
+          "/textures",
+          {
+            nom_texture: formData.nom_texture,
+            description: formData.description,
+            densite: formData.densite,
+            composition: formData.composition,
+            est_actif: formData.est_actif
+          }
+        );
       }
+
       closeModal();
+
       await loadTextures();
+
       resetForm();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'enregistrement');
+
+      setError(
+        err.message ||
+        'Erreur lors de l’enregistrement'
+      );
     }
   };
 
   const handleDelete = async () => {
+
     if (!deleteId) return;
+
     try {
+
       setError(null);
-      await deleteTexture(deleteId);
+
+      await apiDelete(
+        `/textures/${deleteId}`
+      );
+
       closeDeleteModal();
+
       setDeleteId(null);
+
       await loadTextures();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de la suppression');
+
+      setError(
+        err.message ||
+        'Erreur lors de la suppression'
+      );
     }
   };
-
   // Filtrage
   const filteredTextures = textures.filter(t =>
     t.nom_texture.toLowerCase().includes(searchTerm.toLowerCase()) ||

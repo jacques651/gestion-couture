@@ -21,8 +21,11 @@ import {
   IconCheck,
   IconAlertCircle,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
-import { journaliserAction } from '../../services/journal';
+import {
+  apiPost,
+  apiPut
+} from '../../services/api';
+import { notifications } from '@mantine/notifications';
 
 interface TypeMesure {
   id?: number;
@@ -43,10 +46,10 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
 }) => {
   const [nom, setNom] = useState('');
   const [unite, setUnite] = useState<string | null>('cm');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const [loading] = useState(false);
+  const [error] = useState('');
+  const [success] = useState(false);
+  const [successMessage] = useState('');
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
   const unitesOptions = [
@@ -62,87 +65,103 @@ const FormulaireTypeMesure: React.FC<FormulaireTypeMesureProps> = ({
     }
   }, [type]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess(false);
+const handleSubmit = async () => {
 
-    if (!nom.trim()) {
-      setError('Le nom est obligatoire');
-      return;
-    }
+  try {
 
-    setLoading(true);
-    const db = await getDb();
+    if (
+      type &&
+      type.id
+    ) {
 
-    try {
-      if (type?.id) {
+      /**
+       * UPDATE
+       */
+      await apiPut(
 
-        await db.execute(
-          `
-    UPDATE types_mesures
-    SET nom = ?, unite = ?
-    WHERE id = ?
-    `,
-          [
+        `/types-mesures/${type.id}`,
+
+        {
+          nom:
             nom.trim(),
-            unite,
-            type.id
-          ]
-        );
 
-        // Journalisation modification
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'UPDATE',
-          table: 'types_mesures',
-          idEnregistrement: type.id,
-          details:
-            `Modification type mesure : ${nom}`
-        });
+          unite,
 
-        setSuccessMessage(
-          'Type de mesure modifié avec succès'
-        );
+          ordre_affichage:
+            1,
 
-        setSuccess(true);
+          est_active:
+            1
+        }
+      );
 
-      } else {
-        const results = await db.select<{ max_ordre: number }[]>(
-          "SELECT COALESCE(MAX(ordre_affichage), 0) as max_ordre FROM types_mesures WHERE est_active = 1"
-        );
-        const dernierOrdre = results?.[0]?.max_ordre ?? 0;
+      notifications.show({
 
-        await db.execute(
-          "INSERT INTO types_mesures (nom, unite, ordre_affichage, est_active) VALUES (?, ?, ?, 1)",
-          [nom.trim(), unite, dernierOrdre + 1]
-        );
+        title:
+          "Succès",
 
-        // Journalisation création
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'CREATE',
-          table: 'types_mesures',
-          idEnregistrement: nom,
-          details:
-            `Création type mesure : ${nom}`
-        });
+        message:
+          "Type de mesure modifié",
 
-        setSuccessMessage('Type de mesure ajouté avec succès');
-        setSuccess(true);
-      }
+        color:
+          "green"
+      });
 
-      setTimeout(() => {
-        onSuccess();
-      }, 1500);
+    } else {
 
-    } catch (err) {
-      console.error(err);
-      setError("Erreur lors de l'enregistrement");
-    } finally {
-      setLoading(false);
+      /**
+       * CREATE
+       */
+      await apiPost(
+
+        "/types-mesures",
+
+        {
+          nom:
+            nom.trim(),
+
+          unite,
+
+          ordre_affichage:
+            1,
+
+          est_active:
+            1
+        }
+      );
+
+      notifications.show({
+
+        title:
+          "Succès",
+
+        message:
+          "Type de mesure créé",
+
+        color:
+          "green"
+      });
     }
-  };
+
+    onSuccess();
+
+  } catch (err: any) {
+
+    console.error(err);
+
+    notifications.show({
+
+      title:
+        "Erreur",
+
+      message:
+        err.message,
+
+      color:
+        "red"
+    });
+  }
+};
 
   return (
     <Box style={{ maxWidth: 800, margin: '0 auto' }} p="sm">

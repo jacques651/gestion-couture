@@ -39,16 +39,7 @@ const initialFormData: FormData = {
   est_actif: 1
 };
 
-const generateCodeModele = (categorie: string, existingCodes: string[]): string => {
-  const prefix = categorie.substring(0, 3).toUpperCase();
-  let suffix = 1;
-  let code = '';
-  do {
-    code = `${prefix}-${String(suffix).padStart(3, '0')}`;
-    suffix++;
-  } while (existingCodes.includes(code));
-  return code;
-};
+
 
 const ModelesTenuesManager: React.FC = () => {
   const [modeles, setModeles] = useState<ModeleTenue[]>([]);
@@ -118,15 +109,21 @@ const ModelesTenuesManager: React.FC = () => {
 
   const closeDeleteModalHandler = () => { setDeleteId(null); setDeleteDesignation(''); closeDeleteModal(); };
 
-  const handleCategorieChange = (value: string | null) => {
-    if (value && !editingModele) {
-      const categorie = value as 'femme' | 'homme' | 'enfant' | 'accessoire';
-      const existingCodes = modeles.map(m => m.code_modele);
-      const newCode = generateCodeModele(categorie, existingCodes);
-      setFormData({ ...formData, categorie, code_modele: newCode });
-    } else if (value) {
-      setFormData({ ...formData, categorie: value as 'femme' | 'homme' | 'enfant' | 'accessoire' });
-    }
+  const handleCategorieChange = (
+    value: string | null
+  ) => {
+
+    if (!value) return;
+
+    setFormData({
+      ...formData,
+      categorie:
+        value as
+        | 'femme'
+        | 'homme'
+        | 'enfant'
+        | 'accessoire'
+    });
   };
 
   // Gestion de l'upload d'image en base64
@@ -152,110 +149,99 @@ const ModelesTenuesManager: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-const handleSave = async () => {
+  const handleSave = async () => {
 
-  try {
+    try {
 
-    setSaving(true);
+      setSaving(true);
 
-    setError(null);
+      setError(null);
 
-    if (!formData.designation.trim()) {
-      throw new Error(
-        'La désignation est requise'
-      );
-    }
+      if (!formData.designation.trim()) {
+        throw new Error(
+          'La désignation est requise'
+        );
+      }
 
-    if (!formData.categorie) {
-      throw new Error(
-        'La catégorie est requise'
-      );
-    }
+      if (!formData.categorie) {
+        throw new Error(
+          'La catégorie est requise'
+        );
+      }
 
-    if (editingModele) {
+      if (editingModele) {
 
-      await apiPut(
-        `/modeles/${editingModele.id}`,
-        {
-          designation: formData.designation,
-          description: formData.description,
-          image_url: formData.image_url,
-          categorie: formData.categorie,
-          est_actif: formData.est_actif
-        }
-      );
-
-    } else {
-
-      const code =
-        formData.code_modele ||
-        generateCodeModele(
-          formData.categorie,
-          modeles.map(
-            m => m.code_modele
-          )
+        await apiPut(
+          `/modeles/${editingModele.id}`,
+          {
+            designation: formData.designation,
+            description: formData.description,
+            image_url: formData.image_url,
+            categorie: formData.categorie,
+            est_actif: formData.est_actif
+          }
         );
 
-      await apiPost(
-        "/modeles",
-        {
-          code_modele: code,
-          designation: formData.designation,
-          description: formData.description,
-          image_url: formData.image_url,
-          categorie: formData.categorie,
-          est_actif: formData.est_actif
-        }
+      } else {
+        await apiPost(
+          "/modeles",
+          {
+            designation: formData.designation,
+            description: formData.description,
+            image_url: formData.image_url,
+            categorie: formData.categorie,
+            est_actif: formData.est_actif
+          }
+        );
+      }
+
+      closeModal();
+
+      resetForm();
+
+      await loadModeles();
+
+    } catch (err: any) {
+
+      setError(
+        err.message ||
+        "Erreur lors de l'enregistrement"
       );
+
+    } finally {
+
+      setSaving(false);
     }
+  };
+  const handleDelete = async () => {
 
-    closeModal();
+    if (!deleteId) return;
 
-    resetForm();
+    try {
 
-    await loadModeles();
+      setSaving(true);
 
-  } catch (err: any) {
+      setError(null);
 
-    setError(
-      err.message ||
-      "Erreur lors de l'enregistrement"
-    );
+      await apiDelete(
+        `/modeles/${deleteId}`
+      );
 
-  } finally {
+      closeDeleteModalHandler();
 
-    setSaving(false);
-  }
-};
-const handleDelete = async () => {
+      await loadModeles();
 
-  if (!deleteId) return;
+    } catch (err: any) {
 
-  try {
+      setError(
+        err.message || 'Erreur lors de la suppression'
+      );
 
-    setSaving(true);
+    } finally {
 
-    setError(null);
-
-    await apiDelete(
-      `/modeles/${deleteId}`
-    );
-
-    closeDeleteModalHandler();
-
-    await loadModeles();
-
-  } catch (err: any) {
-
-    setError(
-      err.message || 'Erreur lors de la suppression'
-    );
-
-  } finally {
-
-    setSaving(false);
-  }
-};
+      setSaving(false);
+    }
+  };
   if (loading && modeles.length === 0) {
     return (
       <Center style={{ height: '50vh' }}>

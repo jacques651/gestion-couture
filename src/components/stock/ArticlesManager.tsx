@@ -10,15 +10,24 @@ import { useDisclosure } from '@mantine/hooks';
 import {
   IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh,
   IconPackage, IconInfoCircle, IconPrinter, IconArrowUp, IconArrowDown,
-  IconPackages, IconBarcode, IconMapPin, 
+  IconPackages, IconBarcode, IconMapPin,
   IconDownload, IconFileExcel, IconFile,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import {
-  getArticles, createArticle, updateArticle, deleteArticle, updateStockArticle,
-  getModelesTenues, getTailles, getCouleurs, getTextures,
-  ModeleTenue, Taille, Couleur, Texture, ArticleComplet,
+  ModeleTenue,
+  Taille,
+  Couleur,
+  Texture,
+  ArticleComplet,
 } from '../../database/db';
+
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -67,7 +76,14 @@ const ArticlesManager: React.FC = () => {
   const loadData = async () => {
     setLoading(true); setError(null);
     try {
-      const [a, m, t, c, tx] = await Promise.all([getArticles(), getModelesTenues(true), getTailles(), getCouleurs(), getTextures()]);
+      const [a, m, t, c, tx] =
+        await Promise.all([
+          apiGet("/articles"),
+          apiGet("/modeles"),
+          apiGet("/tailles"),
+          apiGet("/couleurs"),
+          apiGet("/textures")
+        ]);
       setArticles(a); setModeles(m); setTailles(t); setCouleurs(c); setTextures(tx);
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -84,15 +100,46 @@ const ArticlesManager: React.FC = () => {
   const paginatedData = filteredArticles.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const applyFilters = async () => {
-    setLoading(true);
-    const f = await getArticles({
-      modele_id: filters.modele_id ? parseInt(filters.modele_id) : undefined,
-      taille_id: filters.taille_id ? parseInt(filters.taille_id) : undefined,
-      couleur_id: filters.couleur_id ? parseInt(filters.couleur_id) : undefined,
-      texture_id: filters.texture_id ? parseInt(filters.texture_id) : undefined,
-      est_disponible: filters.est_disponible ? filters.est_disponible === 'true' : undefined,
-    });
-    setArticles(f); setLoading(false);
+
+    let filtered = [...articles];
+
+    if (filters.modele_id) {
+      filtered =
+        filtered.filter(
+          a =>
+            String(a.modele_id) ===
+            filters.modele_id
+        );
+    }
+
+    if (filters.taille_id) {
+      filtered =
+        filtered.filter(
+          a =>
+            String(a.taille_id) ===
+            filters.taille_id
+        );
+    }
+
+    if (filters.couleur_id) {
+      filtered =
+        filtered.filter(
+          a =>
+            String(a.couleur_id) ===
+            filters.couleur_id
+        );
+    }
+
+    if (filters.texture_id) {
+      filtered =
+        filtered.filter(
+          a =>
+            String(a.texture_id) ===
+            filters.texture_id
+        );
+    }
+
+    setArticles(filtered);
   };
 
   const resetFilters = () => { setFilters({ modele_id: '', taille_id: '', couleur_id: '', texture_id: '', est_disponible: '' }); loadData(); };
@@ -112,8 +159,14 @@ const ArticlesManager: React.FC = () => {
     if (formData.prix_vente <= 0) { setError('Prix de vente > 0'); return; }
     setSaving(true); setError(null);
     try {
-      if (editingArticle) await updateArticle(editingArticle.id, formData);
-      else await createArticle(formData);
+      if (editingArticle) await apiPut(
+        `/articles/${editingArticle.id}`,
+        formData
+      );
+      else await apiPost(
+        "/articles",
+        formData
+      );
       closeModal(); await loadData(); resetForm();
     } catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
@@ -122,7 +175,18 @@ const ArticlesManager: React.FC = () => {
   const handleStockUpdate = async () => {
     if (!selectedArticle || stockQuantity <= 0) return;
     setSaving(true);
-    try { await updateStockArticle(selectedArticle.id, stockQuantity, stockAction); closeStockModal(); await loadData(); }
+    try {
+      await apiPut(
+        `/articles/${selectedArticle.id}`,
+        {
+          ...selectedArticle,
+          quantite_stock:
+            stockAction === 'add'
+              ? selectedArticle.quantite_stock + stockQuantity
+              : selectedArticle.quantite_stock - stockQuantity
+        }
+      );
+    }
     catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
   };
@@ -130,13 +194,17 @@ const ArticlesManager: React.FC = () => {
   const handleDelete = async () => {
     if (!deleteId) return;
     setSaving(true);
-    try { await deleteArticle(deleteId); closeDeleteModalHandler(); await loadData(); }
+    try {
+      await apiDelete(
+        `/articles/${deleteId}`
+      ); closeDeleteModalHandler(); await loadData();
+    }
     catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
   };
 
   const formatPrice = (p: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(p);
-  
+
   const getStockStatus = (stock: number, seuil: number) => {
     if (stock <= 0) return { text: 'Rupture', color: 'red' as const };
     if (stock <= seuil) return { text: 'Stock faible', color: 'orange' as const };

@@ -36,7 +36,10 @@ import {
   IconTag,
   IconCheck,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+  apiGet,
+  apiDelete
+} from '../../services/api';
 import FormulaireTypePrestation from './FormulaireTypePrestation';
 
 interface TypePrestation {
@@ -59,27 +62,37 @@ const ListeTypesPrestations: React.FC = () => {
   const itemsPerPage = 10;
 
   const chargerTypes = async () => {
-    setLoading(true);
-    const db = await getDb();
-    const result = await db.select<TypePrestation[]>(`
-      SELECT id, nom, prix_par_defaut, est_active
-      FROM types_prestations
-      WHERE est_active = 1
-      ORDER BY nom
-    `);
-    setTypes(result || []);
-    setLoading(false);
-  };
 
+    try {
+
+      setLoading(true);
+
+      const result =
+        await apiGet(
+          "/types-prestations"
+        );
+
+      setTypes(result || []);
+
+    } catch (error) {
+
+      console.error(error);
+
+    } finally {
+
+      setLoading(false);
+    }
+  };
   useEffect(() => {
     chargerTypes();
   }, []);
 
   const supprimerType = async (id: number, nom: string) => {
     if (!
-globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
-    const db = await getDb();
-    await db.execute("UPDATE types_prestations SET est_active = 0 WHERE id = ?", [id]);
+      globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
+    await apiDelete(
+      `/types-prestations/${id}`
+    );
     await chargerTypes();
     setSuccessMessage(`Type "${nom}" supprimé avec succès`);
     setShowSuccess(true);
@@ -92,7 +105,7 @@ globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
     setCurrentPage(1);
   };
 
-  const typesFiltres = types.filter(t => 
+  const typesFiltres = types.filter(t =>
     t.nom.toLowerCase().includes(recherche.toLowerCase())
   );
 
@@ -122,9 +135,9 @@ globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
     return (
       <FormulaireTypePrestation
         type={typeEdition || undefined}
-        onSuccess={() => { 
-          setVueForm(false); 
-          setTypeEdition(null); 
+        onSuccess={() => {
+          setVueForm(false);
+          setTypeEdition(null);
           chargerTypes();
           setSuccessMessage(typeEdition ? 'Type modifié avec succès' : 'Type créé avec succès');
           setShowSuccess(true);
@@ -301,23 +314,23 @@ globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
                         <Table.Td>
                           <Group gap="xs" justify="center">
                             <Tooltip label="Modifier">
-                              <ActionIcon 
-                                size="md" 
-                                variant="subtle" 
-                                color="orange" 
-                                onClick={() => { 
-                                  setTypeEdition(t); 
-                                  setVueForm(true); 
+                              <ActionIcon
+                                size="md"
+                                variant="subtle"
+                                color="orange"
+                                onClick={() => {
+                                  setTypeEdition(t);
+                                  setVueForm(true);
                                 }}
                               >
                                 <IconEdit size={18} />
                               </ActionIcon>
                             </Tooltip>
                             <Tooltip label="Supprimer">
-                              <ActionIcon 
-                                size="md" 
-                                variant="subtle" 
-                                color="red" 
+                              <ActionIcon
+                                size="md"
+                                variant="subtle"
+                                color="red"
                                 onClick={() => supprimerType(t.id, t.nom)}
                               >
                                 <IconTrash size={18} />

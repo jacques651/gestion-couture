@@ -1,6 +1,5 @@
 // src/components/ventes/VentesManager.tsx
 import React, { useState, useEffect } from 'react';
-import { Vente } from '../../database/db';
 import { journaliserAction } from "../../services/journal";
 import {
   Stack, Card, Title, Text, Group, Button, TextInput, NumberInput,
@@ -13,17 +12,34 @@ import {
   IconFileInvoice, IconReceipt, IconEye, IconList, IconEdit, IconX, IconUser,
   IconCheck
 } from '@tabler/icons-react';
-import { getDb, getNextVenteCode, getVentes, getVenteDetails, getVenteWithDetails, updateVenteComplete } from '../../database/db';
 import { notifications } from '@mantine/notifications';
 import FormulaireClient from '../clients/FormulaireClient';
 import ModalFacture from '../factures/ModalFacture';
 import ModalRecu from '../paiements/ModalRecu';
+
+import {
+  getVentes,
+  getVente,
+  createVente,
+  updateVente,
+  deleteVente,
+  annulerVente,
+  getVenteDetails,
+  getRendezVous,
+  terminerRendezVous,
+  annulerRendezVous,
+  payerVente
+} from "../../services/ventes";
+import { Vente } from '../../services/vente';
+import { apiGet } from '../../services/api';
+import { getNextVenteCode } from '../../database/db';
 
 // ========== TYPES ==========
 interface Client {
   id(id: any): unknown;
   profil: string; telephone_id: string; nom_prenom: string; adresse?: string; email?: string;
 }
+
 interface Article { id: number; code_article: string; modele: string; modele_id: number; taille: string; taille_id: number; couleur: string; couleur_id: number; texture: string | null; prix_vente: number; quantite_stock: number; emplacement: string | null; est_disponible: number; }
 interface Matiere { id: number; code_matiere: string; designation: string; unite: string; prix_vente: number; stock_actuel: number; }
 interface PanierItem { id: string; produitId: number; designation: string; taille?: string; couleur?: string; quantite: number; prixUnitaire: number; total: number; type_produit: 'article' | 'matiere'; }
@@ -35,10 +51,16 @@ const VentesManager: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [loading, setLoading] = useState(false);
   const [ventes, setVentes] = useState<Vente[]>([]);
+  const [
+,
+  setSelectedDetails
+] = useState<any[]>(
+  []
+);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
-  const [details, setDetails] = useState<any[]>([]);
+  const [details] = useState<any[]>([]);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const itemsPerPage = 10;
   const [venteType, setVenteType] = useState<VenteType>('commande');
@@ -86,219 +108,920 @@ const VentesManager: React.FC = () => {
   const totalPanier = panier.reduce((sum, item) => sum + item.total, 0);
 
   // ========== FONCTIONS (toutes les fonctions restent identiques) ==========
-  const loadVentes = async () => { try { setLoading(true); setVentes(await getVentes()); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); } };
-  const handleAnnulerVente = async (venteId: number, codeVente: string) => {
-    if (!
-      globalThis.confirm(`Annuler la vente "${codeVente}" ?`)) return; try {
-        setLoading(true); const db = await getDb(); const details = await db.select<any[]>(`SELECT * FROM vente_details WHERE vente_id = ?`, [venteId]); for (const d of details) { if (d.article_id) await db.execute(`UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?`, [d.quantite, d.article_id]); if (d.matiere_id) await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?`, [d.quantite, d.matiere_id]); } await db.execute(`UPDATE ventes SET statut = 'ANNULEE' WHERE id = ?`, [venteId]); // Journalisation annulation vente
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'UPDATE',
-          table: 'ventes',
-          idEnregistrement: venteId,
-          details:
-            `Annulation vente : ${codeVente}`
+  const loadVentes =
+    async () => {
+
+      try {
+
+        setLoading(true);
+
+        const data =
+          await getVentes();
+
+        setVentes(data);
+
+      } catch (err: any) {
+
+        notifications.show({
+          title: 'Erreur',
+
+          message:
+            err.message,
+
+          color: 'red'
         });
-        notifications.show({ title: 'Succès', message: `Vente ${codeVente} annulée`, color: 'green' }); await loadVentes();
-      } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); }
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
+  const handleAnnulerVente = async (
+    venteId: number,
+    codeVente: string
+  ) => {
+
+    if (
+      !globalThis.confirm(
+        `Annuler la vente "${codeVente}" ?`
+      )
+    ) return;
+
+    try {
+
+      setLoading(true);
+
+      /**
+       * API
+       */
+      await annulerVente(
+        venteId
+      );
+
+      /**
+       * Journalisation
+       */
+      await journaliserAction({
+
+        utilisateur:
+          'Utilisateur',
+
+        action:
+          'UPDATE',
+
+        table:
+          'ventes',
+
+        idEnregistrement:
+          venteId,
+
+        details:
+          `Annulation vente : ${codeVente}`
+      });
+
+      notifications.show({
+
+        title:
+          'Succès',
+
+        message:
+          `Vente ${codeVente} annulée`,
+
+        color:
+          'green'
+      });
+
+      await loadVentes();
+
+    } catch (err: any) {
+
+      console.error(err);
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          err.message,
+
+        color:
+          'red'
+      });
+
+    } finally {
+
+      setLoading(false);
+    }
   };
   const handleDeleteVente = async () => {
-    if (!deleteVenteId) return; try {
-      setLoading(true); const db = await getDb(); const details = await db.select<any[]>(`SELECT * FROM vente_details WHERE vente_id = ?`, [deleteVenteId]); for (const d of details) { if (d.article_id) await db.execute(`UPDATE articles SET quantite_stock = quantite_stock + ? WHERE id = ?`, [d.quantite, d.article_id]); if (d.matiere_id) await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel + ? WHERE id = ?`, [d.quantite, d.matiere_id]); } await db.execute(`DELETE FROM vente_details WHERE vente_id = ?`, [deleteVenteId]); await db.execute(`DELETE FROM ventes WHERE id = ?`, [deleteVenteId]); // Journalisation suppression vente
+
+    if (!deleteVenteId) return;
+
+    try {
+
+      setLoading(true);
+
+      await deleteVente(
+        deleteVenteId
+      );
+
+      // Journalisation
       await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'DELETE',
-        table: 'ventes',
-        idEnregistrement: deleteVenteId,
+        utilisateur:
+          'Utilisateur',
+
+        action:
+          'DELETE',
+
+        table:
+          'ventes',
+
+        idEnregistrement:
+          deleteVenteId,
+
         details:
           `Suppression vente : ${deleteVenteCode}`
       });
 
-      notifications.show({ title: 'Succès', message: `Vente ${deleteVenteCode} supprimée`, color: 'green' }); setDeleteVenteModalOpen(false); setDeleteVenteId(null); setDeleteVenteCode(''); await loadVentes();
-    } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); }
+      notifications.show({
+        title: 'Succès',
+
+        message:
+          `Vente ${deleteVenteCode} supprimée`,
+
+        color: 'green'
+      });
+
+      setDeleteVenteModalOpen(false);
+
+      setDeleteVenteId(null);
+
+      setDeleteVenteCode('');
+
+      await loadVentes();
+
+    } catch (err: any) {
+
+      notifications.show({
+        title: 'Erreur',
+
+        message:
+          err.message,
+
+        color: 'red'
+      });
+
+    } finally {
+
+      setLoading(false);
+    }
   };
   const loadFormData = async () => {
+
     try {
-      const db = await getDb(); setClients(await db.select<Client[]>(`SELECT
-  id,
-  profil,
-  telephone_id,
-  nom_prenom,
-  adresse,
-  email
-FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db.select<Article[]>(`SELECT a.id, a.code_article, a.prix_vente, a.quantite_stock, a.est_disponible, m.designation as modele, m.id as modele_id, t.libelle as taille, t.id as taille_id, c.nom_couleur as couleur, c.id as couleur_id, tx.nom_texture as texture FROM articles a LEFT JOIN modeles_tenues m ON a.modele_id = m.id LEFT JOIN tailles t ON a.taille_id = t.id LEFT JOIN couleurs c ON a.couleur_id = c.id LEFT JOIN textures tx ON a.texture_id = tx.id WHERE a.est_actif = 1 AND a.est_disponible = 1 AND a.quantite_stock > 0 ORDER BY m.designation, t.ordre, c.nom_couleur`)); setMatieres(await db.select<Matiere[]>(`SELECT id, code_matiere, designation, unite, stock_actuel FROM matieres WHERE est_supprime = 0 AND stock_actuel > 0 ORDER BY designation`)); setModeles(await db.select(`SELECT id, designation, categorie FROM modeles_tenues WHERE est_actif = 1`)); setCouleurs(await db.select(`SELECT id, nom_couleur, code_hex FROM couleurs WHERE est_actif = 1`)); setTailles(await db.select(`SELECT id, libelle, code_taille FROM tailles WHERE est_actif = 1`));
-    } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); }
+
+      const [
+        clientsData,
+        articlesData,
+        matieresData,
+        modelesData,
+        couleursData,
+        taillesData
+      ] = await Promise.all([
+
+        apiGet("/clients"),
+
+        apiGet("/articles"),
+
+        apiGet("/matieres"),
+
+        apiGet("/modeles-tenues"),
+
+        apiGet("/couleurs"),
+
+        apiGet("/tailles")
+      ]);
+
+      /**
+       * Clients
+       */
+      setClients(
+
+        clientsData
+
+          .filter(
+            (c: any) =>
+              c.est_supprime === 0
+          )
+
+          .sort(
+            (a: any, b: any) =>
+              a.nom_prenom.localeCompare(
+                b.nom_prenom
+              )
+          )
+      );
+
+      /**
+       * Articles
+       */
+      setArticles(
+
+        articlesData
+
+          .filter(
+            (a: any) =>
+
+              a.est_actif === 1
+
+              &&
+
+              a.est_disponible === 1
+
+              &&
+
+              Number(a.quantite_stock) > 0
+          )
+      );
+
+      /**
+       * Matières
+       */
+      setMatieres(
+
+        matieresData
+
+          .filter(
+            (m: any) =>
+
+              m.est_supprime === 0
+
+              &&
+
+              Number(m.stock_actuel) > 0
+          )
+
+          .sort(
+            (a: any, b: any) =>
+              a.designation.localeCompare(
+                b.designation
+              )
+          )
+      );
+
+      /**
+       * Modèles
+       */
+      setModeles(
+
+        modelesData.filter(
+          (m: any) =>
+            m.est_actif === 1
+        )
+      );
+
+      /**
+       * Couleurs
+       */
+      setCouleurs(
+
+        couleursData.filter(
+          (c: any) =>
+            c.est_actif === 1
+        )
+      );
+
+      /**
+       * Tailles
+       */
+      setTailles(
+
+        taillesData.filter(
+          (t: any) =>
+            t.est_actif === 1
+        )
+      );
+
+    } catch (err: any) {
+
+      console.error(err);
+
+      notifications.show({
+        title: 'Erreur',
+
+        message:
+          err.message,
+
+        color: 'red'
+      });
+    }
   };
   const generateCode = async () => { try { setCodeVente(await getNextVenteCode()); } catch { setCodeVente(`VTE-${Date.now()}`); } };
-  const handleViewDetails = async (vente: Vente) => { setSelectedVente(vente); try { setDetails(await getVenteDetails(vente.id)); setDetailsModalOpen(true); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } };
-  const handleEditVente = async (vente: Vente) => { try { setLoading(true); const vc = await getVenteWithDetails(vente.id); setEditVenteData({ id: vc.id, code_vente: vc.code_vente, type_vente: vc.type_vente, date_vente: vc.date_vente?.split('T')[0] || new Date().toISOString().split('T')[0], client_id: vc.client_id, client_nom: vc.client_nom, observation: vc.observation || '', montant_total: vc.montant_total, montant_regle: vc.montant_regle, lignes: (vc.details || []).map((d: any) => ({ id: d.id, designation: d.designation, quantite: d.quantite, prix_unitaire: d.prix_unitaire, total: d.total, article_id: d.article_id, matiere_id: d.matiere_id, taille_libelle: d.taille_libelle })) }); setEditModalOpen(true); } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setLoading(false); } };
-  const handleSaveEditVente = async () => {
-    if (!editVenteData) return; setEditLoading(true); try {
-      const newTotal = (editVenteData.lignes || []).reduce((s: number, l: LigneEdit) => s + (l.quantite * l.prix_unitaire), 0); await updateVenteComplete(editVenteData.id, { client_id: editVenteData.client_id, client_nom: editVenteData.client_nom, date_vente: editVenteData.date_vente, observation: editVenteData.observation, type_vente: editVenteData.type_vente, montant_total: newTotal, montant_regle: editVenteData.montant_regle, details: editVenteData.lignes }); notifications.show({ title: 'Succès', message: 'Vente modifiée', color: 'green' });
+  const handleViewDetails =
+    async (vente: Vente) => {
 
-      // Journalisation modification vente
+      try {
+
+        setLoading(true);
+
+        const details =
+          await getVenteDetails(
+            vente.id
+          );
+
+        setSelectedVente(vente);
+
+        setSelectedDetails(
+          details || []
+        );
+
+        setDetailsModalOpen(true);
+
+      } catch (err: any) {
+
+        notifications.show({
+          title: 'Erreur',
+
+          message:
+            err.message,
+
+          color: 'red'
+        });
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
+  const handleEditVente =
+    async (vente: Vente) => {
+
+      try {
+
+        setLoading(true);
+
+        const data =
+          await getVente(
+            vente.id
+          );
+
+        setEditVenteData(data);
+
+        setEditModalOpen(true);
+
+      } catch (err: any) {
+
+        notifications.show({
+          title: 'Erreur',
+
+          message:
+            err.message,
+
+          color: 'red'
+        });
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
+  const handleSaveEditVente = async () => {
+
+    if (!editVenteData) return;
+
+    setEditLoading(true);
+
+    try {
+
+      const newTotal =
+
+        (editVenteData.lignes || [])
+
+          .reduce(
+
+            (
+              s: number,
+              l: LigneEdit
+            ) =>
+
+              s +
+
+              (
+                l.quantite
+                *
+                l.prix_unitaire
+              ),
+
+            0
+          );
+
+      await updateVente(
+
+        editVenteData.id,
+
+        {
+          client_id:
+            editVenteData.client_id,
+
+          client_nom:
+            editVenteData.client_nom,
+
+          date_vente:
+            editVenteData.date_vente,
+
+          observation:
+            editVenteData.observation,
+
+          type_vente:
+            editVenteData.type_vente,
+
+          montant_total:
+            newTotal,
+
+          montant_regle:
+            editVenteData.montant_regle,
+
+          details:
+            editVenteData.lignes
+        }
+      );
+
+      notifications.show({
+        title: 'Succès',
+
+        message:
+          'Vente modifiée',
+
+        color: 'green'
+      });
+
+      // Journalisation
       await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'UPDATE',
-        table: 'ventes',
-        idEnregistrement: editVenteData.id,
+
+        utilisateur:
+          'Utilisateur',
+
+        action:
+          'UPDATE',
+
+        table:
+          'ventes',
+
+        idEnregistrement:
+          editVenteData.id,
+
         details:
+
           `Modification vente : ${editVenteData.code_vente} - ` +
+
           `${newTotal.toLocaleString()} FCFA`
       });
-      setEditModalOpen(false); setEditVenteData(null); await loadVentes();
-    } catch (err: any) { notifications.show({ title: 'Erreur', message: err.message, color: 'red' }); } finally { setEditLoading(false); }
+
+      setEditModalOpen(false);
+
+      setEditVenteData(null);
+
+      await loadVentes();
+
+    } catch (err: any) {
+
+      console.error(err);
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          err.message,
+
+        color:
+          'red'
+      });
+
+    } finally {
+
+      setEditLoading(false);
+    }
   };
 
   const handleAddEditLigne = () => setEditVenteData({ ...editVenteData, lignes: [...(editVenteData?.lignes || []), { designation: '', quantite: 1, prix_unitaire: 0, total: 0 }] });
   const handleEditLigneChange = (i: number, f: string, v: any) => { const nl = [...(editVenteData?.lignes || [])]; nl[i][f] = v; nl[i].total = (nl[i].quantite || 0) * (nl[i].prix_unitaire || 0); setEditVenteData({ ...editVenteData, lignes: nl }); };
   const handleRemoveEditLigne = (i: number) => { const nl = [...(editVenteData?.lignes || [])]; nl.splice(i, 1); setEditVenteData({ ...editVenteData, lignes: nl }); };
   const getEditTotal = () => (editVenteData?.lignes || []).reduce((s: number, l: LigneEdit) => s + (l.quantite * l.prix_unitaire), 0);
-  const handleShowFacture = (vente: Vente) => { if (vente.type_vente !== 'commande') { notifications.show({ title: 'Info', message: 'Seules les commandes sur mesure ont une facture', color: 'blue' }); return; } setFactureData({ client: { nom_prenom: vente.client_nom || 'Client non renseigné', telephone_id: vente.client_id || '' }, lignes: [], total_general: vente.montant_total || 0, avance: vente.montant_regle || 0, reste: (vente.montant_total || 0) - (vente.montant_regle || 0), numero: vente.code_vente || 'N/A', date_commande: vente.date_vente || new Date().toISOString(), id: vente.id, statut: vente.statut }); setShowFacture(true); };
+  const handleShowFacture = (
+    vente: Vente
+  ) => {
+
+    if (
+      vente.type_vente !== 'commande'
+    ) {
+
+      notifications.show({
+
+        title: 'Info',
+
+        message:
+          'Seules les commandes sur mesure ont une facture',
+
+        color: 'blue'
+      });
+
+      return;
+    }
+
+    setFactureData(
+      vente
+    );
+
+    setShowFacture(
+      true
+    );
+  };
   const handleShowRecu = (vente: Vente) => { setVenteIdForRecu(vente.id); setShowRecu(true); };
   const handleAjouterAuPanier = () => { if (!selectedArticle || quantiteCmd > selectedArticle.quantite_stock) { notifications.show({ title: 'Erreur', message: `Stock insuffisant (max: ${selectedArticle?.quantite_stock})`, color: 'red' }); return; } const mm = modeles?.find(m => m.designation === selectedArticle.modele); const tt = tailles?.find(t => t.libelle === selectedArticle.taille); let des = selectedArticle.modele; if (mm) des += ` (${mm.categorie})`; des += ` - ${tt?.code_taille || selectedArticle.taille} - ${selectedArticle.couleur}`; if (selectedArticle.texture) des += ` - (${selectedArticle.texture})`; const ex = panier.findIndex(item => item.produitId === selectedArticle.id && item.type_produit === 'article'); if (ex >= 0) { const up = [...panier]; const nq = up[ex].quantite + quantiteCmd; if (nq > selectedArticle.quantite_stock) { notifications.show({ title: 'Erreur', message: 'Stock insuffisant', color: 'red' }); return; } up[ex].quantite = nq; up[ex].total = up[ex].prixUnitaire * nq; setPanier(up); notifications.show({ title: 'Mis à jour', message: `${des} : ${nq} x ${up[ex].prixUnitaire.toLocaleString()} FCFA`, color: 'green' }); } else { setPanier([...panier, { id: `${Date.now()}-${Math.random()}`, produitId: selectedArticle.id, designation: des, taille: tt?.code_taille || selectedArticle.taille, couleur: selectedArticle.couleur, quantite: quantiteCmd, prixUnitaire: selectedArticle.prix_vente, total: selectedArticle.prix_vente * quantiteCmd, type_produit: 'article' }]); notifications.show({ title: 'Ajouté', message: `${des} x${quantiteCmd}`, color: 'green' }); } setSelectedArticle(null); setQuantiteCmd(1); setSearchProduitTerm(''); };
   const handleAjouterMatiereAuPanier = (matiere: Matiere) => { const ex = panier.findIndex(item => item.produitId === matiere.id && item.type_produit === 'matiere'); if (ex >= 0) { if (panier[ex].quantite + 1 > matiere.stock_actuel) { notifications.show({ title: 'Erreur', message: 'Stock insuffisant', color: 'red' }); return; } const up = [...panier]; up[ex].quantite += 1; up[ex].total = up[ex].prixUnitaire * up[ex].quantite; setPanier(up); notifications.show({ title: 'Mis à jour', message: `${matiere.designation} : ${up[ex].quantite} unité(s)`, color: 'green' }); } else { setPanier([...panier, { id: `${Date.now()}-${Math.random()}`, produitId: matiere.id, designation: matiere.designation, quantite: 1, prixUnitaire: matiere.prix_vente, total: matiere.prix_vente, type_produit: 'matiere' }]); notifications.show({ title: 'Ajouté', message: `${matiere.designation} x1`, color: 'green' }); } };
   const handleSupprimerPanier = (id: string) => setPanier(panier.filter(item => item.id !== id));
   const handleGenererFacture = () => { if (panier.length === 0) { notifications.show({ title: 'Erreur', message: 'Ajoutez des articles à la commande', color: 'red' }); return; } setFactureData({ client: { nom_prenom: clientNom || (clientId ? clients.find(c => c.telephone_id === clientId)?.nom_prenom : 'Client'), telephone_id: clientTelephone || clientId || '' }, lignes: panier.map(item => ({ designation: item.designation, quantite: item.quantite, prix_unitaire: item.prixUnitaire, total: item.total })), total_general: totalPanier, avance: 0, reste: totalPanier, numero: codeVente, date_commande: dateCommande }); setShowFacture(true); };
   const handleSubmitVente = async () => {
+
     if (panier.length === 0) {
-      notifications.show({ title: 'Erreur', message: 'Ajoutez des articles au panier', color: 'red' });
+
+      notifications.show({
+        title: 'Erreur',
+
+        message:
+          'Ajoutez des articles au panier',
+
+        color: 'red'
+      });
+
       return;
     }
+
     setLoading(true);
+
     try {
-      const db = await getDb();
-      let finalClientId = null;
-      let finalClientNom = 'Client comptoir';
 
+      let finalClientId =
+        null;
+
+      let finalClientNom =
+        'Client comptoir';
+
+      /**
+       * CLIENT
+       */
       if (venteType === 'commande') {
+
         if (clientId) {
-          // clientId est maintenant l'ID numérique du client (pas le téléphone)
-          finalClientId = parseInt(clientId);
-          const client = clients.find(c => String(c.id) === clientId || c.telephone_id === clientId);
-          finalClientNom = client?.nom_prenom || clientNom || 'Client';
+
+          finalClientId =
+            parseInt(clientId);
+
+          const client =
+            clients.find(
+              c =>
+
+                String(c.id)
+                === clientId
+
+                ||
+
+                c.telephone_id
+                === clientId
+            );
+
+          finalClientNom =
+            client?.nom_prenom
+            ||
+            clientNom
+            ||
+            'Client';
+
         } else {
-          finalClientNom = clientNom || 'Client';
+
+          finalClientNom =
+            clientNom
+            || 'Client';
         }
+
       } else {
-        finalClientNom = clientNomSimple || 'Client comptoir';
+
+        finalClientNom =
+          clientNomSimple
+          || 'Client comptoir';
       }
 
-      const statut = venteType === 'commande' ? 'EN_ATTENTE' : 'PAYEE';
-      const montantRegle = venteType === 'commande' ? 0 : totalPanier;
+      /**
+       * STATUT
+       */
+      const statut =
 
-      const r = await db.execute(
-        `INSERT INTO ventes (code_vente, type_vente, date_vente, client_id, client_nom, mode_paiement, montant_total, montant_regle, statut, observation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        venteType === 'commande'
+          ? 'EN_ATTENTE'
+          : 'PAYEE';
 
-        [codeVente, venteType, dateCommande, finalClientId, finalClientNom, 'Espèces', totalPanier, montantRegle, statut, observation]
-      );
-      // =========================
-      // RECUPERER ID VENTE
-      // =========================
-      const venteInserted =
-        await db.select<{ id: number }[]>(
-          `
-    SELECT id
-    FROM ventes
-    WHERE code_vente = ?
-    ORDER BY id DESC
-    LIMIT 1
-    `,
-          [codeVente]
-        );
+      const montantRegle =
 
-      const venteId =
-        venteInserted[0]?.id;
+        venteType === 'commande'
+          ? 0
+          : totalPanier;
 
-      // =========================
-      // CREER RENDEZ-VOUS
-      // =========================
-      if (
-        venteType === 'commande' &&
-        venteId &&
-        clientId &&
-        dateRendezVous
-      ) {
+      /**
+       * API CREATE
+       */
+      const vente =
+        await createVente({
 
-        await db.execute(
-          `
-    INSERT INTO rendezvous_commandes (
+          code_vente:
+            codeVente,
 
-      vente_id,
-      client_id,
+          type_vente:
+            venteType,
 
-      type_rendezvous,
+          date_vente:
+            dateCommande,
 
-      date_rendezvous,
+          client_id:
+            finalClientId,
 
-      heure_rendezvous,
+          client_nom:
+            finalClientNom,
 
-      statut
+          mode_paiement:
+            'Espèces',
 
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-    `,
-          [
-            venteId,
+          montant_total:
+            totalPanier,
 
-            Number(clientId),
+          montant_regle:
+            montantRegle,
 
-            typeRendezVous,
+          statut,
 
-            dateRendezVous,
+          observation,
 
-            heureRendezVous || null,
+          details:
 
-            'planifie'
-          ]
-        );
-      }
+            panier.map(item => ({
 
-      const vId = Number(r.lastInsertId);
-      if (!vId || isNaN(vId)) throw new Error("Impossible de récupérer l'ID de la vente");
+              type_produit:
+                item.type_produit,
 
-      for (const item of panier) {
-        await db.execute(
-          `INSERT INTO vente_details (vente_id, article_id, matiere_id, designation, quantite, prix_unitaire, total, taille_libelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [vId, item.type_produit === 'article' && item.produitId > 0 ? item.produitId : null, item.type_produit === 'matiere' ? item.produitId : null, item.designation, item.quantite, item.prixUnitaire, item.total, item.taille || null]
-        );
-        if (venteType !== 'commande') {
-          if (item.type_produit === 'article') {
-            await db.execute(`UPDATE articles SET quantite_stock = quantite_stock - ? WHERE id = ?`, [item.quantite, item.produitId]);
-          } else if (item.type_produit === 'matiere') {
-            await db.execute(`UPDATE matieres SET stock_actuel = stock_actuel - ? WHERE id = ?`, [item.quantite, item.produitId]);
-          }
-        }
-      }
+              article_id:
 
-      notifications.show({ title: 'Succès', message: `Vente ${codeVente} enregistrée`, color: 'green' });
-      // Journalisation création vente
+                item.type_produit
+                  === 'article'
+
+                  &&
+
+                  item.produitId > 0
+
+                  ? item.produitId
+
+                  : null,
+
+              matiere_id:
+
+                item.type_produit
+                  === 'matiere'
+
+                  ? item.produitId
+
+                  : null,
+
+              designation:
+                item.designation,
+
+              quantite:
+                item.quantite,
+
+              prix_unitaire:
+                item.prixUnitaire,
+
+              total:
+                item.total,
+
+              taille_libelle:
+                item.taille || null
+            })),
+
+          rendezvous:
+
+            venteType === 'commande'
+
+              &&
+
+              finalClientId
+
+              &&
+
+              dateRendezVous
+
+              ? {
+
+                client_id:
+                  finalClientId,
+
+                type_rendezvous:
+                  typeRendezVous,
+
+                date_rendezvous:
+                  dateRendezVous,
+
+                heure_rendezvous:
+                  heureRendezVous || null,
+
+                statut:
+                  'planifie'
+              }
+
+              : null
+        });
+
+      /**
+       * Journalisation
+       */
       await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'CREATE',
-        table: 'ventes',
-        idEnregistrement: vId,
+
+        utilisateur:
+          'Utilisateur',
+
+        action:
+          'CREATE',
+
+        table:
+          'ventes',
+
+        idEnregistrement:
+          vente.id,
+
         details:
+
           `Création vente : ${codeVente} - ` +
+
           `${finalClientNom} - ` +
+
           `${totalPanier.toLocaleString()} FCFA`
       });
 
-      setVenteIdForRecu(vId);
+      notifications.show({
+
+        title:
+          'Succès',
+
+        message:
+          `Vente ${codeVente} enregistrée`,
+
+        color:
+          'green'
+      });
+
+      setVenteIdForRecu(
+        vente.id
+      );
+
       setShowRecu(true);
+
+      await loadVentes();
+
+      resetForm();
+
     } catch (err: any) {
-      notifications.show({ title: 'Erreur', message: err.message || String(err), color: 'red' });
+
+      console.error(err);
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          err.message || String(err),
+
+        color:
+          'red'
+      });
+
     } finally {
+
       setLoading(false);
     }
   };
 
-  const submitVenteAvecPaiement = async (_montantRegle: number, _mode: string) => { /* garder l'existant */ };
+  const submitVenteAvecPaiement = async (
+    montantRegle: number,
+    mode: string
+  ) => {
+
+    if (!factureData?.id) {
+
+      notifications.show({
+        title: 'Erreur',
+
+        message:
+          'Vente introuvable',
+
+        color:
+          'red'
+      });
+
+      return;
+    }
+
+    try {
+
+      setLoading(true);
+
+      await payerVente(
+        factureData.id,
+        montantRegle,
+        mode
+      );
+
+      // Journalisation
+      await journaliserAction({
+
+        utilisateur:
+          'Utilisateur',
+
+        action:
+          'UPDATE',
+
+        table:
+          'ventes',
+
+        idEnregistrement:
+          factureData.id,
+
+        details:
+
+          `Paiement vente : ${factureData.code_vente} - ` +
+
+          `${montantRegle.toLocaleString()} FCFA`
+      });
+
+      notifications.show({
+
+        title:
+          'Succès',
+
+        message:
+          'Paiement enregistré',
+
+        color:
+          'green'
+      });
+
+      setShowFacture(false);
+
+      await loadVentes();
+
+    } catch (err: any) {
+
+      console.error(err);
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          err.message,
+
+        color:
+          'red'
+      });
+
+    } finally {
+
+      setLoading(false);
+    }
+  };
   const resetForm = () => { setVenteType('commande'); setClientId(null); setClientNom(''); setClientTelephone(''); setClientNomSimple(''); setClientTelephoneSimple(''); setPanier([]); setSelectedArticle(null); setMontantCommande(0); setQuantiteCommande(1); setObservation(''); setProduitCommande(''); setSearchProduitTerm(''); generateCode(); };
   const backToList = () => { setViewMode('list'); loadVentes(); };
   const formatPrice = (price: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(price);
   const getStatusBadge = (statut: string) => { switch (statut) { case 'PAYEE': return <Badge color="green">Payée</Badge>; case 'PARTIEL': return <Badge color="orange">Partiel</Badge>; case 'ANNULEE': return <Badge color="red">Annulée</Badge>; default: return <Badge color="blue">En cours</Badge>; } };
-  const filteredVentes = ventes.filter(v => v.code_vente.toLowerCase().includes(searchTerm.toLowerCase()) || (v.client_nom && v.client_nom.toLowerCase().includes(searchTerm.toLowerCase())));
+  const filteredVentes = ventes.filter(
+
+    v =>
+
+      (v.code_vente || '')
+        .toLowerCase()
+        .includes(
+          searchTerm.toLowerCase()
+        )
+
+      ||
+
+      (v.client_nom || '')
+        .toLowerCase()
+        .includes(
+          searchTerm.toLowerCase()
+        )
+  );
   const paginatedVentes = filteredVentes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filteredVentes.length / itemsPerPage);
 
@@ -307,16 +1030,7 @@ FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db
 
       try {
 
-        const db = await getDb();
-
-        await db.execute(
-          `
-        UPDATE rendezvous_commandes
-        SET statut = 'termine'
-        WHERE id = ?
-        `,
-          [id]
-        );
+        await terminerRendezVous(id);
 
         loadRendezVous();
 
@@ -331,16 +1045,7 @@ FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db
 
       try {
 
-        const db = await getDb();
-
-        await db.execute(
-          `
-        UPDATE rendezvous_commandes
-        SET statut = 'annule'
-        WHERE id = ?
-        `,
-          [id]
-        );
+        await annulerRendezVous(id);
 
         loadRendezVous();
 
@@ -349,55 +1054,26 @@ FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db
         console.error(err);
       }
     };
+
   const [rendezVous, setRendezVous] =
     useState<any[]>([]);
 
-  const loadRendezVous = async () => {
+  const loadRendezVous =
+    async () => {
 
-    try {
+      try {
 
-      const db = await getDb();
+        const rows =
+          await getRendezVous();
 
-      const rows =
-        await db.select<any[]>(
-          `
-        SELECT
+        setRendezVous(rows);
 
-          r.id,
+      } catch (err) {
 
-          r.date_rendezvous,
+        console.error(err);
+      }
+    };
 
-          r.heure_rendezvous,
-
-          r.type_rendezvous,
-
-          r.statut,
-
-          c.nom_prenom,
-
-          v.code_vente
-
-        FROM rendezvous_commandes r
-
-        LEFT JOIN clients c
-          ON c.id = r.client_id
-
-        LEFT JOIN ventes v
-          ON v.id = r.vente_id
-
-        ORDER BY
-          r.date_rendezvous ASC,
-          r.heure_rendezvous ASC
-        `
-        );
-
-      setRendezVous(rows);
-
-    } catch (err) {
-
-      console.error(err);
-    }
-  };
   const clientOptions = clients.map(c => ({
     value: String(c.id),  // Utilise l'ID numérique maintenant
     label: `${c.nom_prenom} (${c.profil === 'principal' ? 'Moi' : c.profil || 'Moi'}) - ${c.telephone_id}`,
@@ -412,11 +1088,125 @@ FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db
 
   // ========== RENDU ==========
 
-  // SOUS-MODALS (en dehors de la condition)
-  if (showFormulaireClient) return <FormulaireClient onBack={() => setShowFormulaireClient(false)} onSuccess={(cid, cnom) => { setShowFormulaireClient(false); (async () => { const db = await getDb(); setClients(await db.select<Client[]>(`SELECT telephone_id, nom_prenom, adresse, email FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); if (cid) { setClientId(String(cid)); setClientNom(cnom || ''); } })(); }} />;
-  if (showFacture && factureData) return <ModalFacture vente={factureData} onClose={() => setShowFacture(false)} onConfirmPaiement={(m, mode) => { submitVenteAvecPaiement(m, mode); }} onRefresh={loadVentes} />;
-  if (showRecu && venteIdForRecu) return <ModalRecu commande={{ id: venteIdForRecu }} onClose={() => { setShowRecu(false); setVenteIdForRecu(null); backToList(); }} />;
+  // SOUS-MODALS
+  if (showFormulaireClient)
 
+    return (
+
+      <FormulaireClient
+
+        onBack={() =>
+          setShowFormulaireClient(false)
+        }
+
+        onSuccess={
+          async (
+            cid,
+            cnom
+          ) => {
+
+            setShowFormulaireClient(false);
+
+            try {
+
+              const data =
+                await apiGet(
+                  "/clients"
+                );
+
+              setClients(
+
+                data
+
+                  .filter(
+                    (c: any) =>
+                      c.est_supprime === 0
+                  )
+
+                  .sort(
+                    (a: any, b: any) =>
+                      a.nom_prenom.localeCompare(
+                        b.nom_prenom
+                      )
+                  )
+              );
+
+              if (cid) {
+
+                setClientId(
+                  String(cid)
+                );
+
+                setClientNom(
+                  cnom || ''
+                );
+              }
+
+            } catch (err) {
+
+              console.error(err);
+            }
+          }
+        }
+      />
+    );
+
+  if (
+    showFacture
+    &&
+    factureData
+  )
+
+    return (
+
+      <ModalFacture
+
+        vente={factureData}
+
+        onClose={() =>
+          setShowFacture(false)
+        }
+
+        onConfirmPaiement={(
+          m,
+          mode
+        ) => {
+
+          submitVenteAvecPaiement(
+            m,
+            mode
+          );
+        }}
+
+        onRefresh={loadVentes}
+      />
+    );
+
+  if (
+    showRecu
+    &&
+    venteIdForRecu
+  )
+
+    return (
+
+      <ModalRecu
+
+        commande={{
+          id:
+            venteIdForRecu
+        }}
+
+        onClose={() => {
+
+          setShowRecu(false);
+
+          setVenteIdForRecu(null);
+
+          backToList();
+        }}
+      />
+    );
   // VUE LISTE
   if (viewMode === 'list') {
     return (
@@ -753,3 +1543,4 @@ FROM clients WHERE est_supprime = 0 ORDER BY nom_prenom`)); setArticles(await db
 };
 
 export default VentesManager;
+

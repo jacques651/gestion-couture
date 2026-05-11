@@ -27,13 +27,15 @@ import {
   IconInfoCircle,
   IconHelp,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+
 import { notifications } from '@mantine/notifications';
+import { apiPost, apiPut } from '../../services/api';
 
 // ======================
 // TYPES
 // ======================
 interface TypePrestation {
+  code_prestation: any;
   id?: number;
   nom: string;
   prix_par_defaut: number;
@@ -85,16 +87,25 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
     setLoading(true);
 
     try {
-      const db = await getDb();
+      
 
       if (type?.id) {
         // Corrigé : virgule en trop supprimée
-        await db.execute(
-          `UPDATE types_prestations 
-           SET nom = ?, prix_par_defaut = ?
-           WHERE id = ?`,
-          [nom.trim(), valeur, type.id]
-        );
+       await apiPut(
+  `/types-prestations/${type.id}`,
+  {
+    code_prestation:
+      type.code_prestation,
+
+    nom:
+      nom.trim(),
+
+    prix_par_defaut:
+      valeur,
+
+    est_active: 1
+  }
+);
 
         notifications.show({
           title: 'Succès',
@@ -102,13 +113,21 @@ const FormulaireTypePrestation: React.FC<Props> = ({ type, onSuccess, onCancel }
           color: 'green',
         });
       } else {
-        await db.execute(
-          `INSERT INTO types_prestations 
-           (nom, prix_par_defaut, est_active, created_at)
-           VALUES (?, ?, 1, CURRENT_TIMESTAMP)`,
-          [nom.trim(), valeur]
-        );
+       await apiPost(
+  "/types-prestations",
+  {
+    code_prestation:
+      `PREST-${Date.now()}`,
 
+    nom:
+      nom.trim(),
+
+    prix_par_defaut:
+      valeur,
+
+    est_active: 1
+  }
+);
         notifications.show({
           title: 'Succès',
           message: 'Type de prestation ajouté avec succès',

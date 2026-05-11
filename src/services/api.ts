@@ -1,58 +1,114 @@
 const API_URL = "http://localhost:3001";
 
-export async function apiGet(endpoint: string) {
-  const response = await fetch(`${API_URL}${endpoint}`);
+/**
+ * Gestion centralisée des réponses API
+ */
+async function handleResponse(
+  response: Response
+) {
 
-  if (!response.ok) {
-    throw new Error("Erreur API");
+  let data: any = null;
+
+  try {
+
+    data = await response.json();
+
+  } catch {
+
+    data = null;
   }
 
-  return response.json();
-}
-
-export async function apiPost(endpoint: string, data: any) {
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
-
+  // =========================
+  // Erreur HTTP
+  // =========================
   if (!response.ok) {
-    throw new Error("Erreur API");
+
+    throw new Error(
+      data?.error ||
+      "Erreur API"
+    );
   }
 
-  return response.json();
+  return data;
 }
 
+/**
+ * GET
+ */
+export async function apiGet(
+  endpoint: string
+) {
 
-export async function apiDelete(endpoint: string) {
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    method: "DELETE",
-  });
+  const response =
+    await fetch(
+      `${API_URL}${endpoint}`
+    );
 
-  if (!response.ok) {
-    throw new Error("Erreur API");
-  }
-
-  return response.json();
+  return handleResponse(response);
 }
 
-export async function apiPut(endpoint: string, data: any) {
+/**
+ * POST
+ */
+export async function apiPost(
+  endpoint: string,
+  data: any
+) {
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
+  const response =
+    await fetch(
+      `${API_URL}${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify(data),
+      }
+    );
 
-  if (!response.ok) {
-    throw new Error("Erreur API");
-  }
-
-  return response.json();
+  return handleResponse(response);
 }
 
+/**
+ * PUT
+ */
+export async function apiPut(
+  endpoint: string,
+  data: any
+) {
+
+  const response =
+    await fetch(
+      `${API_URL}${endpoint}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify(data),
+      }
+    );
+
+  return handleResponse(response);
+}
+
+/**
+ * DELETE
+ */
+export async function apiDelete(
+  endpoint: string
+) {
+
+  const response =
+    await fetch(
+      `${API_URL}${endpoint}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+  return handleResponse(response);
+}

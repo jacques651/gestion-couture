@@ -7,7 +7,11 @@ import {
   IconUser, IconTools, IconFileDescription,
   IconCoin, IconStack, IconCheck, IconPlus,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+  apiGet,
+  apiPost,
+  apiPut
+} from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import FormulaireTypePrestation from './FormulaireTypePrestation';
 
@@ -41,23 +45,58 @@ const FormulairePrestationRealisee: React.FC<Props> = ({ prestation, onSuccess, 
   const [types, setTypes] = useState<TypePrestation[]>([]);
 
   const loadTypes = async () => {
-    const db = await getDb();
-    const tp = await db.select<TypePrestation[]>(
-      `SELECT id, nom, prix_par_defaut FROM types_prestations WHERE est_active = 1`
-    );
-    setTypes(tp || []);
+
+    try {
+
+      const tp =
+        await apiGet(
+          "/types-prestations"
+        );
+
+      setTypes(tp || []);
+
+    } catch (error) {
+
+      console.error(error);
+    }
   };
 
   useEffect(() => {
+
     const load = async () => {
-      const db = await getDb();
-      const emp = await db.select<Employe[]>(
-        `SELECT id, nom_prenom FROM employes WHERE est_actif = 1 AND type_remuneration = 'prestation'`
-      );
-      setEmployes(emp || []);
-      await loadTypes();
+
+      try {
+
+        const emp =
+          await apiGet(
+            "/employes"
+          );
+
+        const filtered =
+          emp.filter(
+            (e: any) =>
+
+              e.est_actif === 1
+
+              &&
+
+              e.type_remuneration
+              ===
+              'prestation'
+          );
+
+        setEmployes(filtered || []);
+
+        await loadTypes();
+
+      } catch (error) {
+
+        console.error(error);
+      }
     };
+
     load();
+
   }, []);
 
   const total = (valeur || 0) * (nombre || 1);
@@ -83,25 +122,84 @@ const FormulairePrestationRealisee: React.FC<Props> = ({ prestation, onSuccess, 
 
     setLoading(true);
     try {
-      const db = await getDb();
-      if (prestation) {
-        await db.execute(
-          `UPDATE prestations_realisees SET employe_id=?, type_prestation_id=?, designation=?, valeur=?, nombre=?, total=? WHERE id=?`,
-          [parseInt(employeId), typeId ? parseInt(typeId) : null, designation, valeur, nombre, total, prestation.id]
-        );
-      } else {
-        await db.execute(
-          `INSERT INTO prestations_realisees (employe_id, type_prestation_id, designation, valeur, nombre, total) VALUES (?, ?, ?, ?, ?, ?)`,
-          [parseInt(employeId), typeId ? parseInt(typeId) : null, designation, valeur, nombre, total]
-        );
-      }
-      notifications.show({ title: 'Succès', message: 'Prestation enregistrée', color: 'green' });
-      onSuccess();
-    } catch (err: any) {
-      notifications.show({ title: 'Erreur', message: err.message || 'Erreur', color: 'red' });
-    } finally { setLoading(false); }
-  };
 
+  if (prestation) {
+
+    await apiPut(
+      `/prestations-realisees/${prestation.id}`,
+      {
+        employe_id:
+          parseInt(employeId),
+
+        type_prestation_id:
+          typeId
+            ? parseInt(typeId)
+            : null,
+
+        designation,
+
+        valeur,
+
+        nombre,
+
+        total
+      }
+    );
+
+  } else {
+
+    await apiPost(
+      "/prestations-realisees",
+      {
+        employe_id:
+          parseInt(employeId),
+
+        type_prestation_id:
+          typeId
+            ? parseInt(typeId)
+            : null,
+
+        designation,
+
+        valeur,
+
+        nombre,
+
+        total
+      }
+    );
+  }
+
+  notifications.show({
+    title: 'Succès',
+
+    message:
+      'Prestation enregistrée',
+
+    color: 'green'
+  });
+
+  onSuccess();
+
+} catch (err: any) {
+
+  console.error(err);
+
+  notifications.show({
+    title: 'Erreur',
+
+    message:
+      err.message || 'Erreur',
+
+    color: 'red'
+  });
+
+} finally {
+
+  setLoading(false);
+}
+};
+  
   return (
     <>
       <Modal

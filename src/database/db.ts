@@ -72,6 +72,8 @@ export interface ModeleTenue {
 }
 
 export interface CategorieMatiere {
+  couleur_affichage: string;
+  est_active: number;
   id: number;
   code_categorie: string;
   nom_categorie: string;

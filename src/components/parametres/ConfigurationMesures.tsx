@@ -38,7 +38,11 @@ import {
   IconCheck,
   IconDimensions,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+  apiGet,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 import FormulaireTypeMesure from './FormulaireTypeMesure';
 import { journaliserAction } from '../../services/journal';
 
@@ -63,13 +67,26 @@ const ConfigurationMesures: React.FC = () => {
   const itemsPerPage = 10;
 
   const chargerTypes = async () => {
-    setLoading(true);
-    const db = await getDb();
-    const result = await db.select<TypeMesure[]>(
-      "SELECT * FROM types_mesures WHERE est_active = 1 ORDER BY ordre_affichage ASC"
-    );
-    setTypes(result);
-    setLoading(false);
+
+    try {
+
+      setLoading(true);
+
+      const result =
+        await apiGet(
+          "/types-mesures"
+        );
+
+      setTypes(result || []);
+
+    } catch (error) {
+
+      console.error(error);
+
+    } finally {
+
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -78,8 +95,9 @@ const ConfigurationMesures: React.FC = () => {
 
   const supprimerType = async (id: number, nom: string) => {
     if (!globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
-    const db = await getDb();
-    await db.execute("UPDATE types_mesures SET est_active = 0 WHERE id = ?", [id]);
+    await apiDelete(
+      `/types-mesures/${id}`
+    );
 
     await journaliserAction({
       utilisateur: 'Utilisateur',
@@ -95,34 +113,62 @@ const ConfigurationMesures: React.FC = () => {
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
-  const changerOrdre = async (id: number, actuel: number, direction: 'haut' | 'bas') => {
-    const db = await getDb();
-    const nouvelOrdre = direction === 'haut' ? actuel - 1 : actuel + 1;
-    if (nouvelOrdre < 1 || nouvelOrdre > types.length) return;
+  const changerOrdre = async (
+    id: number,
+    actuel: number,
+    direction: 'haut' | 'bas'
+  ) => {
 
-    await db.execute(
-      "UPDATE types_mesures SET ordre_affichage = ? WHERE ordre_affichage = ?",
-      [actuel, nouvelOrdre]
-    );
-    await db.execute(
-      "UPDATE types_mesures SET ordre_affichage = ? WHERE id = ?",
-      [nouvelOrdre, id]
-    );
+    try {
 
-    await journaliserAction({
-      utilisateur: 'Utilisateur',
-      action: 'UPDATE',
-      table: 'types_mesures',
-      idEnregistrement: id,
-      details: `Modification ordre affichage : ${direction}`
-    });
+      const nouvelOrdre =
+        direction === 'haut'
+          ? actuel - 1
+          : actuel + 1;
 
-    await chargerTypes();
-    setSuccessMessage(`Ordre mis à jour avec succès`);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+      if (
+        nouvelOrdre < 1 ||
+        nouvelOrdre > types.length
+      ) return;
+
+      await apiPut(
+        `/types-mesures/${id}/ordre`,
+        {
+          ordre_affichage:
+            nouvelOrdre,
+
+          ancien_ordre:
+            actuel
+        }
+      );
+
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'UPDATE',
+        table: 'types_mesures',
+        idEnregistrement: id,
+        details:
+          `Modification ordre affichage : ${direction}`
+      });
+
+      await chargerTypes();
+
+      setSuccessMessage(
+        `Ordre mis à jour avec succès`
+      );
+
+      setShowSuccess(true);
+
+      setTimeout(
+        () => setShowSuccess(false),
+        3000
+      );
+
+    } catch (error) {
+
+      console.error(error);
+    }
   };
-
   const handleReset = async () => {
     setRecherche('');
     await chargerTypes();
@@ -283,9 +329,9 @@ const ConfigurationMesures: React.FC = () => {
               </Stack>
             ) : (
               <>
-                <Table 
-                  striped 
-                  highlightOnHover 
+                <Table
+                  striped
+                  highlightOnHover
                   verticalSpacing="xs"
                   horizontalSpacing="sm"
                 >

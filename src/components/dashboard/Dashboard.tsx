@@ -11,9 +11,9 @@ import {
   IconCurrencyFrank, IconInfoCircle, IconCash, IconAlertCircle, 
   IconShirt, IconLock,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import { notifications } from '@mantine/notifications';
 import { useAuth } from '../../contexts/AuthContext';
+import { apiGet } from '../../services/api';
 
 
 type PageKey =
@@ -59,39 +59,325 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
   }, [hasAccess]);
 
   const loadAllData = async () => {
-    setLoading(true);
-    try {
-      const db = await getDb();
 
-      const ca = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_total), 0) as total FROM ventes`);
-      const chiffreAffaires = ca[0]?.total || 0;
+  setLoading(true);
 
-      const enc = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_regle), 0) as total FROM ventes`);
-      const encaissements = enc[0]?.total || 0;
+  try {
 
-      const dep = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant), 0) as total FROM depenses`);
-      const depenses = dep[0]?.total || 0;
+    /**
+     * Chargement API
+     */
+    const ventes =
+      await apiGet("/ventes");
 
-      const reste = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_total - montant_regle), 0) as total FROM ventes WHERE statut != 'PAYEE'`);
-      const resteARecouvrer = reste[0]?.total || 0;
+    const depensesData =
+      await apiGet("/depenses");
 
-      setStats({ chiffreAffaires, encaissements, depenses, resteARecouvrer, beneficeTresorerie: encaissements - depenses });
+    const matieres =
+      await apiGet("/matieres");
 
-      const matieresAlertes = await db.select<any[]>(`SELECT m.designation, m.stock_actuel as stock, m.seuil_alerte, m.unite, 'matiere' as type FROM matieres m WHERE m.est_supprime = 0 AND m.stock_actuel <= m.seuil_alerte ORDER BY m.stock_actuel ASC`);
-      const articlesAlertes = await db.select<any[]>(`SELECT a.code_article as designation, a.quantite_stock as stock, a.seuil_alerte, '' as unite, 'article' as type FROM articles a WHERE a.est_actif = 1 AND a.quantite_stock <= a.seuil_alerte ORDER BY a.quantite_stock ASC`);
-      setStockAlertes([...matieresAlertes, ...articlesAlertes].sort((a, b) => a.stock - b.stock));
+    const articles =
+      await apiGet("/articles");
 
-      const sm = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(stock_actuel * prix_achat), 0) as total FROM matieres WHERE est_supprime = 0`);
-      const sa = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(quantite_stock * COALESCE(prix_achat, prix_vente)), 0) as total FROM articles WHERE est_actif = 1`);
-      setStockTotal((sm[0]?.total || 0) + (sa[0]?.total || 0));
+    /**
+     * Chiffre affaires
+     */
+    const chiffreAffaires =
+      ventes.reduce(
+        (sum: number, v: any) =>
+          sum + (
+            Number(v.montant_total)
+            || 0
+          ),
+        0
+      );
 
-      const j = await db.select<any[]>(`SELECT date_vente as date, code_vente as description, montant_total as entree, 0 as sortie FROM ventes UNION ALL SELECT date_depense as date, designation as description, 0 as entree, montant as sortie FROM depenses ORDER BY date DESC LIMIT 10`);
-      setJournal(j || []);
-    } catch (err) {
-      notifications.show({ title: 'Erreur', message: 'Erreur de chargement', color: 'red' });
-    } finally { setLoading(false); }
-  };
+    /**
+     * Encaissements
+     */
+    const encaissements =
+      ventes.reduce(
+        (sum: number, v: any) =>
+          sum + (
+            Number(v.montant_regle)
+            || 0
+          ),
+        0
+      );
 
+    /**
+     * Dépenses
+     */
+    const depenses =
+      depensesData.reduce(
+        (sum: number, d: any) =>
+          sum + (
+            Number(d.montant)
+            || 0
+          ),
+        0
+      );
+
+    /**
+     * Reste à recouvrer
+     */
+    const resteARecouvrer =
+      ventes
+        .filter(
+          (v: any) =>
+            v.statut !== 'PAYEE'
+        )
+        .reduce(
+          (sum: number, v: any) =>
+
+            sum +
+
+            (
+              (
+                Number(v.montant_total)
+                || 0
+              )
+
+              -
+
+              (
+                Number(v.montant_regle)
+                || 0
+              )
+            ),
+
+          0
+        );
+
+    setStats({
+
+      chiffreAffaires,
+
+      encaissements,
+
+      depenses,
+
+      resteARecouvrer,
+
+      beneficeTresorerie:
+        encaissements
+        - depenses
+    });
+
+    /**
+     * Alertes matières
+     */
+    const matieresAlertes =
+      matieres
+
+        .filter(
+          (m: any) =>
+
+            m.est_supprime === 0
+
+            &&
+
+            Number(m.stock_actuel)
+            <=
+            Number(m.seuil_alerte)
+        )
+
+        .map((m: any) => ({
+          designation:
+            m.designation,
+
+          stock:
+            m.stock_actuel,
+
+          seuil_alerte:
+            m.seuil_alerte,
+
+          unite:
+            m.unite,
+
+          type:
+            'matiere'
+        }));
+
+    /**
+     * Alertes articles
+     */
+    const articlesAlertes =
+      articles
+
+        .filter(
+          (a: any) =>
+
+            a.est_actif === 1
+
+            &&
+
+            Number(a.quantite_stock)
+            <=
+            Number(a.seuil_alerte)
+        )
+
+        .map((a: any) => ({
+          designation:
+            a.code_article,
+
+          stock:
+            a.quantite_stock,
+
+          seuil_alerte:
+            a.seuil_alerte,
+
+          unite:
+            '',
+
+          type:
+            'article'
+        }));
+
+    setStockAlertes(
+
+      [
+        ...matieresAlertes,
+        ...articlesAlertes
+      ]
+
+      .sort(
+        (a, b) =>
+          a.stock - b.stock
+      )
+    );
+
+    /**
+     * Valeur stock matières
+     */
+    const stockMatieres =
+      matieres.reduce(
+        (sum: number, m: any) =>
+
+          sum +
+
+          (
+            (
+              Number(m.stock_actuel)
+              || 0
+            )
+
+            *
+
+            (
+              Number(m.prix_achat)
+              || 0
+            )
+          ),
+
+        0
+      );
+
+    /**
+     * Valeur stock articles
+     */
+    const stockArticles =
+      articles.reduce(
+        (sum: number, a: any) =>
+
+          sum +
+
+          (
+            (
+              Number(a.quantite_stock)
+              || 0
+            )
+
+            *
+
+            (
+              Number(a.prix_achat)
+              || Number(a.prix_vente)
+              || 0
+            )
+          ),
+
+        0
+      );
+
+    setStockTotal(
+      stockMatieres
+      + stockArticles
+    );
+
+    /**
+     * Journal récent
+     */
+    const journalVentes =
+      ventes.map((v: any) => ({
+        date:
+          v.date_vente,
+
+        description:
+          v.code_vente,
+
+        entree:
+          v.montant_total,
+
+        sortie:
+          0
+      }));
+
+    const journalDepenses =
+      depensesData.map((d: any) => ({
+        date:
+          d.date_depense,
+
+        description:
+          d.designation,
+
+        entree:
+          0,
+
+        sortie:
+          d.montant
+      }));
+
+    const journal =
+      [
+        ...journalVentes,
+        ...journalDepenses
+      ]
+
+      .sort(
+        (a: any, b: any) =>
+
+          new Date(b.date)
+            .getTime()
+
+          -
+
+          new Date(a.date)
+            .getTime()
+      )
+
+      .slice(0, 10);
+
+    setJournal(journal);
+
+  } catch (err) {
+
+    console.error(err);
+
+    notifications.show({
+      title: 'Erreur',
+
+      message:
+        'Erreur de chargement',
+
+      color: 'red'
+    });
+
+  } finally {
+
+    setLoading(false);
+  }
+};
   const handleNavigate = (page: PageKey, requiredPermission: string) => {
     if (canRead(requiredPermission)) {
       if (setPage) {

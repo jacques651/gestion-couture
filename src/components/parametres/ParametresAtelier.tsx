@@ -40,9 +40,9 @@ import {
   IconMapPin,
 } from '@tabler/icons-react';
 import {
-  getConfigurationAtelier,
-  saveConfigurationAtelier,
-} from '../../database/db';
+  apiGet,
+  apiPut
+} from '../../services/api';
 import { journaliserAction } from '../../services/journal';
 
 // Interface alignée avec la table
@@ -87,7 +87,10 @@ export default function ParametresAtelier() {
 
   useEffect(() => {
     const charger = async () => {
-      const data = await getConfigurationAtelier();
+      const data =
+        await apiGet(
+          "/atelier"
+        );
       if (data) {
         setConfig({
           id: data.id || 1,
@@ -165,19 +168,43 @@ export default function ParametresAtelier() {
     e.preventDefault();
     setSaving(true);
     // Sauvegarde avec les champs de la table
-    await saveConfigurationAtelier({
-      nom_atelier: config.nom_atelier,
-      telephone: config.telephone,
-      email: config.email,
-      adresse: config.adresse,
-      ville: config.ville,
-      pays: config.pays,
-      ifu: config.ifu,
-      rccm: config.rccm,
-      message_facture_defaut: config.message_facture_defaut,
-      logo_base64: config.logo_base64,
-      devise: config.devise,
-    } as any);
+    await apiPut(
+      "/atelier",
+      {
+        nom_atelier:
+          config.nom_atelier,
+
+        telephone:
+          config.telephone,
+
+        email:
+          config.email,
+
+        adresse:
+          config.adresse,
+
+        ville:
+          config.ville,
+
+        pays:
+          config.pays,
+
+        ifu:
+          config.ifu,
+
+        rccm:
+          config.rccm,
+
+        message_facture_defaut:
+          config.message_facture_defaut,
+
+        logo_base64:
+          config.logo_base64,
+
+        devise:
+          config.devise,
+      }
+    );
 
     // Journalisation configuration atelier
     await journaliserAction({

@@ -3,19 +3,43 @@ import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
-
 import { pool } from "./db";
 import clientsRoutes from "./routes/clients";
-import modelesRoutes from "./routes/modeles";
+import modelesRoutes from "./routes/modeles-tenues";
+import taillesRoutes from "./routes/tailles";
+import typesMesuresRoutes from "./routes/types-mesures";
+import couleursRoutes from "./routes/couleurs";
+import texturesRoutes from "./routes/textures";
+import articlesRoutes from "./routes/articles";
+import categoriesMatieresRoutes from "./routes/categoriesMatieres";
+import matieresRoutes from "./routes/matieres";
+import atelierRoutes from "./routes/atelier";
+import typesPrestationsRoutes from "./routes/typesPrestations";
+import ventesRoutes from "./routes/ventes";
+import depensesRoutes from "./routes/depenses";
+import rendezVousRoutes from "./routes/rendezvous-commandes";
 
 dotenv.config();
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({limit: "20mb"}));
+app.use(express.urlencoded({extended: true, limit: "20mb"}));
 app.use("/clients", clientsRoutes);
-app.use("/modeles", modelesRoutes);
+app.use("/modeles-tenues",modelesRoutes);
+app.use("/tailles", taillesRoutes);
+app.use("/types-mesures",typesMesuresRoutes);
+app.use("/couleurs", couleursRoutes);
+app.use("/textures", texturesRoutes);
+app.use("/articles", articlesRoutes);
+app.use("/categories-matieres", categoriesMatieresRoutes);
+app.use("/matieres", matieresRoutes);
+app.use("/atelier", atelierRoutes);
+app.use("/types-prestations",typesPrestationsRoutes);
+app.use("/ventes", ventesRoutes);
+app.use("/depenses",depensesRoutes);
+app.use("/rendezvous-commandes",rendezVousRoutes);
 
 async function initDatabase() {
   try {

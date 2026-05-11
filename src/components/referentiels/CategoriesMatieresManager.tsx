@@ -38,7 +38,16 @@ import {
   IconPrinter,
   IconPalette,
 } from '@tabler/icons-react';
-import { getCategoriesMatieres, createCategorieMatiere, updateCategorieMatiere, deleteCategorieMatiere, CategorieMatiere } from '../../database/db';
+import {
+  CategorieMatiere
+} from '../../database/db';
+
+import {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 
 const CategoriesMatieresManager: React.FC = () => {
   const [categories, setCategories] = useState<CategorieMatiere[]>([]);
@@ -48,7 +57,7 @@ const CategoriesMatieresManager: React.FC = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [saving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const itemsPerPage = 10;
@@ -56,18 +65,23 @@ const CategoriesMatieresManager: React.FC = () => {
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
 
-  const [formData, setFormData] = useState({
-    nom_categorie: '',
-    description: '',
-    couleur_associee: '#6B7280',
-    est_actif: 1
-  });
-
+  const [formData, setFormData] =
+    useState({
+      nom_categorie: "",
+      description: "",
+      couleur_affichage: "#1b365d",
+      est_active: 1
+    });
   const loadCategories = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getCategoriesMatieres();
+      const data =
+        await apiGet(
+          "/categories-matieres"
+        );
+
+      setCategories(data);
       setCategories(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -95,13 +109,17 @@ const CategoriesMatieresManager: React.FC = () => {
   );
 
   const resetForm = () => {
+
     setFormData({
-      nom_categorie: '',
-      description: '',
-      couleur_associee: '#6B7280',
-      est_actif: 1
+      nom_categorie: "",
+      description: "",
+      couleur_affichage: "#1b365d",
+      est_active: 1
     });
+
     setEditingCategorie(null);
+
+    setError(null);
   };
 
   const openAddModal = () => {
@@ -112,10 +130,17 @@ const CategoriesMatieresManager: React.FC = () => {
   const openEditModal = (categorie: CategorieMatiere) => {
     setEditingCategorie(categorie);
     setFormData({
-      nom_categorie: categorie.nom_categorie,
-      description: categorie.description || '',
-      couleur_associee: categorie.couleur_associee || '#6B7280',
-      est_actif: categorie.est_actif
+      nom_categorie:
+        categorie.nom_categorie || "",
+
+      description:
+        categorie.description || "",
+
+      couleur_affichage:
+        categorie.couleur_affichage || "#1b365d",
+
+      est_active:
+        categorie.est_active ?? 1
     });
     openModal();
   };
@@ -133,41 +158,103 @@ const CategoriesMatieresManager: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.nom_categorie.trim()) {
-      setError('Le nom de la catégorie est requis');
+
+    if (
+      !formData.nom_categorie.trim()
+    ) {
+
+      setError(
+        "Le nom est requis"
+      );
+
       return;
     }
 
     try {
-      setSaving(true);
+
       setError(null);
+
       if (editingCategorie) {
-        await updateCategorieMatiere(editingCategorie.id, formData);
+
+        await apiPut(
+          `/categories-matieres/${editingCategorie.id}`,
+          {
+            nom_categorie:
+              formData.nom_categorie,
+
+            description:
+              formData.description,
+
+            couleur_affichage:
+              formData.couleur_affichage,
+
+            est_active:
+              formData.est_active
+          }
+        );
+
       } else {
-        await createCategorieMatiere(formData);
+
+        await apiPost(
+          "/categories-matieres",
+          {
+            nom_categorie:
+              formData.nom_categorie,
+
+            description:
+              formData.description,
+
+            couleur_affichage:
+              formData.couleur_affichage,
+
+            est_active:
+              formData.est_active
+          }
+        );
       }
+
       closeModal();
+
       await loadCategories();
+
       resetForm();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'enregistrement');
-    } finally {
-      setSaving(false);
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Erreur lors de l'enregistrement"
+      );
     }
   };
-
   const handleDelete = async () => {
+
     if (!deleteId) return;
+
     try {
-      setSaving(true);
+
       setError(null);
-      await deleteCategorieMatiere(deleteId);
-      closeDeleteModalHandler();
+
+      await apiDelete(
+        `/categories-matieres/${deleteId}`
+      );
+
+      closeDeleteModal();
+
+      setDeleteId(null);
+
       await loadCategories();
+
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de la suppression');
-    } finally {
-      setSaving(false);
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Erreur lors de la suppression"
+      );
     }
   };
 
@@ -213,9 +300,23 @@ const CategoriesMatieresManager: React.FC = () => {
               {/* Barre d'actions */}
               <Group justify="space-between" align="flex-end">
                 <Box>
-                  <Title order={3} size="h4" c="#1b365d">Liste des catégories</Title>
-                  <Text size="xs" c="dimmed">
-                    {filteredCategories.length} catégorie{filteredCategories.length > 1 ? 's' : ''} trouvée{filteredCategories.length > 1 ? 's' : ''}
+                  <Text
+                    fw={700}
+                    size="lg"
+                    c="#1b365d"
+                  >
+                    Liste des catégories
+                  </Text>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    {filteredCategories.length}
+                    catégorie
+                    {filteredCategories.length > 1 ? 's' : ''}
+                    trouvée
+                    {filteredCategories.length > 1 ? 's' : ''}
                   </Text>
                 </Box>
                 <Group>
@@ -291,7 +392,7 @@ const CategoriesMatieresManager: React.FC = () => {
                                 w={20}
                                 h={20}
                                 style={{
-                                  backgroundColor: categorie.couleur_associee || '#6B7280',
+                                  backgroundColor: categorie.couleur_affichage || '#6B7280',
                                   borderRadius: '4px',
                                   border: '1px solid rgba(0,0,0,0.1)'
                                 }}
@@ -316,12 +417,12 @@ const CategoriesMatieresManager: React.FC = () => {
                                   w={12}
                                   h={12}
                                   style={{
-                                    backgroundColor: categorie.couleur_associee || '#6B7280',
+                                    backgroundColor: categorie.couleur_affichage || '#6B7280',
                                     borderRadius: '50%',
                                     border: '1px solid rgba(0,0,0,0.2)'
                                   }}
                                 />
-                                <Text size="xs">{categorie.couleur_associee || '#6B7280'}</Text>
+                                <Text size="xs">{categorie.couleur_affichage || '#6B7280'}</Text>
                               </Group>
                             </Table.Td>
                             <Table.Td style={{ fontSize: '15px', padding: '6px 4px', whiteSpace: 'nowrap' }}>
@@ -403,8 +504,8 @@ const CategoriesMatieresManager: React.FC = () => {
                 <ColorInput
                   label="Couleur associée"
                   placeholder="Sélectionnez une couleur"
-                  value={formData.couleur_associee}
-                  onChange={(value) => setFormData({ ...formData, couleur_associee: value })}
+                  value={formData.couleur_affichage}
+                  onChange={(value) => setFormData({ ...formData, couleur_affichage: value })}
                   format="hex"
                   size="md"
                   radius="md"
@@ -414,8 +515,8 @@ const CategoriesMatieresManager: React.FC = () => {
                 <Switch
                   label="Catégorie active"
                   description="Les catégories inactives ne seront pas visibles"
-                  checked={formData.est_actif === 1}
-                  onChange={(e) => setFormData({ ...formData, est_actif: e.currentTarget.checked ? 1 : 0 })}
+                  checked={formData.est_active === 1}
+                  onChange={(e) => setFormData({ ...formData, est_active: e.currentTarget.checked ? 1 : 0 })}
                   size="md"
                 />
 
