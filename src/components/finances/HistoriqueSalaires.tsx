@@ -34,9 +34,11 @@ import {
   IconEye,
   IconTrendingUp,
 } from '@tabler/icons-react';
-import { getDb } from "../../database/db";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import {
+
+  apiGet
+
+} from "../../services/api";
 import BulletinSalaire from "./BulletinSalaire";
 
 // ================= TYPES =================
@@ -60,30 +62,34 @@ const HistoriqueSalaires = () => {
   }, []);
 
   // ================= LOAD =================
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const db = await getDb();
+  const loadData =
+    async () => {
 
-      const result = await db.select<any[]>(`
-        SELECT 
-          s.id,
-          e.id as employe_id,
-          s.date_paiement as date,
-          e.nom_prenom as nom,
-          s.montant_net as montant
-        FROM salaires s
-        LEFT JOIN employes e ON e.id = s.employe_id
-        ORDER BY s.date_paiement DESC
-      `);
+      setLoading(true);
 
-      setSalaires(result || []);
-    } catch (error) {
-      console.error("Erreur chargement:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+
+        const result =
+          await apiGet(
+            "/historique-salaires"
+          );
+
+        setSalaires(
+          result || []
+        );
+
+      } catch (error) {
+
+        console.error(
+          "Erreur chargement:",
+          error
+        );
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
 
   const total = salaires.reduce((sum, s) => sum + (s.montant || 0), 0);
   const totalPaiements = salaires.length;
@@ -217,28 +223,87 @@ const HistoriqueSalaires = () => {
   };
 
   // ================= EXPORT EXCEL (CSV) =================
-  const exportExcel = async () => {
-    const csv = [
-      ["Date", "Employé", "Montant (FCFA)"],
-      ...salaires.map(s => [
-        new Date(s.date).toLocaleDateString("fr-FR"),
-        s.nom,
-        s.montant.toString()
-      ])
-    ]
-      .map(r => r.join(","))
-      .join("\n");
+  const exportExcel =
+    async () => {
 
-    const path = await save({
-      filters: [{ name: "Excel", extensions: ["csv"] }],
-      defaultPath: `salaires_${new Date().toISOString().slice(0, 10)}.csv`
-    });
+      const csv = [
 
-    if (path) {
-      await writeFile(path, new TextEncoder().encode(csv));
-    }
-  };
+        [
+          "Date",
+          "Employé",
+          "Montant (FCFA)"
+        ],
 
+        ...salaires.map(s => [
+
+          new Date(
+            s.date
+          ).toLocaleDateString(
+            "fr-FR"
+          ),
+
+          s.nom,
+
+          s.montant.toString()
+        ])
+      ]
+        .map(r =>
+          r.join(",")
+        )
+        .join("\n");
+
+      /**
+       * Blob CSV
+       */
+      const blob =
+        new Blob(
+
+          [csv],
+
+          {
+            type:
+              "text/csv;charset=utf-8;"
+          }
+        );
+
+      /**
+       * URL
+       */
+      const url =
+        URL.createObjectURL(
+          blob
+        );
+
+      /**
+       * Download
+       */
+      const link =
+        document.createElement(
+          "a"
+        );
+
+      link.href =
+        url;
+
+      link.download =
+
+        `salaires_${new Date()
+          .toISOString()
+          .slice(0, 10)
+        }.csv`;
+
+      document.body
+        .appendChild(link);
+
+      link.click();
+
+      document.body
+        .removeChild(link);
+
+      URL.revokeObjectURL(
+        url
+      );
+    };
   // ================= EXPORT PDF =================
   const exportPDF = () => {
     const win = window.open("", "", "width=800,height=600");
@@ -336,16 +401,61 @@ const HistoriqueSalaires = () => {
     </body>
     </html>`;
 
-    const blob = new Blob([htmlContent], { type: 'application/msword' });
-    const path = await save({
-      filters: [{ name: "Word", extensions: ["doc"] }],
-      defaultPath: `salaires_${new Date().toISOString().slice(0, 10)}.doc`
-    });
+    const blob =
 
-    if (path) {
-      const buffer = await blob.arrayBuffer();
-      await writeFile(path, new Uint8Array(buffer));
-    }
+      new Blob(
+
+        [htmlContent],
+
+        {
+          type:
+            "application/msword"
+        }
+      );
+
+    /**
+     * URL téléchargement
+     */
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    /**
+     * Lien
+     */
+    const link =
+      document.createElement(
+        "a"
+      );
+
+    link.href =
+      url;
+
+    link.download =
+
+      `salaires_${new Date()
+        .toISOString()
+        .slice(0, 10)
+      }.doc`;
+
+    /**
+     * Download
+     */
+    document.body
+      .appendChild(link);
+
+    link.click();
+
+    document.body
+      .removeChild(link);
+
+    /**
+     * Cleanup
+     */
+    URL.revokeObjectURL(
+      url
+    );
   };
 
   if (loading) {

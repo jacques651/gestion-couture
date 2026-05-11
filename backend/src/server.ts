@@ -21,6 +21,10 @@ import rendezVousRoutes from "./routes/rendezvous_commandes";
 import utilisateursRoutes from "./routes/utilisateurs";
 import journalRoutes from "./routes/journal";
 import employesRoutes from "./routes/employes";
+import prestationsRoutes from "./routes/prestations-realisees";
+import salairesRoutes from "./routes/salaires";
+import historiqueSalairesRoutes from "./routes/historique-salaires";
+import empruntsRoutes from "./routes/emprunts";
 
 
 dotenv.config();
@@ -47,6 +51,10 @@ app.use("/rendezvous_commandes", rendezVousRoutes);
 app.use("/utilisateurs",utilisateursRoutes)
 app.use("/journal",journalRoutes);
 app.use("/employes",employesRoutes);
+app.use("/prestations-realisees",prestationsRoutes);
+app.use("/salaires",salairesRoutes);
+app.use("/historique-salaires",historiqueSalairesRoutes);
+app.use("/emprunts",empruntsRoutes);
 
 async function initDatabase() {
   try {

@@ -13,7 +13,11 @@ import {
   IconFile,
   IconX,
 } from '@tabler/icons-react';
-import { getDb } from "../../database/db";
+import {
+
+  apiGet
+
+} from "../../services/api";
 import html2pdf from "html2pdf.js";
 
 // ================= TYPES =================
@@ -45,16 +49,6 @@ interface Atelier {
   devise: string;
 }
 
-interface Emprunt {
-  id: number;
-  employe_id: number;
-  montant: number;
-  date_emprunt: string;
-  deduit: number;
-  date_deduction: string | null;
-  created_at?: string;
-  updated_at?: string;
-}
 
 interface SalairePaye {
   id: number;
@@ -68,18 +62,6 @@ interface SalairePaye {
   periode_fin: string | null;
 }
 
-interface PrestationRealisee {
-  id: number;
-  employe_id: number;
-  type_prestation_id: number | null;
-  date_prestation: string;
-  designation: string;
-  valeur: number;
-  nombre: number;
-  total: number;
-  paye: number;
-  created_at?: string;
-}
 
 interface BulletinData {
   employe: Employe;
@@ -101,153 +83,251 @@ const BulletinSalaire = ({ employeId, onClose }: Props) => {
   const [data, setData] = useState<BulletinData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!employeId) return;
+ useEffect(() => {
 
-    const load = async () => {
-      setLoading(true);
-      const db = await getDb();
+  if (!employeId)
+    return;
 
-      // 1. Récupérer l'employé
-      const emp = await db.select<Employe[]>(
-        `SELECT 
-          id, 
-          nom_prenom, 
-          COALESCE(salaire_base, 0) as salaire_base, 
-          telephone, 
-          date_embauche, 
-          type_remuneration, 
-          lieu_residence,
-          personne_a_prevenir,
-          est_actif,
-          est_supprime
-         FROM employes 
-         WHERE id = ? AND est_actif = 1 AND est_supprime = 0`,
-        [employeId]
+  const load =
+  async () => {
+
+    try {
+
+      setLoading(
+        true
       );
 
-      if (!emp.length) {
+      /**
+       * =====================
+       * EMPLOYE
+       * =====================
+       */
+      const employe =
+        await apiGet(
+          `/employes/${employeId}`
+        );
+
+      if (!employe) {
+
         setLoading(false);
+
         return;
       }
 
-      const employe = emp[0];
-
-      // 2. Récupérer l'atelier
-      const atelierRows = await db.select<Atelier[]>(
-        `SELECT 
-          id, nom_atelier, telephone, adresse, ville, pays, email, 
-          ifu, rccm, message_facture_defaut, logo_base64, devise
-         FROM atelier WHERE id = 1`
-      );
-      const atelier = atelierRows.length ? atelierRows[0] : null;
-
-      // 3. Récupérer le dernier salaire payé (non annulé)
-      const salairesPayes = await db.select<SalairePaye[]>(
-        `SELECT 
-          id, montant_brut, montant_net, montant_emprunts, mode, 
-          date_paiement, observation, periode_debut, periode_fin
-         FROM salaires 
-         WHERE employe_id = ? 
-         AND annule = 0
-         ORDER BY date_paiement DESC
-         LIMIT 1`,
-        [employeId]
-      );
-
-      const salairePaye = salairesPayes.length > 0 ? salairesPayes[0] : null;
-
-      let avoirs: Array<{ code: string; libelle: string; montant: number }> = [];
-      let totalAvoirs = 0;
-      let retenues: Array<{ code: string; libelle: string; montant: number }> = [];
-      let totalRetenues = 0;
-      let netAPayer = 0;
-
-      if (salairePaye) {
-        netAPayer = salairePaye.montant_net;
-        totalRetenues = salairePaye.montant_emprunts;
-
-        // 4. Récupérer les détails des AVOIRS selon le type d'employé
-        if (employe.type_remuneration === 'fixe') {
-          // Pour un fixe, les avoirs = salaire de base
-          avoirs.push({
-            code: "SALA",
-            libelle: "Salaire de base mensuel",
-            montant: salairePaye.montant_brut
-          });
-          totalAvoirs = salairePaye.montant_brut;
-        } else {
-
-          // Pour un prestataire, récupérer les prestations payées (paye = 1)
-          const prestationsPayees = await db.select<PrestationRealisee[]>(
-            `SELECT 
-    id, employe_id, type_prestation_id, date_prestation, 
-    designation, valeur, nombre, total, paye
-   FROM prestations_realisees 
-   WHERE employe_id = ? AND paye = 1`,
-            [employeId]
-          );
-
-          if (prestationsPayees.length > 0) {
-            prestationsPayees.forEach((p, idx) => {
-              avoirs.push({
-                code: `P${String(idx + 1).padStart(4, '0')}`,
-                libelle: p.designation,
-                montant: p.total
-              });
-              totalAvoirs += p.total;
-            });
-          } else {
-            // Si pas de prestations trouvées, afficher le montant brut
-            avoirs.push({
-              code: "PRES",
-              libelle: "Prestations du mois",
-              montant: salairePaye.montant_brut
-            });
-            totalAvoirs = salairePaye.montant_brut;
-          }
-        }
-
-        // 5. Récupérer les emprunts déduits sur ce salaire
-        const empruntsDeduits = await db.select<Emprunt[]>(
-          `SELECT id, employe_id, montant, date_emprunt, deduit, date_deduction
-   FROM emprunts 
-   WHERE employe_id = ? AND deduit = 1`,
-          [employeId]
+      /**
+       * =====================
+       * ATELIER
+       * =====================
+       */
+      const atelierRows =
+        await apiGet(
+          "/atelier"
         );
 
-        empruntsDeduits.forEach((e, idx) => {
-          retenues.push({
-            code: `E${String(idx + 1).padStart(4, '0')}`,
-            libelle: `Emprunt du ${new Date(e.date_emprunt).toLocaleDateString('fr-FR')}`,
-            montant: e.montant
-          });
+      const atelier =
+
+        Array.isArray(
+          atelierRows
+        )
+
+          ? atelierRows[0]
+
+          : null;
+
+      /**
+       * =====================
+       * DERNIER SALAIRE
+       * =====================
+       */
+      const salaires =
+        await apiGet(
+          `/salaires/employe/${employeId}`
+        );
+
+      const salairePaye =
+
+        Array.isArray(
+          salaires
+        ) && salaires.length > 0
+
+          ? salaires[0]
+
+          : null;
+
+      /**
+       * =====================
+       * PRESTATIONS
+       * =====================
+       */
+      const prestations =
+        await apiGet(
+          `/prestations-realisees/employe/${employeId}`
+        );
+
+      /**
+       * =====================
+       * EMPRUNTS
+       * =====================
+       */
+      const emprunts =
+        await apiGet(
+          `/emprunts/employe/${employeId}`
+        );
+
+      let avoirs: any[] = [];
+
+      let totalAvoirs = 0;
+
+      /**
+       * FIXE
+       */
+      if (
+        employe.type_remuneration ===
+        "fixe"
+      ) {
+
+        avoirs.push({
+
+          code:
+            "SALA",
+
+          libelle:
+            "Salaire de base mensuel",
+
+          montant:
+            Number(
+              employe.salaire_base || 0
+            )
         });
+
+        totalAvoirs =
+          Number(
+            employe.salaire_base || 0
+          );
+
       } else {
-        // Aucun salaire trouvé
-        avoirs = [];
-        totalAvoirs = 0;
-        retenues = [];
-        totalRetenues = 0;
-        netAPayer = 0;
+
+        (prestations || [])
+          .forEach(
+            (
+              p: any,
+              idx: number
+            ) => {
+
+              avoirs.push({
+
+                code:
+                  `P${String(
+                    idx + 1
+                  ).padStart(4, '0')}`,
+
+                libelle:
+                  p.designation,
+
+                montant:
+                  Number(
+                    p.total || 0
+                  )
+              });
+
+              totalAvoirs +=
+                Number(
+                  p.total || 0
+                );
+            }
+          );
       }
 
+      /**
+       * RETENUES
+       */
+      const retenues: any[] = [];
+
+      let totalRetenues = 0;
+
+      (emprunts || [])
+        .forEach(
+          (
+            e: any,
+            idx: number
+          ) => {
+
+            retenues.push({
+
+              code:
+                `E${String(
+                  idx + 1
+                ).padStart(4, '0')}`,
+
+              libelle:
+
+                `Emprunt du ${
+                  new Date(
+                    e.date_emprunt
+                  ).toLocaleDateString(
+                    'fr-FR'
+                  )
+                }`,
+
+              montant:
+                Number(
+                  e.montant || 0
+                )
+            });
+
+            totalRetenues +=
+              Number(
+                e.montant || 0
+              );
+          }
+        );
+
+      /**
+       * NET
+       */
+      const netAPayer =
+
+        totalAvoirs
+        -
+        totalRetenues;
+
       setData({
+
         employe,
+
         atelier,
+
         salairePaye,
+
         avoirs,
+
         totalAvoirs,
+
         retenues,
+
         totalRetenues,
-        netAPayer,
+
+        netAPayer
       });
-      setLoading(false);
-    };
 
-    load();
-  }, [employeId]);
+    } catch (error) {
 
+      console.error(
+        "Erreur bulletin:",
+        error
+      );
+
+    } finally {
+
+      setLoading(
+        false
+      );
+    }
+  };
+
+  load();
+
+}, [employeId]);
   const handlePrint = () => window.print();
   const handlePDF = () => {
     const el = document.getElementById("bulletin-print");

@@ -52,7 +52,14 @@ import { useReactToPrint } from 'react-to-print';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getDb } from '../../database/db';
+import {
+
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete
+
+} from '../../services/api';
 
 interface Employe {
   id: number;
@@ -88,37 +95,64 @@ const ListeEmprunts: React.FC = () => {
   const printRef = useRef<HTMLDivElement>(null);
   const itemsPerPage = 10;
 
-  const fetchEmployes = async () => {
-    const db = await getDb();
-    const res = await db.select<Employe[]>(`
-      SELECT id, nom_prenom 
-      FROM employes
-      WHERE est_supprime = 0 AND est_actif = 1
-      ORDER BY nom_prenom
-    `);
-    setEmployes(res || []);
-  };
+  const fetchEmployes =
+    async () => {
 
-  const fetchEmprunts = async () => {
-    setLoading(true);
-    const db = await getDb();
-    const res = await db.select<Emprunt[]>(`
-      SELECT 
-        e.id,
-        e.employe_id,
-        e.montant,
-        e.date_emprunt,
-        e.deduit,
-        e.salaire_id,
-        e.date_deduction,
-        emp.nom_prenom as employe_nom
-      FROM emprunts e
-      LEFT JOIN employes emp ON emp.id = e.employe_id
-      ORDER BY e.date_emprunt DESC
-    `);
-    setEmprunts(res || []);
-    setLoading(false);
-  };
+      try {
+
+        const res =
+          await apiGet(
+            "/employes"
+          );
+
+        setEmployes(
+          res || []
+        );
+
+      } catch (error) {
+
+        console.error(error);
+      }
+    };
+  const fetchEmprunts =
+    async () => {
+
+      try {
+
+        setLoading(
+          true
+        );
+
+        const res =
+          await apiGet(
+            "/emprunts"
+          );
+
+        setEmprunts(
+
+          (res || []).map(
+            (e: any) => ({
+
+              ...e,
+
+              montant:
+                Number(
+                  e.montant || 0
+                )
+            })
+          )
+        );
+      } catch (error) {
+
+        console.error(error);
+
+      } finally {
+
+        setLoading(
+          false
+        );
+      }
+    };
 
   useEffect(() => {
     fetchEmployes();
@@ -130,11 +164,18 @@ const ListeEmprunts: React.FC = () => {
       alert("Veuillez sélectionner un employé et un montant valide");
       return;
     }
-    const db = await getDb();
-    await db.execute(
-      `INSERT INTO emprunts (employe_id, montant, date_emprunt)
-       VALUES (?, ?, DATE('now'))`,
-      [form.employe_id, form.montant]
+    await apiPost(
+
+      "/emprunts",
+
+      {
+
+        employe_id:
+          form.employe_id,
+
+        montant:
+          form.montant
+      }
     );
 
     // Journalisation ajout emprunt
@@ -165,12 +206,18 @@ const ListeEmprunts: React.FC = () => {
       alert("Veuillez sélectionner un employé et un montant valide");
       return;
     }
-    const db = await getDb();
-    await db.execute(
-      `UPDATE emprunts 
-       SET employe_id = ?, montant = ?
-       WHERE id = ? AND deduit = 0`,
-      [form.employe_id, form.montant, editingEmprunt.id]
+    await apiPut(
+
+      `/emprunts/${editingEmprunt.id}`,
+
+      {
+
+        employe_id:
+          form.employe_id,
+
+        montant:
+          form.montant
+      }
     );
 
     // Journalisation modification emprunt
@@ -198,8 +245,9 @@ const ListeEmprunts: React.FC = () => {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const db = await getDb();
-    await db.execute(`DELETE FROM emprunts WHERE id = ? AND deduit = 0`, [deleteId]);
+    await apiDelete(
+      `/emprunts/${deleteId}`
+    );
 
     // Journalisation suppression emprunt
     await journaliserAction({
@@ -240,12 +288,12 @@ const ListeEmprunts: React.FC = () => {
   const handleReset = async () => {
     if (!
       globalThis.confirm("⚠️ Réinitialiser tous les emprunts déduits ?\nCela annulera les déductions et les liens avec les salaires.")) return;
-    const db = await getDb();
-    await db.execute(`
-      UPDATE emprunts 
-      SET deduit = 0, salaire_id = NULL, date_deduction = NULL
-      WHERE deduit = 1
-    `);
+    await apiPut(
+
+      "/emprunts/reset",
+
+      {}
+    );
 
     // Journalisation réinitialisation
     await journaliserAction({

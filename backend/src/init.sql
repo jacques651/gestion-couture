@@ -510,3 +510,47 @@ CREATE TABLE IF NOT EXISTS paiements_salaires (
     created_at TIMESTAMP
     DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS prestations_realisees (
+
+    id SERIAL PRIMARY KEY,
+
+    employe_id INTEGER
+    REFERENCES employes(id)
+    ON DELETE CASCADE,
+
+    designation TEXT NOT NULL,
+
+    valeur NUMERIC(12,2) DEFAULT 0,
+
+    nombre INTEGER DEFAULT 1,
+
+    total NUMERIC(12,2) DEFAULT 0,
+
+    date_prestation DATE
+    DEFAULT CURRENT_DATE,
+
+    created_at TIMESTAMP
+    DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS emprunts (
+
+    id SERIAL PRIMARY KEY,
+
+    employe_id INTEGER
+    REFERENCES employes(id)
+    ON DELETE CASCADE,
+
+    montant NUMERIC(12,2)
+    DEFAULT 0,
+
+    date_emprunt DATE
+    DEFAULT CURRENT_DATE,
+
+    deduit INTEGER
+    DEFAULT 0,
+
+    salaire_id INTEGER,
+
+    date_deduction DATE
+);

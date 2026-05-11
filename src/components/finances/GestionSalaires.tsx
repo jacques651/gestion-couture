@@ -39,10 +39,12 @@ import {
   IconCalendar,
 } from '@tabler/icons-react';
 import {
-  payerSalaire,
-  selectSafe,
-  annulerPaiementSalaire
-} from '../../database/db';
+
+  apiGet,
+  apiPost,
+  apiPut
+
+} from '../../services/api';
 import ModalPaiementSalaire from './ModalPaiementSalaire';
 
 // ================= TYPES =================
@@ -76,54 +78,33 @@ const GestionSalaires = () => {
   const [successMessage, setSuccessMessage] = useState('');
 
   // ================= LOAD =================
-  const loadEmployes = async () => {
-    setLoading(true);
-    const data = await selectSafe<any[]>(`
-      SELECT 
-        e.id as employe_id,
-        e.nom_prenom as nom,
-        e.type_remuneration as type,
-        COALESCE(e.salaire_base, 0) as salaire_base,
-        COALESCE((
-          SELECT SUM(pr.total)
-          FROM prestations_realisees pr
-          WHERE pr.employe_id = e.id 
-          AND (pr.paye = 0 OR pr.paye IS NULL)
-        ), 0) as total_prestations,
-        COALESCE((
-          SELECT SUM(s.montant_net)
-          FROM salaires s
-          WHERE s.employe_id = e.id AND s.annule = 0
-        ), 0) as total_paye,
-        COALESCE((
-          SELECT SUM(em.montant)
-          FROM emprunts em
-          WHERE em.employe_id = e.id AND em.deduit = 0
-        ), 0) as retenue
-      FROM employes e
-      WHERE e.est_actif = 1 AND e.est_supprime = 0
-    `);
+  const loadEmployes =
+    async () => {
 
-    const list = data.map((emp: any) => {
-      const brut =
-        emp.type === 'fixe'
-          ? emp.salaire_base
-          : emp.total_prestations;
-      const reste = brut - emp.total_paye - emp.retenue;
-      return {
-        employe_id: emp.employe_id,
-        nom: emp.nom,
-        type: emp.type,
-        salaire_brut: brut,
-        retenue: emp.retenue,
-        total_paye: emp.total_paye,
-        reste_a_payer: reste > 0 ? reste : 0
-      };
-    });
+      try {
 
-    setEmployes(list);
-    setLoading(false);
-  };
+        setLoading(true);
+
+        const data =
+          await apiGet(
+            "/salaires"
+          );
+
+        setEmployes(
+          data || []
+        );
+
+      } catch (error) {
+
+        console.error(
+          error
+        );
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     loadEmployes();
@@ -142,14 +123,25 @@ const GestionSalaires = () => {
     observation: string
   ) => {
     if (!selectedEmploye) return;
-    const emp = employes.find(e => e.employe_id === selectedEmploye.id);
-    await payerSalaire({
-      employe_id: selectedEmploye.id,
-      type: emp?.type || 'fixe',
-      montant_net: montant,
-      mode,
-      observation
-    });
+    await apiPost(
+
+      "/salaires/payer",
+
+      {
+
+        employe_id:
+          selectedEmploye.id,
+
+        montant_net:
+          montant,
+
+        mode:
+          mode,
+
+        observation:
+          observation
+      }
+    );
 
     // Journalisation paiement salaire
     await journaliserAction({
@@ -170,23 +162,54 @@ const GestionSalaires = () => {
   };
 
   // ================= ANNULATION =================
-  const handleAnnulerClick = async (emp: SalaireEmploye) => {
-    const salaires = await selectSafe<SalairePaye>(`
-      SELECT id, montant_net, date_paiement
-      FROM salaires
-      WHERE employe_id = ?
-      ORDER BY date_paiement DESC
-    `, [emp.employe_id]);
-    setSalairesEmploye(salaires);
-    setSelectedEmploye({ id: emp.employe_id, nom: emp.nom });
-    setShowAnnulationModal(true);
-  };
+  const handleAnnulerClick =
+    async (
+      emp: SalaireEmploye
+    ) => {
+
+      try {
+
+        const salaires =
+          await apiGet(
+
+            `/salaires/employe/${emp.employe_id}`
+          );
+
+        setSalairesEmploye(
+          salaires || []
+        );
+
+        setSelectedEmploye({
+
+          id:
+            emp.employe_id,
+
+          nom:
+            emp.nom
+        });
+
+        setShowAnnulationModal(
+          true
+        );
+
+      } catch (error) {
+
+        console.error(
+          error
+        );
+      }
+    };
 
   const handleConfirmAnnulation = async (salaireId: number, montant: number) => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      await annulerPaiementSalaire(salaireId);
+      await apiPut(
+
+        `/salaires/${salaireId}/annuler`,
+
+        {}
+      );
 
       // Journalisation annulation salaire
       await journaliserAction({
