@@ -40,7 +40,7 @@ import {
 } from '@tabler/icons-react';
 import {
   CategorieMatiere
-} from '../../database/db';
+} from '../../types/categories';
 
 import {
   apiGet,
@@ -427,11 +427,11 @@ const CategoriesMatieresManager: React.FC = () => {
                             </Table.Td>
                             <Table.Td style={{ fontSize: '15px', padding: '6px 4px', whiteSpace: 'nowrap' }}>
                               <Badge
-                                color={categorie.est_actif === 1 ? 'green' : 'red'}
+                                color={categorie.est_active === 1 ? 'green' : 'red'}
                                 variant="filled"
                                 size="xs"
                               >
-                                {categorie.est_actif === 1 ? 'Actif' : 'Inactif'}
+                                {categorie.est_active === 1 ? 'Actif' : 'Inactif'}
                               </Badge>
                             </Table.Td>
                             <Table.Td style={{ padding: '6px 4px' }}>

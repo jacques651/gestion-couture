@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
+  TypePrestation
+} from '../../types/prestations';
+import {
   Stack,
   Card,
   Title,
@@ -42,12 +45,6 @@ import {
 } from '../../services/api';
 import FormulaireTypePrestation from './FormulaireTypePrestation';
 
-interface TypePrestation {
-  id: number;
-  nom: string;
-  prix_par_defaut: number;
-  est_active: number;
-}
 
 const ListeTypesPrestations: React.FC = () => {
   const [types, setTypes] = useState<TypePrestation[]>([]);
@@ -115,7 +112,16 @@ const ListeTypesPrestations: React.FC = () => {
     currentPage * itemsPerPage
   );
 
-  const totalValeur = typesFiltres.reduce((sum, t) => sum + t.prix_par_defaut, 0);
+  const totalValeur =
+
+  typesFiltres.reduce(
+
+    (sum, t) =>
+
+      sum + (t.prix_par_defaut || 0),
+
+    0
+  );
 
   if (loading) {
     return (
@@ -308,7 +314,7 @@ const ListeTypesPrestations: React.FC = () => {
                         </Table.Td>
                         <Table.Td ta="right">
                           <Badge color="green" variant="light" size="md">
-                            {t.prix_par_defaut.toLocaleString()} FCFA
+                            {(t.prix_par_defaut || 0).toLocaleString()} FCFA
                           </Badge>
                         </Table.Td>
                         <Table.Td>
@@ -331,7 +337,15 @@ const ListeTypesPrestations: React.FC = () => {
                                 size="md"
                                 variant="subtle"
                                 color="red"
-                                onClick={() => supprimerType(t.id, t.nom)}
+                                onClick={() =>
+
+  supprimerType(
+
+    t.id || 0,
+
+    t.nom
+  )
+}
                               >
                                 <IconTrash size={18} />
                               </ActionIcon>

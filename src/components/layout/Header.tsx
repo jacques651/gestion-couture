@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { RefreshCcw, ChevronDown, LogOut } from 'lucide-react';
 import { Role } from '../../types/auth';
-import { resetAllData } from '../../database/db';
+import {
+  apiPost
+} from '../../services/api';
 import { PageKey } from '../../types/pages';
 import { menuSections } from '../../config/menuSections';
 
@@ -65,7 +67,10 @@ globalThis.confirm("Cette action est irréversible. Confirmer ?");
     try {
       setIsResetting(true);
 
-      await resetAllData();
+      await apiPost(
+  '/admin/reset',
+  {}
+);
 
       alert("Base réinitialisée avec succès !");
       location.reload();

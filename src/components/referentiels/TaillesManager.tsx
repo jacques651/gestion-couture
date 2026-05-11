@@ -26,9 +26,10 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh } from '@tabler/icons-react';
+
 import {
   Taille
-} from '../../database/db';
+} from '../../types/tailles';
 
 import {
   apiGet,
@@ -101,14 +102,26 @@ const TaillesManager: React.FC = () => {
   const openEditModal = (taille: Taille) => {
     setEditingTaille(taille);
     setFormData({
-      code_taille: taille.code_taille,
-      libelle: taille.libelle,
-      ordre: taille.ordre,
-      categorie: (taille.categorie as any) || 'universel',
-      description: taille.description || '',
-      est_actif: taille.est_actif
-    });
-    openModal();
+
+  code_taille:
+    taille.code_taille || '',
+
+  libelle:
+    taille.libelle || '',
+
+  ordre:
+    taille.ordre || 0,
+
+  categorie:
+    (taille.categorie as any)
+    || 'universel',
+
+  description:
+    taille.description || '',
+
+  est_actif:
+    taille.est_actif
+});
   };
 
   const openDeleteConfirm = (id: number, _libelle: string) => {
@@ -213,9 +226,21 @@ const TaillesManager: React.FC = () => {
   };
   // Filtrage
   const filteredTailles = tailles.filter(t =>
-    t.libelle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.code_taille.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+
+  t.libelle
+    .toLowerCase()
+    .includes(
+      searchTerm.toLowerCase()
+    )
+
+  ||
+
+  (t.code_taille || '')
+    .toLowerCase()
+    .includes(
+      searchTerm.toLowerCase()
+    )
+);
 
   // Pagination
   const totalPages = Math.ceil(filteredTailles.length / itemsPerPage);

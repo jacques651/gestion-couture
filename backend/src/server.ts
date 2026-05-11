@@ -25,6 +25,7 @@ import prestationsRoutes from "./routes/prestations-realisees";
 import salairesRoutes from "./routes/salaires";
 import historiqueSalairesRoutes from "./routes/historique-salaires";
 import empruntsRoutes from "./routes/emprunts";
+import adminRoutes from './routes/admin';
 
 
 dotenv.config();
@@ -32,29 +33,30 @@ dotenv.config();
 const app = express();
 
 app.use(cors());
-app.use(express.json({limit: "20mb"}));
-app.use(express.urlencoded({extended: true, limit: "20mb"}));
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use("/clients", clientsRoutes);
-app.use("/modeles-tenues",modelesRoutes);
+app.use("/modeles-tenues", modelesRoutes);
 app.use("/tailles", taillesRoutes);
-app.use("/types-mesures",typesMesuresRoutes);
+app.use("/types-mesures", typesMesuresRoutes);
 app.use("/couleurs", couleursRoutes);
 app.use("/textures", texturesRoutes);
 app.use("/articles", articlesRoutes);
 app.use("/categories-matieres", categoriesMatieresRoutes);
 app.use("/matieres", matieresRoutes);
 app.use("/atelier", atelierRoutes);
-app.use("/types-prestations",typesPrestationsRoutes);
+app.use("/types-prestations", typesPrestationsRoutes);
 app.use("/ventes", ventesRoutes);
-app.use("/depenses",depensesRoutes);
+app.use("/depenses", depensesRoutes);
 app.use("/rendezvous_commandes", rendezVousRoutes);
-app.use("/utilisateurs",utilisateursRoutes)
-app.use("/journal",journalRoutes);
-app.use("/employes",employesRoutes);
-app.use("/prestations-realisees",prestationsRoutes);
-app.use("/salaires",salairesRoutes);
-app.use("/historique-salaires",historiqueSalairesRoutes);
-app.use("/emprunts",empruntsRoutes);
+app.use("/utilisateurs", utilisateursRoutes)
+app.use("/journal", journalRoutes);
+app.use("/employes", employesRoutes);
+app.use("/prestations-realisees", prestationsRoutes);
+app.use("/salaires", salairesRoutes);
+app.use("/historique-salaires", historiqueSalairesRoutes);
+app.use("/emprunts", empruntsRoutes);
+app.use('/admin',adminRoutes);
 
 async function initDatabase() {
   try {
@@ -88,6 +90,22 @@ app.get("/test", async (_, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+app.get(
+
+  "/health",
+
+  (_, res) => {
+
+    res.json({
+
+      success: true,
+
+      message:
+        "Serveur actif"
+    });
+  }
+);
 
 app.listen(PORT, async () => {
   console.log(`🚀 Backend lancé sur le port ${PORT}`);

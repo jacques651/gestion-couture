@@ -27,7 +27,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh } from '@tabler/icons-react';
 import {
   Couleur
-} from '../../database/db';
+} from '../../types/couleurs';
 
 import {
   apiGet,
@@ -44,12 +44,12 @@ const CouleursManager: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [editingCouleur, setEditingCouleur] = useState<Couleur | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  
+
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
-  
+
   const itemsPerPage = 10;
-  
+
   const [formData, setFormData] = useState({
     nom_couleur: '',
     code_hex: '#000000',
@@ -65,7 +65,6 @@ const CouleursManager: React.FC = () => {
       setError(null);
       const data = await apiGet("/couleurs");
 
-setCouleurs(data);
       setCouleurs(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -126,91 +125,91 @@ setCouleurs(data);
     openDeleteModal();
   };
 
- const handleSave = async () => {
+  const handleSave = async () => {
 
-  if (!formData.nom_couleur.trim()) {
+    if (!formData.nom_couleur.trim()) {
 
-    setError(
-      'Le nom de la couleur est requis'
-    );
-
-    return;
-  }
-
-  try {
-
-    setError(null);
-
-    if (editingCouleur) {
-
-      await apiPut(
-        `/couleurs/${editingCouleur.id}`,
-        {
-          nom_couleur: formData.nom_couleur,
-          code_hex: formData.code_hex,
-          code_rgb: formData.code_rgb,
-          code_cmyk: formData.code_cmyk,
-          description: formData.description,
-          est_actif: formData.est_actif
-        }
+      setError(
+        'Le nom de la couleur est requis'
       );
 
-    } else {
-
-      await apiPost(
-        "/couleurs",
-        {
-          nom_couleur: formData.nom_couleur,
-          code_hex: formData.code_hex,
-          code_rgb: formData.code_rgb,
-          code_cmyk: formData.code_cmyk,
-          description: formData.description,
-          est_actif: formData.est_actif
-        }
-      );
+      return;
     }
 
-    closeModal();
+    try {
 
-    await loadCouleurs();
+      setError(null);
 
-    resetForm();
+      if (editingCouleur) {
 
-  } catch (err: any) {
+        await apiPut(
+          `/couleurs/${editingCouleur.id}`,
+          {
+            nom_couleur: formData.nom_couleur,
+            code_hex: formData.code_hex,
+            code_rgb: formData.code_rgb,
+            code_cmyk: formData.code_cmyk,
+            description: formData.description,
+            est_actif: formData.est_actif
+          }
+        );
 
-    setError(
-      err.message ||
-      'Erreur lors de l’enregistrement'
-    );
-  }
-};
+      } else {
 
- const handleDelete = async () => {
+        await apiPost(
+          "/couleurs",
+          {
+            nom_couleur: formData.nom_couleur,
+            code_hex: formData.code_hex,
+            code_rgb: formData.code_rgb,
+            code_cmyk: formData.code_cmyk,
+            description: formData.description,
+            est_actif: formData.est_actif
+          }
+        );
+      }
 
-  if (!deleteId) return;
+      closeModal();
 
-  try {
+      await loadCouleurs();
 
-    setError(null);
+      resetForm();
 
-    await apiDelete(
-      `/couleurs/${deleteId}`
-    );
+    } catch (err: any) {
 
-    closeDeleteModal();
+      setError(
+        err.message ||
+        'Erreur lors de l’enregistrement'
+      );
+    }
+  };
 
-    setDeleteId(null);
+  const handleDelete = async () => {
 
-    await loadCouleurs();
+    if (!deleteId) return;
 
-  } catch (err: any) {
+    try {
 
-    setError(
-      err.message ||
-      'Erreur lors de la suppression'
-    );
-  }
-};
+      setError(null);
+
+      await apiDelete(
+        `/couleurs/${deleteId}`
+      );
+
+      closeDeleteModal();
+
+      setDeleteId(null);
+
+      await loadCouleurs();
+
+    } catch (err: any) {
+
+      setError(
+        err.message ||
+        'Erreur lors de la suppression'
+      );
+    }
+  };
   // Filtrage
   const filteredCouleurs = couleurs.filter(c =>
     c.nom_couleur.toLowerCase().includes(searchTerm.toLowerCase())
@@ -405,7 +404,7 @@ setCouleurs(data);
             required
             withAsterisk
           />
-          
+
           <ColorInput
             label="Code Hexadécimal"
             placeholder="#000000"
@@ -413,14 +412,14 @@ setCouleurs(data);
             onChange={handleHexChange}
             format="hex"
           />
-          
+
           <TextInput
             label="Code RGB"
             placeholder="(0,0,0)"
             value={formData.code_rgb}
             onChange={(e) => setFormData({ ...formData, code_rgb: e.target.value })}
           />
-          
+
           <Textarea
             label="Description"
             placeholder="Description de la couleur..."
@@ -428,15 +427,15 @@ setCouleurs(data);
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
           />
-          
+
           <Switch
             label="Actif"
             checked={formData.est_actif === 1}
             onChange={(e) => setFormData({ ...formData, est_actif: e.currentTarget.checked ? 1 : 0 })}
           />
-          
+
           <Divider />
-          
+
           <Group justify="flex-end">
             <Button variant="light" onClick={closeModal}>
               Annuler

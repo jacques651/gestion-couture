@@ -35,10 +35,11 @@ import {
 } from '@tabler/icons-react';
 
 
-const navigate =
-  useNavigate();
 const SupportTechnique:
-React.FC = ({ }) => {
+React.FC = () => {
+
+  const navigate =
+    useNavigate();
   const supportOptions = [
     {
       icon: IconPhone,

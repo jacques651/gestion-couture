@@ -26,7 +26,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconEdit, IconTrash, IconSearch, IconRefresh } from '@tabler/icons-react';
 import {
   Texture
-} from '../../database/db';
+} from '../../types/textures';
 
 import {
   apiGet,
@@ -63,7 +63,6 @@ const TexturesManager: React.FC = () => {
       setError(null);
       const data = await apiGet("/textures");
 
-      setTextures(data);
       setTextures(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');

@@ -30,16 +30,11 @@ import {
 
 import { notifications } from '@mantine/notifications';
 import { apiPost, apiPut } from '../../services/api';
+import { TypePrestation } from '../../types/prestations';
 
 // ======================
 // TYPES
 // ======================
-interface TypePrestation {
-  code_prestation: any;
-  id?: number;
-  nom: string;
-  prix_par_defaut: number;
-}
 
 interface Props {
   type?: TypePrestation;
