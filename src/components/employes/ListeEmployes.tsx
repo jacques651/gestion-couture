@@ -44,7 +44,13 @@ import {
   IconCheck,
   IconUserStar,
 } from '@tabler/icons-react';
-import { getDb, payerSalaireSecurise } from '../../database/db';
+import {
+
+  apiGet,
+  apiPut,
+  apiDelete
+
+} from '../../services/api';
 import FormulaireEmploye from './FormulaireEmploye';
 
 interface Employe {
@@ -71,17 +77,34 @@ const ListeEmployes: React.FC = () => {
   const [paiementResult, setPaiementResult] = useState<any>(null);
   const itemsPerPage = 10;
 
-  const chargerEmployes = async () => {
-    setLoading(true);
-    const db = await getDb();
-    const result = await db.select<Employe[]>(
-      `SELECT * FROM employes 
-       WHERE est_supprime = 0 
-       ORDER BY nom_prenom`
-    );
-    setEmployes(result.flat());
-    setLoading(false);
-  };
+  const chargerEmployes =
+    async () => {
+
+      try {
+
+        setLoading(true);
+
+        const result =
+          await apiGet(
+            "/employes"
+          );
+
+        setEmployes(
+          result || []
+        );
+
+      } catch (error) {
+
+        console.error(
+          "Erreur chargement employés:",
+          error
+        );
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     chargerEmployes();
@@ -93,26 +116,17 @@ const ListeEmployes: React.FC = () => {
   ) => {
 
     if (!
-globalThis.confirm(
-      `Supprimer l'employé "${nom}" ?`
-    )) {
+      globalThis.confirm(
+        `Supprimer l'employé "${nom}" ?`
+      )) {
       return;
     }
 
     try {
 
-      const db = await getDb();
-
-      // Suppression logique
-      await db.execute(
-        `
-      UPDATE employes
-      SET est_supprime = 1
-      WHERE id = ?
-      `,
-        [id]
+      await apiDelete(
+        `/employes/${id}`
       );
-
       // Journalisation
       await journaliserAction({
         utilisateur: 'Utilisateur',
@@ -149,8 +163,14 @@ globalThis.confirm(
   const handlePaiement = async (e: Employe) => {
     try {
       setLoadingPaiement(e.id);
-      const result = await payerSalaireSecurise(e.id);
-      
+      const result =
+        await apiPut(
+
+          `/employes/${e.id}/payer`,
+
+          {}
+        );
+
       // Journalisation paiement
       await journaliserAction({
         utilisateur: 'Utilisateur',

@@ -40,7 +40,10 @@ import {
     IconUser,
     IconStatusChange,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+    apiGet,
+    apiPut
+} from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -84,33 +87,23 @@ export default function SuiviRendezVous() {
     } = useQuery<RendezVous[]>({
         queryKey: ['rendezvous_suivi'],
         queryFn: async () => {
-            try {
-                const db = await getDb();
-                if (!db) throw new Error("Base de données non initialisée");
 
-                const rows = await db.select<RendezVous[]>(
-                    `
-          SELECT
-            r.id,
-            r.date_rendezvous,
-            r.heure_rendezvous,
-            r.type_rendezvous,
-            r.statut,
-            c.nom_prenom,
-            v.code_vente,
-            r.client_id,
-            r.vente_id
-          FROM rendezvous_commandes r
-          LEFT JOIN clients c ON c.id = r.client_id
-          LEFT JOIN ventes v ON v.id = r.vente_id
-          WHERE r.statut != 'archive' OR r.statut IS NULL
-          ORDER BY r.date_rendezvous ASC, r.heure_rendezvous ASC
-          `
+            try {
+
+                const rows =
+                    await apiGet(
+                        '/rendezvous'
+                    );
+
+                return rows || [];
+
+            } catch (err) {
+
+                console.error(
+                    "Erreur chargement rendez-vous:",
+                    err
                 );
 
-                return rows;
-            } catch (err) {
-                console.error("Erreur dans queryFn:", err);
                 throw err;
             }
         },
@@ -166,36 +159,77 @@ export default function SuiviRendezVous() {
     const paginatedData = filteredAndSortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const updateStatutMutation = useMutation({
-        mutationFn: async ({ id, statut }: { id: number; statut: string }) => {
-            const db = await getDb();
-            if (!db) throw new Error("Base de données non disponible");
 
-            const rendezVousAvant = rendezVous.find(r => r.id === id);
+  mutationFn: async (
+    {
+      id,
+      statut
+    }: {
+      id: number;
+      statut: string;
+    }
+  ) => {
 
-            await db.execute(
-                `UPDATE rendezvous_commandes SET statut = ? WHERE id = ?`,
-                [statut, id]
-            );
+    const rendezVousAvant =
+      rendezVous.find(
+        r => r.id === id
+      );
 
-            await journaliserAction({
-                utilisateur: 'Utilisateur',
-                action: 'UPDATE',
-                table: 'rendezvous_commandes',
-                idEnregistrement: id.toString(),
-                details: `Changement de statut: ${rendezVousAvant?.statut} → ${statut} pour le rendez-vous du ${rendezVousAvant?.date_rendezvous}`
-            });
-        },
-        onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ['rendezvous_suivi'] });
-            await refetch();
-            setUpdateModalOpen(false);
-            setSelectedRendezVous(null);
-        },
-        onError: (error) => {
-            console.error(error);
-            alert("❌ Erreur lors de la mise à jour du statut");
-        }
+    /**
+     * API UPDATE
+     */
+    await apiPut(
+      `/rendezvous/${id}/statut`,
+      {
+        statut
+      }
+    );
+
+    /**
+     * Journal
+     */
+    await journaliserAction({
+
+      utilisateur:
+        'Utilisateur',
+
+      action:
+        'UPDATE',
+
+      table:
+        'rendezvous_commandes',
+
+      idEnregistrement:
+        id.toString(),
+
+      details:
+        `Changement de statut: ${rendezVousAvant?.statut} → ${statut} pour le rendez-vous du ${rendezVousAvant?.date_rendezvous}`
     });
+  },
+
+  onSuccess: async () => {
+
+    await queryClient.invalidateQueries({
+      queryKey:
+        ['rendezvous_suivi']
+    });
+
+    await refetch();
+
+    setUpdateModalOpen(false);
+
+    setSelectedRendezVous(null);
+  },
+
+  onError: (error) => {
+
+    console.error(error);
+
+    alert(
+      "❌ Erreur lors de la mise à jour du statut"
+    );
+  }
+});
 
     const handleSort = (column: 'date_rendezvous' | 'nom_prenom' | 'statut') => {
         if (sortBy === column) {

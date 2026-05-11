@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Group, Badge, ActionIcon, Stack, Title, Card, Text, Tooltip, Modal, TextInput, Textarea, Switch, LoadingOverlay } from '@mantine/core';
 import { IconPlus, IconEdit, IconTrash, IconRefresh } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import { notifications } from '@mantine/notifications';
-import { apiGet, apiPost, apiPut } from '../../services/api';
+import { apiDelete, apiGet, apiPost, apiPut } from '../../services/api';
 
 interface CategorieMatiere {
   id: number;
@@ -163,34 +162,85 @@ const handleSave = async () => {
   }
 };
 
-  const handleDelete = async (id: number, nom: string) => {
-    if (
-globalThis.confirm(`Supprimer la catégorie "${nom}" ?`)) {
-      const db = await getDb();
-      try {
-        // Vérifier si des matières utilisent cette catégorie
-        const used = await db.select<{ count: number }[]>(
-          `SELECT COUNT(*) as count FROM matieres WHERE categorie_id = ?`,
-          [id]
-        );
-        if (used[0].count > 0) {
-          notifications.show({ 
-            title: 'Impossible', 
-            message: `Cette catégorie est utilisée par ${used[0].count} matière(s)`, 
-            color: 'red' 
-          });
-          return;
-        }
-        await db.execute(`DELETE FROM categories_matieres WHERE id = ?`, [id]);
-        notifications.show({ title: 'Succès', message: 'Catégorie supprimée', color: 'green' });
-        loadData();
-      } catch (error) {
-        console.error(error);
-        notifications.show({ title: 'Erreur', message: 'Erreur lors de la suppression', color: 'red' });
-      }
-    }
-  };
+ const handleDelete = async (
+  id: number,
+  nom: string
+) => {
 
+  if (
+    globalThis.confirm(
+      `Supprimer la catégorie "${nom}" ?`
+    )
+  ) {
+
+    try {
+
+      /**
+       * Vérifier utilisation
+       */
+      const used =
+        await apiGet(
+          `/categories-matieres/${id}/usage`
+        );
+
+      if (
+        used.count > 0
+      ) {
+
+        notifications.show({
+
+          title:
+            'Impossible',
+
+          message:
+            `Cette catégorie est utilisée par ${used.count} matière(s)`,
+
+          color:
+            'red'
+        });
+
+        return;
+      }
+
+      /**
+       * DELETE
+       */
+      await apiDelete(
+        `/categories-matieres/${id}`
+      );
+
+      notifications.show({
+
+        title:
+          'Succès',
+
+        message:
+          'Catégorie supprimée',
+
+        color:
+          'green'
+      });
+
+      loadData();
+
+    } catch (error) {
+
+      console.error(error);
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          'Erreur lors de la suppression',
+
+        color:
+          'red'
+      });
+    }
+  }
+};
   if (loading) {
     return (
       <Card withBorder radius="md" p="lg" pos="relative">

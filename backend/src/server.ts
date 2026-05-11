@@ -17,7 +17,11 @@ import atelierRoutes from "./routes/atelier";
 import typesPrestationsRoutes from "./routes/typesPrestations";
 import ventesRoutes from "./routes/ventes";
 import depensesRoutes from "./routes/depenses";
-import rendezVousRoutes from "./routes/rendezvous-commandes";
+import rendezVousRoutes from "./routes/rendezvous_commandes";
+import utilisateursRoutes from "./routes/utilisateurs";
+import journalRoutes from "./routes/journal";
+import employesRoutes from "./routes/employes";
+
 
 dotenv.config();
 
@@ -39,7 +43,10 @@ app.use("/atelier", atelierRoutes);
 app.use("/types-prestations",typesPrestationsRoutes);
 app.use("/ventes", ventesRoutes);
 app.use("/depenses",depensesRoutes);
-app.use("/rendezvous-commandes",rendezVousRoutes);
+app.use("/rendezvous_commandes", rendezVousRoutes);
+app.use("/utilisateurs",utilisateursRoutes)
+app.use("/journal",journalRoutes);
+app.use("/employes",employesRoutes);
 
 async function initDatabase() {
   try {

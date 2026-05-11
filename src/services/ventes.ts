@@ -83,7 +83,7 @@ export const getRendezVous =
 async () => {
 
   return await apiGet(
-    "/rendezvous-commandes"
+    "/rendezvous"
   );
 };
 
@@ -91,7 +91,7 @@ export const terminerRendezVous =
 async (id: number) => {
 
   return await apiPut(
-    `/rendezvous-commandes/${id}/terminer`,
+    `/rendezvous/${id}/terminer`,
     {}
   );
 };
@@ -100,7 +100,7 @@ export const annulerRendezVous =
 async (id: number) => {
 
   return await apiPut(
-    `/rendezvous-commandes/${id}/annuler`,
+    `/rendezvous/${id}/annuler`,
     {}
   );
 };

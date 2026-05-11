@@ -36,8 +36,18 @@ import { getNextVenteCode } from '../../database/db';
 
 // ========== TYPES ==========
 interface Client {
-  id(id: any): unknown;
-  profil: string; telephone_id: string; nom_prenom: string; adresse?: string; email?: string;
+
+  id: number;
+
+  profil: string;
+
+  telephone_id: string;
+
+  nom_prenom: string;
+
+  adresse?: string;
+
+  email?: string;
 }
 
 interface Article { id: number; code_article: string; modele: string; modele_id: number; taille: string; taille_id: number; couleur: string; couleur_id: number; texture: string | null; prix_vente: number; quantite_stock: number; emplacement: string | null; est_disponible: number; }
@@ -52,11 +62,11 @@ const VentesManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [
-,
-  setSelectedDetails
-] = useState<any[]>(
-  []
-);
+    ,
+    setSelectedDetails
+  ] = useState<any[]>(
+    []
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
@@ -461,24 +471,49 @@ const VentesManager: React.FC = () => {
 
         setLoading(true);
 
+        /**
+         * Vente
+         */
         const data =
           await getVente(
             vente.id
           );
 
-        setEditVenteData(data);
+        /**
+         * Détails
+         */
+        const details =
+          await getVenteDetails(
+            vente.id
+          );
+
+        /**
+         * Injecter les lignes
+         */
+        setEditVenteData({
+
+          ...data,
+
+          lignes:
+            details || []
+        });
 
         setEditModalOpen(true);
 
       } catch (err: any) {
 
+        console.error(err);
+
         notifications.show({
-          title: 'Erreur',
+
+          title:
+            'Erreur',
 
           message:
             err.message,
 
-          color: 'red'
+          color:
+            'red'
         });
 
       } finally {
@@ -486,6 +521,7 @@ const VentesManager: React.FC = () => {
         setLoading(false);
       }
     };
+
   const handleSaveEditVente = async () => {
 
     if (!editVenteData) return;
@@ -515,7 +551,7 @@ const VentesManager: React.FC = () => {
 
             0
           );
-
+      console.log(editVenteData);
       await updateVente(
 
         editVenteData.id,
@@ -1445,7 +1481,12 @@ const VentesManager: React.FC = () => {
 
         <Modal opened={editModalOpen} onClose={() => { setEditModalOpen(false); setEditVenteData(null); }} title={<Group gap="sm"><IconEdit size={20} color="white" /><Text fw={700} c="white">Modifier vente {editVenteData?.code_vente || ''}</Text></Group>} size="xl" centered radius="md" styles={{ header: { backgroundColor: '#1b365d', padding: '14px 20px' }, title: { color: 'white' }, body: { padding: '20px' } }}>
           {editVenteData && <Stack gap="md">
-            <Paper p="md" radius="md" withBorder><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md"><TextInput label="Date" type="date" value={editVenteData.date_vente} onChange={(e) => setEditVenteData({ ...editVenteData, date_vente: e.target.value })} size="sm" radius="md" /><Select label="Type" data={[{ value: 'commande', label: '📝 Sur mesure' }, { value: 'pret_a_porter', label: '👕 Prêt-à-porter' }, { value: 'matiere', label: '📦 Matière' }]} value={editVenteData.type_vente} onChange={(val) => setEditVenteData({ ...editVenteData, type_vente: val })} size="sm" radius="md" /></SimpleGrid><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" mt="sm"><TextInput label="Client" value={editVenteData.client_nom || ''} onChange={(e) => setEditVenteData({ ...editVenteData, client_nom: e.target.value })} size="sm" radius="md" /><TextInput label="Téléphone" value={editVenteData.client_id || ''} onChange={(e) => setEditVenteData({ ...editVenteData, client_id: e.target.value })} size="sm" radius="md" /></SimpleGrid><Textarea label="Observation" value={editVenteData.observation || ''} onChange={(e) => setEditVenteData({ ...editVenteData, observation: e.target.value })} rows={2} size="sm" radius="md" mt="sm" /></Paper>
+            <Paper p="md" radius="md" withBorder><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md"><TextInput label="Date" type="date" value={
+              editVenteData.date_vente
+                ?.split('T')[0] || ''
+            } onChange={(e) => setEditVenteData({ ...editVenteData, date_vente: e.target.value })} size="sm" radius="md" /><Select label="Type" data={[{ value: 'commande', label: '📝 Sur mesure' }, { value: 'pret_a_porter', label: '👕 Prêt-à-porter' }, { value: 'matiere', label: '📦 Matière' }]} value={editVenteData.type_vente} onChange={(val) => setEditVenteData({ ...editVenteData, type_vente: val })} size="sm" radius="md" /></SimpleGrid><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" mt="sm"><TextInput label="Client" value={editVenteData.client_nom || ''} onChange={(e) => setEditVenteData({ ...editVenteData, client_nom: e.target.value })} size="sm" radius="md" /><TextInput label="Téléphone" value={
+              editVenteData.client_telephone || ''
+            } onChange={(e) => setEditVenteData({ ...editVenteData, client_id: e.target.value })} size="sm" radius="md" /></SimpleGrid><Textarea label="Observation" value={editVenteData.observation || ''} onChange={(e) => setEditVenteData({ ...editVenteData, observation: e.target.value })} rows={2} size="sm" radius="md" mt="sm" /></Paper>
             <Paper p="md" radius="md" withBorder><Group justify="space-between" mb="sm"><Text fw={600} size="sm">📋 Articles</Text><Button variant="light" size="compact-sm" onClick={handleAddEditLigne} leftSection={<IconPlus size={14} />}>Ajouter</Button></Group><ScrollArea h={300}><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Désignation</Table.Th><Table.Th w={70} ta="center">Qté</Table.Th><Table.Th w={110} ta="right">Prix unit.</Table.Th><Table.Th w={110} ta="right">Total</Table.Th><Table.Th w={40}></Table.Th></Table.Tr></Table.Thead><Table.Tbody>{(editVenteData.lignes || []).map((l: LigneEdit, i: number) => (<Table.Tr key={i}><Table.Td><TextInput size="xs" value={l.designation} onChange={(e) => handleEditLigneChange(i, 'designation', e.target.value)} /></Table.Td><Table.Td><NumberInput size="xs" min={1} value={l.quantite} onChange={(val) => handleEditLigneChange(i, 'quantite', val)} /></Table.Td><Table.Td><NumberInput size="xs" min={0} step={100} value={l.prix_unitaire} onChange={(val) => handleEditLigneChange(i, 'prix_unitaire', val)} /></Table.Td><Table.Td><Text size="sm" ta="right" fw={600}>{(l.quantite * l.prix_unitaire).toLocaleString()} FCFA</Text></Table.Td><Table.Td><ActionIcon color="red" variant="subtle" onClick={() => handleRemoveEditLigne(i)}><IconTrash size={14} /></ActionIcon></Table.Td></Table.Tr>))}</Table.Tbody></Table></ScrollArea></Paper>
             <Paper p="md" radius="md" withBorder><Group justify="space-between" mb="xs"><Text fw={600}>Total</Text><Text fw={700} size="lg" c="blue">{getEditTotal().toLocaleString()} FCFA</Text></Group><Divider my="xs" /><SimpleGrid cols={2} spacing="md"><NumberInput label="Montant réglé" value={editVenteData.montant_regle} onChange={(val) => setEditVenteData({ ...editVenteData, montant_regle: val || 0 })} min={0} step={1000} size="sm" radius="md" /><Box><Text size="xs" fw={500} mb={4}>Reste à payer</Text><Text fw={600} c="red">{(getEditTotal() - (editVenteData.montant_regle || 0)).toLocaleString()} FCFA</Text></Box></SimpleGrid></Paper>
             <Group justify="flex-end" gap="sm"><Button variant="light" onClick={() => setEditModalOpen(false)} radius="md">Annuler</Button><Button onClick={handleSaveEditVente} loading={editLoading} radius="md" variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }}>Enregistrer</Button></Group>
@@ -1464,7 +1505,17 @@ const VentesManager: React.FC = () => {
   return (
     <Container size="lg" p={0}><Stack gap="md" p="md">
       <Card withBorder radius="lg" p="md" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}><Group justify="space-between"><Group gap="sm"><ThemeIcon size={42} radius="md" variant="white" color="#1b365d"><IconShoppingBag size={22} /></ThemeIcon><Box><Title order={4} c="white">Nouvelle vente</Title><Text c="gray.3" size="xs">Code : {codeVente}</Text></Box></Group><Group gap={4}><Tooltip label="Liste"><ActionIcon variant="subtle" color="white" onClick={backToList}><IconList size={18} /></ActionIcon></Tooltip><Tooltip label="Reset"><ActionIcon variant="subtle" color="white" onClick={resetForm}><IconRefresh size={18} /></ActionIcon></Tooltip></Group></Group></Card>
-      <Card withBorder radius="lg" shadow="sm" p="md"><Group justify="space-between" mb="sm"><Title order={5}>👤 Client</Title><SegmentedControl value={venteType} onChange={(val) => { setVenteType(val as VenteType); setPanier([]); }} data={[{ value: 'commande', label: 'Sur mesure' }, { value: 'pret_a_porter', label: 'Prêt-à-porter' }, { value: 'matiere', label: 'Matière' }]} size="xs" color="#1b365d" /></Group><Divider mb="sm" />{venteType === 'commande' ? <Stack gap="xs"><Select label="Sélectionnez le client" placeholder="Rechercher..." data={clientOptions} value={clientId} onChange={setClientId} searchable clearable size="sm" radius="md" leftSection={<IconUser size={16} />} /><SimpleGrid cols={2} spacing="xs"><TextInput label="Nom complet" value={clientNom} onChange={(e) => setClientNom(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} size="sm" radius="md" /></SimpleGrid><Button variant="subtle" size="compact-xs" leftSection={<IconPlus size={12} />} onClick={() => setShowFormulaireClient(true)}>Nouveau client</Button></Stack> : <SimpleGrid cols={2} spacing="xs"><TextInput label="Nom client (optionnel)" value={clientNomSimple} onChange={(e) => setClientNomSimple(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone (optionnel)" value={clientTelephoneSimple} onChange={(e) => setClientTelephoneSimple(e.target.value)} size="sm" radius="md" /></SimpleGrid>}</Card>
+      <Card withBorder radius="lg" shadow="sm" p="md"><Group justify="space-between" mb="sm"><Title order={5}>👤 Client</Title><SegmentedControl value={venteType} onChange={(val) => { setVenteType(val as VenteType); setPanier([]); }} data={[{ value: 'commande', label: 'Sur mesure' }, { value: 'pret_a_porter', label: 'Prêt-à-porter' }, { value: 'matiere', label: 'Matière' }]} size="xs" color="#1b365d" /></Group><Divider mb="sm" />{venteType === 'commande' ? <Stack gap="xs"><Select label="Sélectionnez le client" placeholder="Rechercher..." data={clientOptions} value={clientId} onChange={setClientId} searchable clearable size="sm" radius="md" leftSection={<IconUser size={16} />} /><SimpleGrid cols={2} spacing="xs"><TextInput label="Nom complet" value={clientNom} onChange={(e) => setClientNom(e.target.value)} size="sm" radius="md" />
+        <TextInput
+          label="Téléphone"
+          value={
+            editVenteData?.client_telephone || ''
+          }
+          size="sm"
+          radius="md"
+          readOnly
+        />
+      </SimpleGrid><Button variant="subtle" size="compact-xs" leftSection={<IconPlus size={12} />} onClick={() => setShowFormulaireClient(true)}>Nouveau client</Button></Stack> : <SimpleGrid cols={2} spacing="xs"><TextInput label="Nom client (optionnel)" value={clientNomSimple} onChange={(e) => setClientNomSimple(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone (optionnel)" value={clientTelephoneSimple} onChange={(e) => setClientTelephoneSimple(e.target.value)} size="sm" radius="md" /></SimpleGrid>}</Card>
       {(venteType === 'pret_a_porter' || venteType === 'matiere') && <Card withBorder radius="lg" shadow="sm" p="md"><Group justify="space-between" mb="sm"><Title order={5}>📦 {venteType === 'pret_a_porter' ? 'Articles disponibles' : 'Matières disponibles'}</Title><Group gap="xs"><TextInput placeholder="Rechercher..." leftSection={<IconSearch size={14} />} value={searchProduitTerm} onChange={(e) => setSearchProduitTerm(e.target.value)} size="xs" radius="md" style={{ width: 200 }} /><Tooltip label="Actualiser"><ActionIcon variant="light" onClick={loadFormData} size="sm" radius="md"><IconRefresh size={14} /></ActionIcon></Tooltip></Group></Group><ScrollArea h={350} offsetScrollbars><Table striped highlightOnHover style={{ fontSize: 12 }}><Table.Thead style={{ backgroundColor: '#1b365d', position: 'sticky', top: 0, zIndex: 1 }}><Table.Tr><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px' }}>Désignation</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50, textAlign: 'center' }}>Taille</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 80 }}>Couleur</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 80, textAlign: 'right' }}>Prix vente</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50, textAlign: 'center' }}>Stock</Table.Th><Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50 }}></Table.Th></Table.Tr></Table.Thead><Table.Tbody>{venteType === 'pret_a_porter' ? articles.filter(a => a.modele.toLowerCase().includes(searchProduitTerm.toLowerCase()) || a.couleur.toLowerCase().includes(searchProduitTerm.toLowerCase()) || a.taille.toLowerCase().includes(searchProduitTerm.toLowerCase())).map(article => { const mm = modeles?.find(m => m.designation === article.modele); const cc = couleurs?.find(c => c.nom_couleur === article.couleur); const tt = tailles?.find(t => t.libelle === article.taille); return (<Table.Tr key={article.id}><Table.Td style={{ padding: '4px 8px' }}><Text size="xs" fw={600}>{article.modele}</Text>{mm && <Text size="10px" c="dimmed">{mm.categorie}</Text>}</Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" variant="light" color="blue">{tt?.code_taille || article.taille}</Badge></Table.Td><Table.Td style={{ padding: '4px 8px' }}><Group gap={6} wrap="nowrap"><Box w={12} h={12} style={{ backgroundColor: cc?.code_hex || '#ccc', borderRadius: '50%', border: '1px solid rgba(0,0,0,0.2)' }} /><Text size="xs">{article.couleur}</Text></Group></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" fw={600} c="green">{article.prix_vente.toLocaleString()} FCFA</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" color={article.quantite_stock < 5 ? 'orange' : 'green'}>{article.quantite_stock}</Badge></Table.Td><Table.Td style={{ padding: '4px 8px' }}><ActionIcon variant="light" color="blue" size="sm" onClick={() => { setSelectedArticle(article); setQuantiteCmd(1); setShowQuantiteModal(true); }}><IconPlus size={14} /></ActionIcon></Table.Td></Table.Tr>); }) : matieres.filter(m => m.designation.toLowerCase().includes(searchProduitTerm.toLowerCase())).map(matiere => (<Table.Tr key={matiere.id}><Table.Td colSpan={3} style={{ padding: '4px 8px' }}><Text size="xs" fw={600}>{matiere.designation}</Text><Text size="10px" c="dimmed">{matiere.code_matiere} - {matiere.unite}</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" c="dimmed">-</Text></Table.Td><Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" color={matiere.stock_actuel < 5 ? 'orange' : 'green'}>{matiere.stock_actuel}</Badge></Table.Td><Table.Td style={{ padding: '4px 8px' }}><ActionIcon variant="light" color="blue" size="sm" onClick={() => handleAjouterMatiereAuPanier(matiere)}><IconPlus size={14} /></ActionIcon></Table.Td></Table.Tr>))}</Table.Tbody></Table></ScrollArea></Card>}
       {venteType === 'commande' && <Card withBorder radius="lg" shadow="sm" p="md"><Title order={5} mb="sm">📝 Ajouter un article à la commande</Title><Group align="flex-end" gap="xs" mb="sm"><TextInput placeholder="Désignation" value={produitCommande} onChange={(e) => setProduitCommande(e.target.value)} size="sm" radius="md" style={{ flex: 2 }} /><NumberInput placeholder="Qté" value={quantiteCommande} onChange={(val) => setQuantiteCommande(Number(val) || 1)} min={1} size="sm" radius="md" style={{ width: 70 }} /><NumberInput placeholder="Prix unitaire" value={montantCommande} onChange={(val) => setMontantCommande(Number(val) || 0)} min={0} step={500} size="sm" radius="md" style={{ width: 130 }} rightSection={<Text size="xs">FCFA</Text>} /><ActionIcon variant="filled" color="#1b365d" size="lg" radius="md" onClick={() => { if (!produitCommande || montantCommande <= 0) { notifications.show({ title: 'Erreur', message: 'Désignation et prix requis', color: 'red' }); return; } setPanier([...panier, { id: `${Date.now()}`, produitId: 0, designation: produitCommande, quantite: quantiteCommande, prixUnitaire: montantCommande, total: quantiteCommande * montantCommande, type_produit: 'article' }]); setProduitCommande(''); setMontantCommande(0); setQuantiteCommande(1); }}><IconPlus size={18} /></ActionIcon></Group></Card>}
       <Card

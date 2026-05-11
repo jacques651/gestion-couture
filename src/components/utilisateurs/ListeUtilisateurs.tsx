@@ -18,7 +18,11 @@ import {
   IconPlus, IconEdit, IconTrash, IconRefresh,
   IconLock, IconLockOpen, IconShield,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+  apiGet,
+  apiPut,
+  apiDelete
+} from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import FormulaireUtilisateur from './FormulaireUtilisateur';
 import { aPermission } from '../../services/permissions';
@@ -34,6 +38,15 @@ interface Utilisateur {
 const ListeUtilisateurs: React.FC = () => {
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [loading, setLoading] = useState(true);
+  const [
+
+    hasPermission,
+
+    setHasPermission
+
+  ] = useState<
+    boolean | null
+  >(null);
   const [showForm, setShowForm] = useState(false);
   const [editUser, setEditUser] = useState<Utilisateur | null>(null);
   const [desactiverId, setDesactiverId] = useState<number | null>(null);
@@ -42,19 +55,59 @@ const ListeUtilisateurs: React.FC = () => {
   const [deleteUserId, setDeleteUserId] = useState<number | null>(null);
 
   const loadUsers = async () => {
+
     setLoading(true);
+
     try {
-      const db = await getDb();
-      const data = await db.select<Utilisateur[]>(
-        `SELECT id, nom, login, role, est_actif FROM utilisateurs ORDER BY nom`
+
+      const data =
+        await apiGet(
+          "/utilisateurs"
+        );
+
+      setUtilisateurs(
+        data || []
       );
-      setUtilisateurs(data || []);
+
     } catch (err: any) {
-      notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
-    } finally { setLoading(false); }
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          err.message,
+
+        color:
+          'red'
+      });
+
+    } finally {
+
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+
+    const checkPermission =
+      async () => {
+
+        const allowed =
+          await aPermission(
+            'utilisateurs'
+          );
+
+        setHasPermission(
+          allowed
+        );
+      };
+
+    checkPermission();
+
+  }, []);
 
   // Désactiver/Réactiver un utilisateur
   const handleToggleActif = async () => {
@@ -74,7 +127,7 @@ const ListeUtilisateurs: React.FC = () => {
     }
     if (!desactiverId) return;
     try {
-      const db = await getDb();
+
       const user =
         utilisateurs.find(
           u => u.id === desactiverId
@@ -85,16 +138,13 @@ const ListeUtilisateurs: React.FC = () => {
           ? 0
           : 1;
 
-      await db.execute(
-        `
-  UPDATE utilisateurs
-  SET est_actif = ?
-  WHERE id = ?
-  `,
-        [
-          newStatus,
-          desactiverId
-        ]
+      await apiPut(
+
+        `/utilisateurs/${desactiverId}/statut`,
+
+        {
+          est_actif: newStatus
+        }
       );
 
       // Journalisation activation/désactivation
@@ -122,34 +172,83 @@ const ListeUtilisateurs: React.FC = () => {
   };
 
   // Supprimer définitivement
-  const handleDeleteDefinitif = async () => {
-    if (!deleteUserId) return;
-    try {
-      const db = await getDb();
-      await db.execute(`DELETE FROM permissions WHERE utilisateur_id = ?`, [deleteUserId]);
-      await db.execute(`DELETE FROM utilisateurs WHERE id = ?`, [deleteUserId]);
-      notifications.show({ title: 'Succès', message: 'Utilisateur supprimé définitivement', color: 'green' });
-      setDeleteModalOpen(false);
-      setDeleteUserId(null);
-      loadUsers();
-    } catch (err: any) {
-      notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
-    }
-    const session = getUtilisateurConnecte();
+  const handleDeleteDefinitif =
+    async () => {
 
-    if (deleteUserId === session?.id) {
+      if (!deleteUserId)
+        return;
 
-      notifications.show({
-        title: 'Erreur',
-        message:
-          'Vous ne pouvez pas supprimer votre propre compte',
-        color: 'red'
-      });
+      /**
+       * Session
+       */
+      const session =
+        getUtilisateurConnecte();
 
-      return;
-    }
-  };
+      /**
+       * Interdire auto-suppression
+       */
+      if (
+        deleteUserId ===
+        session?.id
+      ) {
 
+        notifications.show({
+
+          title:
+            'Erreur',
+
+          message:
+            'Vous ne pouvez pas supprimer votre propre compte',
+
+          color:
+            'red'
+        });
+
+        return;
+      }
+
+      try {
+
+        /**
+         * DELETE API
+         */
+        await apiDelete(
+          `/utilisateurs/${deleteUserId}`
+        );
+
+        notifications.show({
+
+          title:
+            'Succès',
+
+          message:
+            'Utilisateur supprimé définitivement',
+
+          color:
+            'green'
+        });
+
+        setDeleteModalOpen(false);
+
+        setDeleteUserId(null);
+
+        loadUsers();
+
+      } catch (err: any) {
+
+        notifications.show({
+
+          title:
+            'Erreur',
+
+          message:
+            err.message,
+
+          color:
+            'red'
+        });
+      }
+    };
   if (showForm) {
     return (
       <FormulaireUtilisateur
@@ -169,7 +268,9 @@ const ListeUtilisateurs: React.FC = () => {
     }
   };
 
-  if (!aPermission('utilisateurs')) {
+  if (
+    hasPermission === false
+  ) {
 
     return (
       <Center h="70vh">
@@ -187,6 +288,17 @@ const ListeUtilisateurs: React.FC = () => {
     );
   }
 
+  if (
+    hasPermission === null
+  ) {
+    return (
+      <Center h="50vh">
+
+        <LoadingOverlay visible />
+
+      </Center>
+    );
+  }
   if (loading) {
     return (
       <Center style={{ height: '50vh' }}>

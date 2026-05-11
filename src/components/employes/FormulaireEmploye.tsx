@@ -25,7 +25,12 @@ import {
   IconCheck,
   IconAlertCircle,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+
+  apiPost,
+  apiPut
+
+} from '../../services/api';
 
 const FormulaireEmploye = ({ employe, onSuccess, onCancel }: any) => {
 
@@ -66,27 +71,29 @@ const FormulaireEmploye = ({ employe, onSuccess, onCancel }: any) => {
     setLoading(true);
 
     try {
-      const db = await getDb();
+
       const salaireFinal = type === 'fixe' ? salaire : 0;
 
       if (employe) {
 
-        await db.execute(
-          `
-    UPDATE employes
-    SET nom_prenom=?,
-        telephone=?,
-        type_remuneration=?,
-        salaire_base=?
-    WHERE id=?
-    `,
-          [
-            nomPrenom,
-            telephone || null,
-            type,
-            salaireFinal,
-            employe.id
-          ]
+        await apiPut(
+
+          `/employes/${employe.id}`,
+
+          {
+
+            nom_prenom:
+              nomPrenom,
+
+            telephone:
+              telephone || null,
+
+            type_remuneration:
+              type,
+
+            salaire_base:
+              salaireFinal
+          }
         );
 
         // Journalisation modification
@@ -102,22 +109,24 @@ const FormulaireEmploye = ({ employe, onSuccess, onCancel }: any) => {
 
       } else {
 
-        await db.execute(
-          `
-    INSERT INTO employes (
-      nom_prenom,
-      telephone,
-      type_remuneration,
-      salaire_base
-    )
-    VALUES (?, ?, ?, ?)
-    `,
-          [
-            nomPrenom,
-            telephone || null,
-            type,
-            salaireFinal
-          ]
+        await apiPost(
+
+          "/employes",
+
+          {
+
+            nom_prenom:
+              nomPrenom,
+
+            telephone:
+              telephone || null,
+
+            type_remuneration:
+              type,
+
+            salaire_base:
+              salaireFinal
+          }
         );
 
         // Journalisation création

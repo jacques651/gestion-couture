@@ -30,14 +30,14 @@ import {
 import {
   apiGet
 } from "../../services/api";
-import { useAuth } from "../../contexts/AuthContext";
 import {
-  sauvegarderSession
-} from "../../services/session";
-
+  apiPost
+} from "../../services/api";
 import {
   journaliserAction
 } from "../../services/journal";
+import { useAuth } from "../../contexts/AuthContext";
+import { sauvegarderSession } from "../../services/session";
 
 interface ConfigurationAtelier {
   id: number;
@@ -56,7 +56,7 @@ interface ConfigurationAtelier {
 }
 
 const Login: React.FC = () => {
-  const { login, register } = useAuth();
+  useAuth();
 
   const [isFirstUser, setIsFirstUser] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
@@ -132,72 +132,159 @@ const Login: React.FC = () => {
 
 }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit =
+  async (
+    e: React.FormEvent
+  ) => {
+
     e.preventDefault();
+
     setLoading(true);
+
     setError("");
 
     try {
-      if (isFirstUser) {
-        await register(nom, loginValue, password, "admin");
 
-        // Journalisation création admin
+      /**
+       * =========================
+       * PREMIER UTILISATEUR
+       * =========================
+       */
+      if (isFirstUser) {
+
+        const user =
+          await apiPost(
+
+            "/utilisateurs",
+
+            {
+
+              nom,
+
+              login:
+                loginValue,
+
+              mot_de_passe:
+                password,
+
+              role:
+                "admin"
+            }
+          );
+
+        /**
+         * Journal
+         */
         await journaliserAction({
-          utilisateur: nom,
-          action: 'CREATE',
-          table: 'utilisateurs',
-          idEnregistrement: loginValue,
+
+          utilisateur:
+            nom,
+
+          action:
+            'CREATE',
+
+          table:
+            'utilisateurs',
+
+          idEnregistrement:
+            user.id,
+
           details:
             `Création administrateur : ${nom}`
         });
 
-        alert("✅ Administrateur créé avec succès ! Connectez-vous maintenant.");
-        setIsFirstUser(false);
-        setPassword("");
-        setNom("");
-        setLoginValue("");
-      } else {
-        const result = await login(
-          loginValue,
-          password
+        alert(
+          "✅ Administrateur créé avec succès !"
         );
 
-        if (
-          result.success &&
-          result.utilisateur
-        ) {
+        setIsFirstUser(false);
 
-          // Sauvegarde session
-          sauvegarderSession({
-            id: result.utilisateur.id,
-            nom: result.utilisateur.nom,
-            role: result.utilisateur.role
-          });
-          // Journalisation connexion
-          await journaliserAction({
-            utilisateur: loginValue,
-            action: 'LOGIN',
-            table: 'auth',
-            idEnregistrement: loginValue,
-            details:
-              `Connexion utilisateur : ${loginValue}`
-          });
+        setPassword("");
 
-        } else {
+        setNom("");
 
-          setError(
-            "❌ Identifiants incorrects. Veuillez réessayer."
-          );
+        setLoginValue("");
 
-        }
+        return;
       }
+
+      /**
+       * =========================
+       * LOGIN
+       * =========================
+       */
+      const utilisateur =
+        await apiPost(
+
+          "/utilisateurs/login",
+
+          {
+
+            login:
+              loginValue,
+
+            mot_de_passe:
+              password
+          }
+        );
+
+      /**
+       * SESSION
+       */
+      sauvegarderSession({
+
+        id:
+          utilisateur.id,
+
+        nom:
+          utilisateur.nom,
+
+        role:
+          utilisateur.role
+      });
+
+      /**
+       * Journal
+       */
+      await journaliserAction({
+
+        utilisateur:
+          loginValue,
+
+        action:
+          'LOGIN',
+
+        table:
+          'auth',
+
+        idEnregistrement:
+          utilisateur.id,
+
+        details:
+          `Connexion utilisateur : ${loginValue}`
+      });
+
+      /**
+       * Reload app
+       */
+      window.location.reload();
+
     } catch (err: any) {
-      setError("Erreur : " + err.message);
+
+      console.error(err);
+
+      setError(
+
+        err.message
+        ||
+        "Erreur de connexion"
+      );
+
     } finally {
+
       setLoading(false);
     }
-  };
-
+};
   const atelierNom = config?.nom_atelier || "GESTION COUTURE";
   const atelierSlogan = config?.adresse ? `Atelier situé à ${config.adresse.split(',')[0]}` : "Gestion professionnelle d'atelier de couture";
 

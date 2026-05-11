@@ -1,18 +1,30 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import bcrypt from 'bcryptjs';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState
+} from 'react';
+
 import {
   apiGet,
   apiPost
 } from '../services/api';
 
-
-export type Role = 'admin' | 'caissier' | 'couturier';
+export type Role =
+  | 'admin'
+  | 'caissier'
+  | 'couturier';
 
 export interface User {
+
   id: number;
+
   nom: string;
+
   login: string;
+
   role: Role;
+
   permissions?: Record<
     string,
     {
@@ -23,224 +35,422 @@ export interface User {
 }
 
 interface Permission {
+
   lecture: boolean;
+
   ecriture: boolean;
 }
 
 interface AuthContextType {
+
   user: User | null;
+
   loading: boolean;
+
   isAuthenticated: boolean;
+
   login: (
     login: string,
     password: string
   ) => Promise<{
     success: boolean;
-    utilisateur?: any;
+    utilisateur?: User;
   }>;
 
-  register: (nom: string, login: string, password: string, role: Role) => Promise<void>;
+  register: (
+    nom: string,
+    login: string,
+    password: string,
+    role: Role
+  ) => Promise<void>;
+
   logout: () => void;
-  hasRole: (roles: Role[]) => boolean;
-  permissions: Record<string, Permission>;
-  canRead: (fonctionnalite: string) => boolean;
-  canWrite: (fonctionnalite: string) => boolean;
-}
 
+  hasRole: (
+    roles: Role[]
+  ) => boolean;
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const normalizeRole = (role: string): Role => {
-  const r = role?.toLowerCase().trim();
-  if (r === 'admin' || r === 'caissier' || r === 'couturier') return r;
-  return 'couturier';
-};
-
-const loadUserPermissions =
-async (
-  userId: number
-): Promise<
-  Record<string, Permission>
-> => {
-
-  try {
-
-    const perms =
-      await apiGet(
-        `/permissions/${userId}`
-      );
-
-    const map:
+  permissions:
     Record<
       string,
       Permission
-    > = {};
+    >;
 
-    perms.forEach((p: any) => {
+  canRead: (
+    fonctionnalite: string
+  ) => boolean;
 
-      map[
-        p.fonctionnalite
-      ] = {
+  canWrite: (
+    fonctionnalite: string
+  ) => boolean;
+}
 
-        lecture:
-          p.lecture === 1,
+const AuthContext =
+  createContext<
+    AuthContextType | undefined
+  >(undefined);
 
-        ecriture:
-          p.ecriture === 1
-      };
-    });
+/**
+ * =========================
+ * NORMALIZE ROLE
+ * =========================
+ */
+const normalizeRole = (
+  role: string
+): Role => {
 
-    return map;
+  const r =
+    role
+      ?.toLowerCase()
+      .trim();
 
-  } catch {
+  if (
+    r === 'admin'
+    ||
+    r === 'caissier'
+    ||
+    r === 'couturier'
+  ) {
 
-    return {};
+    return r;
   }
+
+  return 'couturier';
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [permissions, setPermissions] = useState<Record<string, Permission>>({});
+/**
+ * =========================
+ * LOAD USER PERMISSIONS
+ * =========================
+ */
+const loadUserPermissions =
+  async (
+    userId: number
+  ): Promise<
+    Record<
+      string,
+      Permission
+    >
+  > => {
 
-  // Charger session utilisateur et ses permissions
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const stored = localStorage.getItem('user');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const userObj: User = {
-            id: parsed.id,
-            nom: parsed.nom,
-            login: parsed.login,
-            role: normalizeRole(parsed.role || 'couturier')
+    try {
+
+      const perms =
+        await apiGet(
+          `/utilisateurs/${userId}/permissions`
+        );
+
+      const map:
+        Record<
+          string,
+          Permission
+        > = {};
+
+      perms.forEach(
+        (p: any) => {
+
+          map[
+            p.module
+          ] = {
+
+            lecture:
+              p.peut_voir === 1,
+
+            ecriture:
+              p.peut_modifier === 1
           };
-          setUser(userObj);
+        }
+      );
 
-          // Charger les permissions si ce n'est pas un admin
-          if (userObj.role !== 'admin') {
-            const perms = await loadUserPermissions(userObj.id);
-            setPermissions(perms);
+      return map;
+
+    } catch (error) {
+
+      console.error(
+        "Erreur permissions:",
+        error
+      );
+
+      return {};
+    }
+  };
+
+/**
+ * =========================
+ * PROVIDER
+ * =========================
+ */
+export const AuthProvider:
+React.FC<{
+  children: React.ReactNode
+}> = ({
+  children
+}) => {
+
+  const [
+    user,
+    setUser
+  ] = useState<
+    User | null
+  >(null);
+
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
+
+  const [
+    permissions,
+    setPermissions
+  ] = useState<
+    Record<
+      string,
+      Permission
+    >
+  >({});
+
+  /**
+   * =========================
+   * LOAD SESSION
+   * =========================
+   */
+  useEffect(() => {
+
+    const init =
+    async () => {
+
+      try {
+
+        const stored =
+
+          localStorage.getItem(
+            'utilisateur'
+          );
+
+        if (stored) {
+
+          const parsed =
+            JSON.parse(stored);
+
+          const userObj: User = {
+
+            id:
+              parsed.id,
+
+            nom:
+              parsed.nom,
+
+            login:
+              parsed.login,
+
+            role:
+              normalizeRole(
+                parsed.role
+              )
+          };
+
+          setUser(
+            userObj
+          );
+
+          /**
+           * ADMIN
+           */
+          if (
+            userObj.role === 'admin'
+          ) {
+
+            setPermissions({});
+
+          } else {
+
+            /**
+             * USER PERMISSIONS
+             */
+            const perms =
+
+              await loadUserPermissions(
+                userObj.id
+              );
+
+            setPermissions(
+              perms
+            );
+
+            userObj.permissions =
+              perms;
           }
         }
+
       } catch (err) {
-        console.error('Erreur chargement session:', err);
-        localStorage.removeItem('user');
+
+        console.error(
+          'Erreur chargement session:',
+          err
+        );
+
+        localStorage.removeItem(
+          'utilisateur'
+        );
+
       } finally {
+
         setLoading(false);
       }
     };
+
     init();
+
   }, []);
 
- const register = async (
-  nom: string,
-  login: string,
-  password: string,
-  role: Role
-) => {
+  /**
+   * =========================
+   * REGISTER
+   * =========================
+   */
+  const register = async (
 
-  const hash =
-    bcrypt.hashSync(
-      password,
-      10
+    nom: string,
+
+    login: string,
+
+    password: string,
+
+    role: Role
+
+  ) => {
+
+    await apiPost(
+
+      "/utilisateurs",
+
+      {
+
+        nom:
+          nom.trim(),
+
+        login:
+          login.trim(),
+
+        mot_de_passe:
+          password,
+
+        role,
+
+        est_actif: 1
+      }
     );
+  };
 
-  await apiPost(
-    "/utilisateurs",
-    {
-      nom:
-        nom.trim(),
-
-      login:
-        login.trim(),
-
-      mot_de_passe_hash:
-        hash,
-
-      role,
-
-      est_actif: 1
-    }
-  );
-};
-
+  /**
+   * =========================
+   * LOGIN
+   * =========================
+   */
   const login = async (
+
     loginValue: string,
+
     password: string
+
   ): Promise<{
+
     success: boolean;
+
     utilisateur?: User;
+
   }> => {
 
     try {
 
-      
-const results =
-  await apiGet(
-    `/utilisateurs/login/${loginValue.trim()}`
-  );
+      /**
+       * API LOGIN
+       */
+      const utilisateur =
+        await apiPost(
 
-      if (
-        !Array.isArray(results) ||
-        results.length === 0
-      ) {
+          "/utilisateurs/login",
 
-        return {
-          success: false
-        };
-      }
+          {
 
-      const dbUser = results[0];
+            login:
+              loginValue.trim(),
 
-      const isValid = await bcrypt.compare(
-        password,
-        dbUser.mot_de_passe_hash
-      );
+            mot_de_passe:
+              password
+          }
+        );
 
-      if (!isValid) {
-
-        return {
-          success: false
-        };
-      }
-
+      /**
+       * USER OBJECT
+       */
       const userObj: User = {
-        id: dbUser.id,
-        nom: dbUser.nom,
-        login: dbUser.login,
-        role: normalizeRole(dbUser.role),
+
+        id:
+          utilisateur.id,
+
+        nom:
+          utilisateur.nom,
+
+        login:
+          utilisateur.login,
+
+        role:
+          normalizeRole(
+            utilisateur.role
+          )
       };
 
-      setUser(userObj);
-
-      localStorage.setItem(
-        'user',
-        JSON.stringify(userObj)
+      /**
+       * SAVE SESSION
+       */
+      setUser(
+        userObj
       );
 
-      // Permissions
-      if (userObj.role !== 'admin') {
+      localStorage.setItem(
 
+        'utilisateur',
+
+        JSON.stringify(
+          userObj
+        )
+      );
+
+      /**
+       * ADMIN
+       */
+      if (
+        userObj.role === 'admin'
+      ) {
+
+        setPermissions({});
+
+      } else {
+
+        /**
+         * USER PERMISSIONS
+         */
         const perms =
+
           await loadUserPermissions(
             userObj.id
           );
 
-        setPermissions(perms);
+        setPermissions(
+          perms
+        );
 
-        // AJOUT IMPORTANT
-        userObj.permissions = perms;
-
-      } else {
-
-        setPermissions({});
+        userObj.permissions =
+          perms;
       }
 
       return {
+
         success: true,
-        utilisateur: userObj
+
+        utilisateur:
+          userObj
       };
 
     } catch (err) {
@@ -256,50 +466,138 @@ const results =
     }
   };
 
+  /**
+   * =========================
+   * LOGOUT
+   * =========================
+   */
   const logout = () => {
+
     setUser(null);
+
     setPermissions({});
-    localStorage.removeItem('user');
+
+    localStorage.removeItem(
+      'utilisateur'
+    );
   };
 
-  const hasRole = (roles: Role[]) => {
-    return user ? roles.includes(user.role) : false;
+  /**
+   * =========================
+   * HAS ROLE
+   * =========================
+   */
+  const hasRole = (
+    roles: Role[]
+  ) => {
+
+    return user
+      ? roles.includes(
+          user.role
+        )
+      : false;
   };
 
-  const canRead = (fonctionnalite: string): boolean => {
-    if (user?.role === 'admin') return true;
-    return permissions[fonctionnalite]?.lecture || false;
+  /**
+   * =========================
+   * CAN READ
+   * =========================
+   */
+  const canRead = (
+    fonctionnalite: string
+  ): boolean => {
+
+    if (
+      user?.role === 'admin'
+    ) {
+
+      return true;
+    }
+
+    return (
+      permissions[
+        fonctionnalite
+      ]?.lecture || false
+    );
   };
 
-  const canWrite = (fonctionnalite: string): boolean => {
-    if (user?.role === 'admin') return true;
-    return permissions[fonctionnalite]?.ecriture || false;
+  /**
+   * =========================
+   * CAN WRITE
+   * =========================
+   */
+  const canWrite = (
+    fonctionnalite: string
+  ): boolean => {
+
+    if (
+      user?.role === 'admin'
+    ) {
+
+      return true;
+    }
+
+    return (
+      permissions[
+        fonctionnalite
+      ]?.ecriture || false
+    );
   };
 
   return (
+
     <AuthContext.Provider
+
       value={{
+
         user,
+
         loading,
-        isAuthenticated: !!user,
+
+        isAuthenticated:
+          !!user,
+
         login,
+
         register,
+
         logout,
+
         hasRole,
+
         permissions,
+
         canRead,
+
         canWrite,
       }}
     >
+
       {children}
+
     </AuthContext.Provider>
   );
 };
 
+/**
+ * =========================
+ * USE AUTH
+ * =========================
+ */
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+
+  const context =
+    useContext(
+      AuthContext
+    );
+
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+
+    throw new Error(
+
+      'useAuth must be used within AuthProvider'
+    );
   }
+
   return context;
 };

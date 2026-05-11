@@ -13,7 +13,12 @@ import {
   IconEye, IconFileExcel, IconUser, IconClock,
   IconPlus, IconEdit, IconTrash, IconTrashX, IconFilter,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+
+  apiGet,
+  apiDelete
+
+} from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import * as XLSX from 'xlsx';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -44,18 +49,38 @@ const JournalModifications: React.FC = () => {
   const itemsPerPage = 20;
 
   const loadJournal = async () => {
+
     setLoading(true);
+
     try {
-      const db = await getDb();
-      const data = await db.select<JournalEntry[]>(`
-        SELECT * FROM journal_modifications 
-        ORDER BY date_modification DESC 
-        LIMIT 500
-      `);
-      setEntries(data || []);
+
+      const data =
+        await apiGet(
+          "/journal"
+        );
+
+      setEntries(
+        data || []
+      );
+
     } catch (err: any) {
-      notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
-    } finally { setLoading(false); }
+
+      notifications.show({
+
+        title:
+          'Erreur',
+
+        message:
+          err.message,
+
+        color:
+          'red'
+      });
+
+    } finally {
+
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadJournal(); }, []);
@@ -63,8 +88,9 @@ const JournalModifications: React.FC = () => {
   // Vider le journal
   const handleClearJournal = async () => {
     try {
-      const db = await getDb();
-      await db.execute(`DELETE FROM journal_modifications`);
+      await apiDelete(
+        "/journal"
+      );
       notifications.show({ title: 'Succès', message: 'Journal vidé avec succès', color: 'green' });
       closeClearModal();
       loadJournal();

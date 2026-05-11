@@ -1,78 +1,87 @@
 import {
-  getUtilisateurConnecte
-} from './session';
+  apiGet
+} from "./api";
 
-export type Permission =
-  | '*'
-  | 'dashboard'
-  | 'clients'
-  | 'mesures'
-  | 'ventes'
-  | 'factures'
-  | 'paiements'
-  | 'depenses'
-  | 'employes'
-  | 'salaires'
-  | 'stocks'
-  | 'parametres'
-  | 'journal'
-  | 'utilisateurs';
+export interface Permission {
 
-// =========================
-// Permissions par rôle
-// =========================
-const permissionsParRole:
-  Record<string, Permission[]> = {
+  fonctionnalite: string;
 
-  admin: ['*'],
+  lecture: boolean;
 
-  caissier: [
-    'dashboard',
-    'clients',
-    'ventes',
-    'factures',
-    'paiements'
-  ],
+  ecriture: boolean;
+}
 
-  couturier: [
-    'dashboard',
-    'clients',
-    'mesures'
-  ],
+/**
+ * Vérifier permission
+ */
+export const aPermission =
+async (
 
-  gestionnaire: [
-    'dashboard',
-    'clients',
-    'ventes',
-    'depenses',
-    'stocks',
-    'employes'
-  ]
-};
+  fonctionnalite: string,
 
-// =========================
-// Vérifier permission
-// =========================
-export function aPermission(
-  permission: Permission
-): boolean {
+  type:
+    'lecture'
+    |
+    'ecriture' = 'lecture'
 
-  const utilisateur =
-    getUtilisateurConnecte();
+) => {
 
-  if (!utilisateur) {
+  try {
+
+    const session =
+      JSON.parse(
+        localStorage.getItem(
+          "utilisateur"
+        ) || "null"
+      );
+
+    if (!session)
+      return false;
+
+    /**
+     * ADMIN
+     */
+    if (
+      session.role === 'admin'
+    ) {
+
+      return true;
+    }
+
+    /**
+     * API
+     */
+    const permissions =
+      await apiGet(
+        `/utilisateurs/${session.id}/permissions`
+      );
+
+    const perm =
+      permissions.find(
+        (p: any) =>
+          p.module === fonctionnalite
+      );
+
+    if (!perm)
+      return false;
+
+    if (
+      type === 'lecture'
+    ) {
+
+      return (
+        perm.peut_voir === 1
+      );
+    }
+
+    return (
+      perm.peut_modifier === 1
+    );
+
+  } catch (error) {
+
+    console.error(error);
+
     return false;
   }
-
-  const perms =
-    permissionsParRole[
-      utilisateur.role
-    ] || [];
-
-  // Admin = accès total
-  if (perms.includes('*')) {
-    return true;
-  }
-
-  return perms.includes(permission);
-}
+};

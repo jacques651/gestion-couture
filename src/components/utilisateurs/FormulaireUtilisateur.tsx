@@ -7,9 +7,14 @@ import {
 import {
     IconUser, IconLock, IconMail, IconShield, IconCheck,
 } from '@tabler/icons-react';
-import { getDb, savePermissions, getPermissions } from '../../database/db';
+import {
+
+    apiGet,
+    apiPost,
+    apiPut
+
+} from '../../services/api';
 import { notifications } from '@mantine/notifications';
-import bcrypt from 'bcryptjs';
 import {
     journaliserAction
 } from '../../services/journal';
@@ -62,22 +67,35 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
     const [customRoles, setCustomRoles] = useState<string[]>([]);
 
     // Charger tous les rôles personnalisés existants dans la base
-    const loadCustomRoles = async () => {
-        try {
-            const db = await getDb();
-            const roles = await db.select<any[]>(
-                `SELECT DISTINCT role FROM utilisateurs WHERE role NOT IN ('admin', 'caissier', 'couturier')`
-            );
-            const rolesList = roles.map(r => r.role);
-            setCustomRoles(rolesList);
-        } catch (error) {
-            console.error('Erreur chargement rôles:', error);
-        }
-    };
+    const loadCustomRoles =
+        async () => {
+
+            try {
+
+                const roles =
+                    await apiGet(
+                        "/utilisateurs/roles"
+                    );
+
+                setCustomRoles(
+                    roles || []
+                );
+
+            } catch (error) {
+
+                console.error(
+                    'Erreur chargement rôles:',
+                    error
+                );
+            }
+        };
 
     // Charger les permissions de l'utilisateur si en modification
     const loadPermissions = async (userId: number) => {
-        const perms = await getPermissions(userId);
+        const perms =
+            await apiGet(
+                `/utilisateurs/${userId}/permissions`
+            );
         const map: Record<string, { lecture: boolean; ecriture: boolean }> = {};
         FONCTIONNALITES.forEach(f => {
             const p = perms.find((x: any) => x.fonctionnalite === f.id);
@@ -109,139 +127,347 @@ const FormulaireUtilisateur: React.FC<Props> = ({ utilisateur, onSuccess, onCanc
     };
 
     const handleSubmit = async () => {
-        if (!nom.trim() || !login.trim()) {
-            notifications.show({ title: 'Erreur', message: 'Nom et login requis', color: 'red' });
+
+        if (
+            !nom.trim()
+            ||
+            !login.trim()
+        ) {
+
+            notifications.show({
+
+                title: 'Erreur',
+
+                message:
+                    'Nom et login requis',
+
+                color: 'red'
+            });
+
             return;
         }
+
+        /**
+         * Vérifier rôle
+         */
         if (!role) {
 
-            const session =
-                getUtilisateurConnecte();
+            notifications.show({
 
-            if (
-                role === 'admin' &&
-                session?.role !== 'admin'
-            ) {
+                title: 'Erreur',
 
-                notifications.show({
-                    title: 'Accès refusé',
-                    message:
-                        'Seul un administrateur peut créer un administrateur',
-                    color: 'red'
-                });
+                message:
+                    'Veuillez sélectionner ou créer un rôle',
 
-                return;
-            }
-            notifications.show({ title: 'Erreur', message: 'Veuillez sélectionner ou créer un rôle', color: 'red' });
+                color: 'red'
+            });
+
             return;
         }
+
+        /**
+         * Session
+         */
+        const session =
+            getUtilisateurConnecte();
+
+        /**
+         * Interdire création admin
+         */
+        if (
+            role === 'admin'
+            &&
+            session?.role !== 'admin'
+        ) {
+
+            notifications.show({
+
+                title:
+                    'Accès refusé',
+
+                message:
+                    'Seul un administrateur peut créer un administrateur',
+
+                color:
+                    'red'
+            });
+
+            return;
+        }
+
         setLoading(true);
+
         try {
-            const db = await getDb();
-            let userId = utilisateur?.id;
 
+            let userId =
+                utilisateur?.id;
+
+            /**
+             * =========================
+             * MODIFICATION
+             * =========================
+             */
             if (utilisateur) {
-                // MODIFICATION
 
-                const session =
-                    getUtilisateurConnecte();
-
+                /**
+                 * Interdire modification admin
+                 */
                 if (
-                    utilisateur.role === 'admin' &&
+                    utilisateur.role === 'admin'
+                    &&
                     session?.role !== 'admin'
                 ) {
 
                     notifications.show({
-                        title: 'Accès refusé',
+
+                        title:
+                            'Accès refusé',
+
                         message:
                             'Seul un administrateur peut modifier un administrateur',
-                        color: 'red'
+
+                        color:
+                            'red'
                     });
 
                     setLoading(false);
 
                     return;
                 }
-                await db.execute(
-                    `UPDATE utilisateurs SET nom=?, login=?, role=? WHERE id=?`,
-                    [nom, login, role, utilisateur.id]
+
+                /**
+                 * UPDATE USER
+                 */
+                await apiPut(
+
+                    `/utilisateurs/${utilisateur.id}`,
+
+                    {
+
+                        nom,
+                        login,
+                        role
+                    }
                 );
 
-                // Journalisation modification utilisateur
+                /**
+                 * Journal
+                 */
                 await journaliserAction({
-                    utilisateur: 'Utilisateur',
-                    action: 'UPDATE',
-                    table: 'utilisateurs',
-                    idEnregistrement: utilisateur.id,
+
+                    utilisateur:
+                        'Utilisateur',
+
+                    action:
+                        'UPDATE',
+
+                    table:
+                        'utilisateurs',
+
+                    idEnregistrement:
+                        utilisateur.id,
+
                     details:
                         `Modification utilisateur : ${nom} (${role})`
                 });
 
             } else {
-                // CRÉATION
+
+                /**
+                 * =========================
+                 * CREATION
+                 * =========================
+                 */
                 if (!password) {
-                    notifications.show({ title: 'Erreur', message: 'Mot de passe requis', color: 'red' });
+
+                    notifications.show({
+
+                        title:
+                            'Erreur',
+
+                        message:
+                            'Mot de passe requis',
+
+                        color:
+                            'red'
+                    });
+
                     setLoading(false);
+
                     return;
                 }
 
-                // Vérifier si le login existe déjà
-                const existing = await db.select<any[]>(
-                    `SELECT id FROM utilisateurs WHERE login = ?`,
-                    [login]
-                );
-                if (existing.length > 0) {
-                    notifications.show({ title: 'Erreur', message: 'Ce login existe déjà', color: 'red' });
+                /**
+                 * Vérifier login
+                 */
+                const existing =
+                    await apiGet(
+                        `/utilisateurs/check-login/${login}`
+                    );
+
+                if (
+                    existing.exists
+                ) {
+
+                    notifications.show({
+
+                        title:
+                            'Erreur',
+
+                        message:
+                            'Ce login existe déjà',
+
+                        color:
+                            'red'
+                    });
+
                     setLoading(false);
+
                     return;
                 }
 
-                // Hasher le mot de passe
-                const hash = bcrypt.hashSync(password, 10);
+                /**
+                 * CREATE USER
+                 */
+                const result =
+                    await apiPost(
 
-                const result = await db.execute(
-                    `INSERT INTO utilisateurs (nom, login, mot_de_passe_hash, role, est_actif) VALUES (?, ?, ?, ?, 1)`,
-                    [nom, login, hash, role]
-                );
-                userId = Number(result.lastInsertId);
+                        "/utilisateurs",
 
-                // Journalisation création utilisateur
+                        {
+
+                            nom,
+
+                            login,
+
+                            mot_de_passe:
+                                password,
+
+                            role
+                        }
+                    );
+
+                userId =
+                    result.id;
+
+                /**
+                 * Journal
+                 */
                 await journaliserAction({
-                    utilisateur: 'Utilisateur',
-                    action: 'CREATE',
-                    table: 'utilisateurs',
-                    idEnregistrement: userId,
+
+                    utilisateur:
+                        'Utilisateur',
+
+                    action:
+                        'CREATE',
+
+                    table:
+                        'utilisateurs',
+
+                    idEnregistrement:
+                        userId,
+
                     details:
                         `Création utilisateur : ${nom} (${role})`
                 });
             }
 
-            // Sauvegarder les permissions
+            /**
+             * =========================
+             * SAUVEGARDE PERMISSIONS
+             * =========================
+             */
             if (userId) {
-                const permsArray = Object.entries(permissions).map(([key, val]) => ({
-                    fonctionnalite: key,
-                    lecture: val.lecture,
-                    ecriture: val.ecriture,
-                }));
-                await savePermissions(userId, permsArray);
 
-                // Journalisation permissions
+                const permsArray =
+
+                    Object.entries(
+                        permissions
+                    ).map(
+
+                        ([key, val]) => ({
+
+                            fonctionnalite:
+                                key,
+
+                            lecture:
+                                val.lecture,
+
+                            ecriture:
+                                val.ecriture,
+                        })
+                    );
+
+                await apiPut(
+
+                    `/utilisateurs/${userId}/permissions`,
+
+                    {
+
+                        permissions:
+                            permsArray
+                    }
+                );
+
+                /**
+                 * Journal
+                 */
                 await journaliserAction({
-                    utilisateur: 'Utilisateur',
-                    action: 'UPDATE',
-                    table: 'permissions',
-                    idEnregistrement: userId,
+
+                    utilisateur:
+                        'Utilisateur',
+
+                    action:
+                        'UPDATE',
+
+                    table:
+                        'permissions',
+
+                    idEnregistrement:
+                        userId,
+
                     details:
                         `Mise à jour permissions : ${nom}`
                 });
             }
 
-            notifications.show({ title: 'Succès', message: 'Utilisateur enregistré', color: 'green' });
+            notifications.show({
+
+                title:
+                    'Succès',
+
+                message:
+                    'Utilisateur enregistré',
+
+                color:
+                    'green'
+            });
+
             onSuccess();
+
         } catch (err: any) {
-            console.error('ERREUR:', err);
-            notifications.show({ title: 'Erreur', message: err.message || String(err), color: 'red' });
-        } finally { setLoading(false); }
+
+            console.error(
+                'ERREUR:',
+                err
+            );
+
+            notifications.show({
+
+                title:
+                    'Erreur',
+
+                message:
+                    err.message || String(err),
+
+                color:
+                    'red'
+            });
+
+        } finally {
+
+            setLoading(false);
+        }
     };
 
     // Construction des options du select avec le rôle actuel s'il est personnalisé

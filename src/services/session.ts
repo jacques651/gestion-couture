@@ -1,64 +1,36 @@
-export interface UtilisateurConnecte {
-
-  id?: number;
-
-  nom: string;
-
-  role: string;
-
-  permissions?: Record<
-    string,
-    {
-      lecture: boolean;
-      ecriture: boolean;
-    }
-  >;
-}
-
-const STORAGE_KEY = 'utilisateur_connecte';
-
-// =========================
-// SAUVEGARDE SESSION
-// =========================
-export function sauvegarderSession(
-  utilisateur: UtilisateurConnecte
-) {
+export const sauvegarderSession =
+(
+  utilisateur: any
+) => {
 
   localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(utilisateur)
+
+    "utilisateur",
+
+    JSON.stringify(
+      utilisateur
+    )
   );
-}
+};
 
-// =========================
-// LIRE SESSION
-// =========================
-export function getUtilisateurConnecte():
-  UtilisateurConnecte | null {
+export const getUtilisateurConnecte =
+() => {
 
-  const raw = localStorage.getItem(
-    STORAGE_KEY
-  );
+  const data =
+    localStorage.getItem(
+      "utilisateur"
+    );
 
-  if (!raw) return null;
-
-  try {
-
-    return JSON.parse(raw);
-
-  } catch {
-
+  if (!data)
     return null;
 
-  }
-}
+  return JSON.parse(data);
+};
 
-// =========================
-// SUPPRIMER SESSION
-// =========================
-export function supprimerSession() {
+export const supprimerSession =
+() => {
 
   localStorage.removeItem(
-    STORAGE_KEY
+    "utilisateur"
   );
-}
+};
