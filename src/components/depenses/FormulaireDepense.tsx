@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { journaliserAction } from "../../services/journal";
 import {
   Stack,
   Card,
@@ -46,7 +45,12 @@ import {
   IconRefresh,
   IconCalendar,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+
+  apiPost,
+  apiPut
+
+} from '../../services/api';
 
 const categories = [
   { value: 'transport', label: 'Transport', icon: IconGasStation, color: 'blue' },
@@ -121,89 +125,73 @@ const FormulaireDepense: React.FC<{
     setError('');
 
     try {
-      const db = await getDb();
 
       if (depense) {
 
-        await db.execute(
-          `
-    UPDATE depenses
-    SET categorie=?,
-        designation=?,
-        montant=?,
-        responsable=?,
-        observation=?,
-        date_depense=?
-    WHERE id=?
-    `,
-          [
+        await apiPut(
+
+          `/depenses/${depense.id}`,
+
+          {
+
             categorie,
             designation,
             montant,
             responsable,
             observation,
-            dateDepense,
-            depense.id
-          ]
+            date_depense:
+              dateDepense
+          }
         );
 
-        // Journalisation modification
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'UPDATE',
-          table: 'depenses',
-          idEnregistrement: depense.id,
-          details: `Modification dépense : ${designation}`
-        });
-
-        setSuccess('Dépense modifiée avec succès');
+        setSuccess(
+          'Dépense modifiée avec succès'
+        );
 
       } else {
 
-        await db.execute(
-          `
-    INSERT INTO depenses (
-      categorie,
-      designation,
-      montant,
-      responsable,
-      observation,
-      date_depense
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-    `,
-          [
+        await apiPost(
+
+          "/depenses",
+
+          {
+
             categorie,
             designation,
             montant,
             responsable,
             observation,
-            dateDepense
-          ]
+            date_depense:
+              dateDepense
+          }
         );
 
-        // Journalisation création
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'CREATE',
-          table: 'depenses',
-          idEnregistrement: designation,
-          details: `Création dépense : ${designation}`
-        });
-
-        setSuccess('Dépense ajoutée avec succès');
+        setSuccess(
+          'Dépense ajoutée avec succès'
+        );
       }
 
       setShowSuccess(true);
 
       setTimeout(() => {
+
         setShowSuccess(false);
+
         onSuccess();
+
       }, 2000);
 
     } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'enregistrement');
+
+      setError(
+
+        err.message
+        ||
+        'Erreur lors de l’enregistrement'
+      );
+
     } finally {
+
       setIsSubmitting(false);
     }
   };

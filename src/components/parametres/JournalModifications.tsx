@@ -21,8 +21,7 @@ import {
 } from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import * as XLSX from 'xlsx';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+
 
 interface JournalEntry {
   id: number;
@@ -290,27 +289,156 @@ const JournalModifications: React.FC = () => {
 
   const formatDate = (date: string) => new Date(date).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const exportExcel = async () => {
-    setExporting(true);
-    try {
-      const data = filtered.map(e => ({
-        'Date': formatDate(e.date_modification),
-        'Utilisateur': e.utilisateur,
-        'Action': e.action,
-        'Table': e.table_concernee,
-        'ID': e.id_enregistrement,
-        'Détails': e.details
+ const exportExcel =
+async () => {
+
+  setExporting(true);
+
+  try {
+
+    const data =
+
+      filtered.map(e => ({
+
+        Date:
+          formatDate(
+            e.date_modification
+          ),
+
+        Utilisateur:
+          e.utilisateur,
+
+        Action:
+          e.action,
+
+        Table:
+          e.table_concernee,
+
+        ID:
+          e.id_enregistrement,
+
+        Détails:
+          e.details
       }));
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Journal');
-      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const path = await save({ filters: [{ name: 'Excel', extensions: ['xlsx'] }], defaultPath: `journal_${new Date().toISOString().split('T')[0]}.xlsx` });
-      if (path) { await writeFile(path, new Uint8Array(buf)); notifications.show({ title: 'Export réussi', message: '', color: 'green' }); }
-    } catch (e) { notifications.show({ title: 'Erreur', message: 'Échec export', color: 'red' }); }
-    finally { setExporting(false); }
-  };
+    const ws =
+      XLSX.utils.json_to_sheet(
+        data
+      );
 
+    const wb =
+      XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+
+      wb,
+
+      ws,
+
+      'Journal'
+    );
+
+    const buf =
+      XLSX.write(
+
+        wb,
+
+        {
+
+          bookType: 'xlsx',
+
+          type: 'array'
+        }
+      );
+
+    /**
+     * BLOB
+     */
+    const blob =
+
+      new Blob(
+
+        [buf],
+
+        {
+          type:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      );
+
+    /**
+     * URL
+     */
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    /**
+     * DOWNLOAD
+     */
+    const link =
+      document.createElement(
+        'a'
+      );
+
+    link.href =
+      url;
+
+    link.download =
+
+      `journal_${
+        new Date()
+          .toISOString()
+          .split('T')[0]
+      }.xlsx`;
+
+    document.body
+      .appendChild(link);
+
+    link.click();
+
+    document.body
+      .removeChild(link);
+
+    /**
+     * CLEANUP
+     */
+    URL.revokeObjectURL(
+      url
+    );
+
+    notifications.show({
+
+      title:
+        'Export réussi',
+
+      message:
+        'Fichier Excel téléchargé',
+
+      color:
+        'green'
+    });
+
+  } catch (e) {
+
+    notifications.show({
+
+      title:
+        'Erreur',
+
+      message:
+        'Échec export',
+
+      color:
+        'red'
+    });
+
+  } finally {
+
+    setExporting(false);
+  }
+};
   if (loading) {
     return <Center style={{ height: '50vh' }}><LoadingOverlay visible /><Text>Chargement...</Text></Center>;
   }

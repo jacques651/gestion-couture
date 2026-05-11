@@ -8,7 +8,7 @@ import {
 import {
   IconUsers, IconShoppingBag, IconReceipt, IconChartBar, IconTrendingUp,
   IconBuildingStore, IconPackage, IconFileInvoice, IconCheck,
-  IconCurrencyFrank, IconInfoCircle, IconCash, IconAlertCircle, 
+  IconCurrencyFrank, IconInfoCircle, IconCash, IconAlertCircle,
   IconShirt, IconLock,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -60,88 +60,217 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
 
   const loadAllData = async () => {
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
+    try {
 
-    /**
-     * Chargement API
-     */
-    const ventes =
-      await apiGet("/ventes");
+      /**
+       * Chargement API
+       */
+      const ventes =
 
-    const depensesData =
-      await apiGet("/depenses");
+        (
+          await apiGet(
+            "/ventes"
+          )
+        ) || [];
 
-    const matieres =
-      await apiGet("/matieres");
+      const depensesData =
+        await apiGet("/depenses");
 
-    const articles =
-      await apiGet("/articles");
+      const matieres =
+        await apiGet("/matieres");
 
-    /**
-     * Chiffre affaires
-     */
-    const chiffreAffaires =
-      ventes.reduce(
-        (sum: number, v: any) =>
-          sum + (
-            Number(v.montant_total)
-            || 0
-          ),
-        0
-      );
+      const articles =
+        await apiGet("/articles");
 
-    /**
-     * Encaissements
-     */
-    const encaissements =
-      ventes.reduce(
-        (sum: number, v: any) =>
-          sum + (
-            Number(v.montant_regle)
-            || 0
-          ),
-        0
-      );
-
-    /**
-     * Dépenses
-     */
-    const depenses =
-      depensesData.reduce(
-        (sum: number, d: any) =>
-          sum + (
-            Number(d.montant)
-            || 0
-          ),
-        0
-      );
-
-    /**
-     * Reste à recouvrer
-     */
-    const resteARecouvrer =
-      ventes
-        .filter(
-          (v: any) =>
-            v.statut !== 'PAYEE'
-        )
-        .reduce(
+      /**
+       * Chiffre affaires
+       */
+      const chiffreAffaires =
+        ventes.reduce(
           (sum: number, v: any) =>
+            sum + (
+              Number(v.montant_total)
+              || 0
+            ),
+          0
+        );
+
+      /**
+       * Encaissements
+       */
+      const encaissements =
+        ventes.reduce(
+          (sum: number, v: any) =>
+            sum + (
+              Number(v.montant_regle)
+              || 0
+            ),
+          0
+        );
+
+      /**
+       * Dépenses
+       */
+      const depenses =
+        depensesData.reduce(
+          (sum: number, d: any) =>
+            sum + (
+              Number(d.montant)
+              || 0
+            ),
+          0
+        );
+
+      /**
+       * Reste à recouvrer
+       */
+      const resteARecouvrer =
+        ventes
+          .filter(
+            (v: any) =>
+              v.statut !== 'PAYEE'
+          )
+          .reduce(
+            (sum: number, v: any) =>
+
+              sum +
+
+              (
+                (
+                  Number(v.montant_total)
+                  || 0
+                )
+
+                -
+
+                (
+                  Number(v.montant_regle)
+                  || 0
+                )
+              ),
+
+            0
+          );
+
+      setStats({
+
+        chiffreAffaires,
+
+        encaissements,
+
+        depenses,
+
+        resteARecouvrer,
+
+        beneficeTresorerie:
+          encaissements
+          - depenses
+      });
+
+      /**
+       * Alertes matières
+       */
+      const matieresAlertes =
+        matieres
+
+          .filter(
+            (m: any) =>
+
+              m.est_supprime === 0
+
+              &&
+
+              Number(m.stock_actuel)
+              <=
+              Number(m.seuil_alerte)
+          )
+
+          .map((m: any) => ({
+            designation:
+              m.designation,
+
+            stock:
+              m.stock_actuel,
+
+            seuil_alerte:
+              m.seuil_alerte,
+
+            unite:
+              m.unite,
+
+            type:
+              'matiere'
+          }));
+
+      /**
+       * Alertes articles
+       */
+      const articlesAlertes =
+        articles
+
+          .filter(
+            (a: any) =>
+
+              a.est_actif === 1
+
+              &&
+
+              Number(a.quantite_stock)
+              <=
+              Number(a.seuil_alerte)
+          )
+
+          .map((a: any) => ({
+            designation:
+              a.code_article,
+
+            stock:
+              a.quantite_stock,
+
+            seuil_alerte:
+              a.seuil_alerte,
+
+            unite:
+              '',
+
+            type:
+              'article'
+          }));
+
+      setStockAlertes(
+
+        [
+          ...matieresAlertes,
+          ...articlesAlertes
+        ]
+
+          .sort(
+            (a, b) =>
+              a.stock - b.stock
+          )
+      );
+
+      /**
+       * Valeur stock matières
+       */
+      const stockMatieres =
+        matieres.reduce(
+          (sum: number, m: any) =>
 
             sum +
 
             (
               (
-                Number(v.montant_total)
+                Number(m.stock_actuel)
                 || 0
               )
 
-              -
+              *
 
               (
-                Number(v.montant_regle)
+                Number(m.prix_achat)
                 || 0
               )
             ),
@@ -149,235 +278,111 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
           0
         );
 
-    setStats({
+      /**
+       * Valeur stock articles
+       */
+      const stockArticles =
+        articles.reduce(
+          (sum: number, a: any) =>
 
-      chiffreAffaires,
-
-      encaissements,
-
-      depenses,
-
-      resteARecouvrer,
-
-      beneficeTresorerie:
-        encaissements
-        - depenses
-    });
-
-    /**
-     * Alertes matières
-     */
-    const matieresAlertes =
-      matieres
-
-        .filter(
-          (m: any) =>
-
-            m.est_supprime === 0
-
-            &&
-
-            Number(m.stock_actuel)
-            <=
-            Number(m.seuil_alerte)
-        )
-
-        .map((m: any) => ({
-          designation:
-            m.designation,
-
-          stock:
-            m.stock_actuel,
-
-          seuil_alerte:
-            m.seuil_alerte,
-
-          unite:
-            m.unite,
-
-          type:
-            'matiere'
-        }));
-
-    /**
-     * Alertes articles
-     */
-    const articlesAlertes =
-      articles
-
-        .filter(
-          (a: any) =>
-
-            a.est_actif === 1
-
-            &&
-
-            Number(a.quantite_stock)
-            <=
-            Number(a.seuil_alerte)
-        )
-
-        .map((a: any) => ({
-          designation:
-            a.code_article,
-
-          stock:
-            a.quantite_stock,
-
-          seuil_alerte:
-            a.seuil_alerte,
-
-          unite:
-            '',
-
-          type:
-            'article'
-        }));
-
-    setStockAlertes(
-
-      [
-        ...matieresAlertes,
-        ...articlesAlertes
-      ]
-
-      .sort(
-        (a, b) =>
-          a.stock - b.stock
-      )
-    );
-
-    /**
-     * Valeur stock matières
-     */
-    const stockMatieres =
-      matieres.reduce(
-        (sum: number, m: any) =>
-
-          sum +
-
-          (
-            (
-              Number(m.stock_actuel)
-              || 0
-            )
-
-            *
+            sum +
 
             (
-              Number(m.prix_achat)
-              || 0
-            )
-          ),
+              (
+                Number(a.quantite_stock)
+                || 0
+              )
 
-        0
-      );
+              *
 
-    /**
-     * Valeur stock articles
-     */
-    const stockArticles =
-      articles.reduce(
-        (sum: number, a: any) =>
+              (
+                Number(a.prix_achat)
+                || Number(a.prix_vente)
+                || 0
+              )
+            ),
 
-          sum +
-
-          (
-            (
-              Number(a.quantite_stock)
-              || 0
-            )
-
-            *
-
-            (
-              Number(a.prix_achat)
-              || Number(a.prix_vente)
-              || 0
-            )
-          ),
-
-        0
-      );
-
-    setStockTotal(
-      stockMatieres
-      + stockArticles
-    );
-
-    /**
-     * Journal récent
-     */
-    const journalVentes =
-      ventes.map((v: any) => ({
-        date:
-          v.date_vente,
-
-        description:
-          v.code_vente,
-
-        entree:
-          v.montant_total,
-
-        sortie:
           0
-      }));
+        );
 
-    const journalDepenses =
-      depensesData.map((d: any) => ({
-        date:
-          d.date_depense,
+      setStockTotal(
+        stockMatieres
+        + stockArticles
+      );
 
-        description:
-          d.designation,
+      /**
+       * Journal récent
+       */
+      const journalVentes =
+        ventes.map((v: any) => ({
+          date:
+            v.date_vente,
 
-        entree:
-          0,
+          description:
+            v.code_vente,
 
-        sortie:
-          d.montant
-      }));
+          entree:
+            v.montant_total,
 
-    const journal =
-      [
-        ...journalVentes,
-        ...journalDepenses
-      ]
+          sortie:
+            0
+        }));
 
-      .sort(
-        (a: any, b: any) =>
+      const journalDepenses =
+        depensesData.map((d: any) => ({
+          date:
+            d.date_depense,
 
-          new Date(b.date)
-            .getTime()
+          description:
+            d.designation,
 
-          -
+          entree:
+            0,
 
-          new Date(a.date)
-            .getTime()
-      )
+          sortie:
+            d.montant
+        }));
 
-      .slice(0, 10);
+      const journal =
+        [
+          ...journalVentes,
+          ...journalDepenses
+        ]
 
-    setJournal(journal);
+          .sort(
+            (a: any, b: any) =>
 
-  } catch (err) {
+              new Date(b.date)
+                .getTime()
 
-    console.error(err);
+              -
 
-    notifications.show({
-      title: 'Erreur',
+              new Date(a.date)
+                .getTime()
+          )
 
-      message:
-        'Erreur de chargement',
+          .slice(0, 10);
 
-      color: 'red'
-    });
+      setJournal(journal);
 
-  } finally {
+    } catch (err) {
 
-    setLoading(false);
-  }
-};
+      console.error(err);
+
+      notifications.show({
+        title: 'Erreur',
+
+        message:
+          'Erreur de chargement',
+
+        color: 'red'
+      });
+
+    } finally {
+
+      setLoading(false);
+    }
+  };
   const handleNavigate = (page: PageKey, requiredPermission: string) => {
     if (canRead(requiredPermission)) {
       if (setPage) {
@@ -407,8 +412,8 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
             Vous n'avez pas les permissions nécessaires pour accéder au tableau de bord.
             Veuillez contacter un administrateur.
           </Text>
-          <Button 
-            variant="light" 
+          <Button
+            variant="light"
             onClick={() => window.history.back()}
             leftSection={<IconCheck size={16} />}
           >
@@ -420,78 +425,79 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
   }
 
   const tauxRecouvrement = stats.chiffreAffaires > 0 ? (stats.encaissements / stats.chiffreAffaires) * 100 : 0;
-  const beneficeReel = stats.beneficeTresorerie - stockTotal;
+  const beneficeReel =
+    stats.beneficeTresorerie;
 
   const quickLinks = [
-    { 
-      label: 'Ventes', 
-      action: () => handleNavigate('ventes', 'ventes'), 
-      icon: <IconBuildingStore size={20} />, 
-      color: 'pink', 
-      description: 'Gestion des ventes', 
+    {
+      label: 'Ventes',
+      action: () => handleNavigate('ventes', 'ventes'),
+      icon: <IconBuildingStore size={20} />,
+      color: 'pink',
+      description: 'Gestion des ventes',
       bg: '#fce4ec',
       permission: canViewVentes
     },
-    { 
-      label: 'Clients', 
-      action: () => handleNavigate('clients', 'clients'), 
-      icon: <IconUsers size={20} />, 
-      color: 'blue', 
-      description: 'Gestion des clients', 
+    {
+      label: 'Clients',
+      action: () => handleNavigate('clients', 'clients'),
+      icon: <IconUsers size={20} />,
+      color: 'blue',
+      description: 'Gestion des clients',
       bg: '#e8f4fd',
       permission: canViewClients
     },
-    { 
-      label: 'Articles', 
-      action: () => handleNavigate('articles', 'articles'), 
-      icon: <IconShoppingBag size={20} />, 
-      color: 'violet', 
-      description: 'Inventaire des tenues', 
+    {
+      label: 'Articles',
+      action: () => handleNavigate('articles', 'articles'),
+      icon: <IconShoppingBag size={20} />,
+      color: 'violet',
+      description: 'Inventaire des tenues',
       bg: '#f3e5f5',
       permission: canViewArticles
     },
-    { 
-      label: 'Matières', 
-      action: () => handleNavigate('matieres', 'matieres'), 
-      icon: <IconPackage size={20} />, 
-      color: 'teal', 
-      description: 'Matières premières', 
+    {
+      label: 'Matières',
+      action: () => handleNavigate('matieres', 'matieres'),
+      icon: <IconPackage size={20} />,
+      color: 'teal',
+      description: 'Matières premières',
       bg: '#e0f7fa',
       permission: canViewMatieres
     },
-    { 
-      label: 'Dépenses', 
-      action: () => handleNavigate('depenses', 'depenses'), 
-      icon: <IconReceipt size={20} />, 
-      color: 'red', 
-      description: 'Gestion des dépenses', 
+    {
+      label: 'Dépenses',
+      action: () => handleNavigate('depenses', 'depenses'),
+      icon: <IconReceipt size={20} />,
+      color: 'red',
+      description: 'Gestion des dépenses',
       bg: '#ffebee',
       permission: canViewDepenses
     },
-    { 
-      label: 'Salaires', 
-      action: () => handleNavigate('salaires', 'salaires'), 
-      icon: <IconCurrencyFrank size={20} />, 
-      color: 'indigo', 
-      description: 'Gestion des salaires', 
+    {
+      label: 'Salaires',
+      action: () => handleNavigate('salaires', 'salaires'),
+      icon: <IconCurrencyFrank size={20} />,
+      color: 'indigo',
+      description: 'Gestion des salaires',
       bg: '#e8eaf6',
       permission: canViewSalaires
     },
-    { 
-      label: 'Factures & Reçus', 
-      action: () => handleNavigate('factures-recus', 'ventes'), 
-      icon: <IconFileInvoice size={20} />, 
-      color: 'orange', 
-      description: 'Documents', 
+    {
+      label: 'Factures & Reçus',
+      action: () => handleNavigate('factures-recus', 'ventes'),
+      icon: <IconFileInvoice size={20} />,
+      color: 'orange',
+      description: 'Documents',
       bg: '#fff3e0',
       permission: canViewVentes
     },
-    { 
-      label: 'Modèles', 
-      action: () => handleNavigate('modeles', 'articles'), 
-      icon: <IconShirt size={20} />, 
-      color: 'green', 
-      description: 'Modèles de tenues', 
+    {
+      label: 'Modèles',
+      action: () => handleNavigate('modeles', 'articles'),
+      icon: <IconShirt size={20} />,
+      color: 'green',
+      description: 'Modèles de tenues',
       bg: '#e8f5e9',
       permission: canViewArticles
     },
@@ -554,15 +560,15 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
             <Grid>
               {quickLinks.map((link, i) => (
                 <Grid.Col key={i} span={{ base: 12, sm: 6, md: 3 }}>
-                  <Paper 
-                    withBorder 
-                    radius="lg" 
-                    p="sm" 
-                    bg={link.bg} 
-                    style={{ 
+                  <Paper
+                    withBorder
+                    radius="lg"
+                    p="sm"
+                    bg={link.bg}
+                    style={{
                       cursor: link.permission ? 'pointer' : 'not-allowed',
                       opacity: link.permission ? 1 : 0.5,
-                    }} 
+                    }}
                     onClick={() => link.permission && link.action()}
                   >
                     <Group gap="md" wrap="nowrap">
@@ -599,12 +605,12 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
                       <Text fw={700} c={l.color}>{formatCurrency(l.value)}</Text>
                     </Group>
                   ))}
-                  <RingProgress 
-                    size={100} 
-                    thickness={8} 
-                    sections={[{ value: Math.min(tauxRecouvrement, 100), color: tauxRecouvrement > 70 ? 'green' : 'orange' }]} 
-                    label={<Text ta="center" fw={700} size="sm">{Math.round(tauxRecouvrement)}%</Text>} 
-                    mx="auto" 
+                  <RingProgress
+                    size={100}
+                    thickness={8}
+                    sections={[{ value: Math.min(tauxRecouvrement, 100), color: tauxRecouvrement > 70 ? 'green' : 'orange' }]}
+                    label={<Text ta="center" fw={700} size="sm">{Math.round(tauxRecouvrement)}%</Text>}
+                    mx="auto"
                   />
                 </Stack>
               </Card>
@@ -651,12 +657,12 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
                         <Box style={{ width: '100%', height: 6, backgroundColor: '#e9ecef', borderRadius: 3 }}>
                           <Box style={{ width: `${Math.min((item.stock / (item.seuil_alerte || 1)) * 100, 100)}%`, height: '100%', backgroundColor: item.stock <= 0 ? '#e03131' : '#f08c00', borderRadius: 3 }} />
                         </Box>
-                        <Button 
-                          variant="subtle" 
-                          size="compact-xs" 
-                          color={item.type === 'matiere' ? 'blue' : 'violet'} 
-                          onClick={() => handleNavigate(item.type === 'matiere' ? 'matieres' : 'articles', item.type === 'matiere' ? 'matieres' : 'articles')} 
-                          rightSection={<IconShoppingBag size={12} />} 
+                        <Button
+                          variant="subtle"
+                          size="compact-xs"
+                          color={item.type === 'matiere' ? 'blue' : 'violet'}
+                          onClick={() => handleNavigate(item.type === 'matiere' ? 'matieres' : 'articles', item.type === 'matiere' ? 'matieres' : 'articles')}
+                          rightSection={<IconShoppingBag size={12} />}
                           mt={4}
                         >
                           Voir {item.type === 'matiere' ? 'la matière' : "l'article"}

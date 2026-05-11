@@ -52,6 +52,84 @@ router.get(
 
 /**
  * =========================
+ * AJOUT JOURNAL
+ * =========================
+ */
+router.post(
+
+  "/",
+
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        utilisateur,
+        action,
+        table_concernee,
+        id_enregistrement,
+        details
+
+      } = req.body;
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO journal_modifications (
+
+            utilisateur,
+            action,
+            table_concernee,
+            id_enregistrement,
+            details
+
+          )
+
+          VALUES (
+
+            $1,
+            $2,
+            $3,
+            $4,
+            $5
+          )
+
+          RETURNING *
+          `,
+          [
+
+            utilisateur,
+
+            action,
+
+            table_concernee,
+
+            id_enregistrement,
+
+            details
+          ]
+        );
+
+      res.json(
+        result.rows[0]
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+
+        error:
+          "Erreur ajout journal"
+      });
+    }
+  }
+);
+
+/**
+ * =========================
  * VIDER JOURNAL
  * =========================
  */

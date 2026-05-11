@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { journaliserAction } from "../../services/journal";
+
 import {
   Stack,
   Card,
@@ -24,7 +24,13 @@ import {
   IconAlertCircle,
   IconLock,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+
+  apiGet,
+  apiPost,
+  apiPut
+
+} from '../../services/api';
 
 interface Employe {
   id: number;
@@ -50,19 +56,30 @@ const FormulaireEmprunt: React.FC<Props> = ({ emprunt, onSuccess, onCancel }) =>
   const isDeduit = emprunt?.deduit === 1;
 
   useEffect(() => {
-    const fetch = async () => {
-      const db = await getDb();
-      const res = await db.select<Employe[]>(`
-        SELECT id, nom_prenom 
-        FROM employes 
-        WHERE est_supprime = 0 AND est_actif = 1
-        ORDER BY nom_prenom
-      `);
-      setEmployes(res || []);
-    };
-    fetch();
-  }, []);
 
+    const fetch =
+      async () => {
+
+        try {
+
+          const res =
+            await apiGet(
+              "/employes"
+            );
+
+          setEmployes(
+            res || []
+          );
+
+        } catch (error) {
+
+          console.error(error);
+        }
+      };
+
+    fetch();
+
+  }, []);
   const employesOptions = employes.map(e => ({
     value: e.id.toString(),
     label: e.nom_prenom
@@ -90,89 +107,68 @@ const FormulaireEmprunt: React.FC<Props> = ({ emprunt, onSuccess, onCancel }) =>
     setLoading(true);
 
     try {
-      const db = await getDb();
 
       if (emprunt) {
 
-        await db.execute(
-          `
-    UPDATE emprunts
-    SET employe_id = ?,
-        montant = ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-    `,
-          [
-            parseInt(employeId),
-            montant,
-            emprunt.id
-          ]
+        await apiPut(
+
+          `/emprunts/${emprunt.id}`,
+
+          {
+
+            employe_id:
+              parseInt(employeId),
+
+            montant
+          }
         );
 
-        // Employé concerné
-        const employeNom =
-          employes.find(
-            e => e.id === parseInt(employeId)
-          )?.nom_prenom || 'Inconnu';
-
-        // Journalisation modification
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'UPDATE',
-          table: 'emprunts',
-          idEnregistrement: emprunt.id,
-          details:
-            `Modification emprunt : ${employeNom} - ` +
-            `${Number(montant).toLocaleString()} FCFA`
-        });
-
-        setSuccess('Emprunt modifié avec succès');
+        setSuccess(
+          'Emprunt modifié avec succès'
+        );
 
       } else {
 
-        await db.execute(
-          `
-    INSERT INTO emprunts (
-      employe_id,
-      montant,
-      date_emprunt
-    )
-    VALUES (?, ?, DATE('now'))
-    `,
-          [
-            parseInt(employeId),
+        await apiPost(
+
+          "/emprunts",
+
+          {
+
+            employe_id:
+              parseInt(employeId),
+
             montant
-          ]
+          }
         );
 
-        // Employé concerné
-        const employeNom =
-          employes.find(
-            e => e.id === parseInt(employeId)
-          )?.nom_prenom || 'Inconnu';
-
-        // Journalisation création
-        await journaliserAction({
-          utilisateur: 'Utilisateur',
-          action: 'CREATE',
-          table: 'emprunts',
-          idEnregistrement: employeId,
-          details:
-            `Création emprunt : ${employeNom} - ` +
-            `${Number(montant).toLocaleString()} FCFA`
-        });
-
-        setSuccess('Emprunt ajouté avec succès');
+        setSuccess(
+          'Emprunt ajouté avec succès'
+        );
       }
 
-      setTimeout(() => {
-        onSuccess();
-      }, 1500);
+      setTimeout(
+
+        () => {
+
+          onSuccess();
+
+        },
+
+        1500
+      );
 
     } catch (err) {
+
       console.error(err);
-      setError("Erreur lors de l'enregistrement");
+
+      setError(
+
+        "Erreur lors de l'enregistrement"
+      );
+
     } finally {
+
       setLoading(false);
     }
   };
@@ -260,7 +256,21 @@ const FormulaireEmprunt: React.FC<Props> = ({ emprunt, onSuccess, onCancel }) =>
                 label="Montant (FCFA)"
                 placeholder="Ex: 50000"
                 value={montant}
-                onChange={(val) => setMontant(Number(val))}
+                onChange={(val) =>
+
+                  setMontant(
+
+                    val === ''
+                      ||
+                      val === null
+                      ||
+                      val === undefined
+
+                      ? undefined
+
+                      : Number(val)
+                  )
+                }
                 leftSection={<IconMoneybag size={14} />}
                 size="sm"
                 min={0}

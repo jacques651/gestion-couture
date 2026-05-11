@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { journaliserAction } from "../../services/journal";
+
 import {
   Stack,
   Card,
@@ -42,8 +42,13 @@ import {
   IconTrendingDown,
   IconChartPie,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import FormulaireDepense from './FormulaireDepense';
+import {
+
+  apiGet,
+  apiDelete
+
+} from '../../services/api';
 
 interface Depense {
   id: number;
@@ -67,72 +72,100 @@ const ListeDepenses: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const itemsPerPage = 10;
 
-  const chargerDepenses = async () => {
-    setLoading(true);
-    try {
-      const db = await getDb();
-      const result = await db.select<Depense[]>(
-        "SELECT * FROM depenses ORDER BY date_depense DESC"
+const chargerDepenses =
+async () => {
+
+  setLoading(true);
+
+  try {
+
+    const result =
+      await apiGet(
+        "/depenses"
       );
-      setDepenses(result as unknown as Depense[]);
-    } catch (error) {
-      console.error("Erreur lors du chargement des dépenses :", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+    setDepenses(
+      result || []
+    );
+
+  } catch (error) {
+
+    console.error(
+
+      "Erreur chargement dépenses:",
+
+      error
+    );
+
+  } finally {
+
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     chargerDepenses();
   }, []);
 
-  const supprimer = async (id: number, designation: string) => {
+ const supprimer =
+async (
 
-  if (!
-globalThis.confirm(`Supprimer la dépense "${designation}" ?`)) {
+  id: number,
+
+  designation: string
+
+) => {
+
+  if (
+
+    !globalThis.confirm(
+
+      `Supprimer la dépense "${designation}" ?`
+    )
+
+  ) {
+
     return;
   }
 
   try {
 
-    const db = await getDb();
+    await apiDelete(
 
-    // Suppression
-    await db.execute(
-      `DELETE FROM depenses WHERE id = ?`,
-      [id]
+      `/depenses/${id}`
     );
 
-    // Journalisation
-    await journaliserAction({
-      utilisateur: 'Utilisateur',
-      action: 'DELETE',
-      table: 'depenses',
-      idEnregistrement: id,
-      details: `Suppression dépense : ${designation}`
-    });
-
-    // Recharger
+    /**
+     * RELOAD
+     */
     await chargerDepenses();
 
-    // Notification succès
+    /**
+     * SUCCESS
+     */
     setSuccessMessage(
+
       `Dépense "${designation}" supprimée avec succès`
     );
 
     setShowSuccess(true);
 
-    setTimeout(() => {
-      setShowSuccess(false);
-    }, 3000);
+    setTimeout(
+
+      () =>
+        setShowSuccess(false),
+
+      3000
+    );
 
   } catch (error) {
 
     console.error(
+
       "Erreur suppression dépense:",
+
       error
     );
-
   }
 };
 

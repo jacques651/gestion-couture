@@ -36,7 +36,11 @@ import {
   IconArrowDownRight,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
-import { getDb } from '../../database/db';
+import {
+
+  apiGet
+
+} from '../../services/api';
 
 interface BilanProps {
   setPage?: (page: string) => void;
@@ -63,51 +67,234 @@ const BilanFinancier: React.FC<BilanProps> = ({ setPage }) => {
     loadBilan();
   }, []);
 
-  const loadBilan = async () => {
-    try {
-      setLoading(true);
-      const db = await getDb();
+  const loadBilan =
+async () => {
 
-      // Chiffre d'affaires (total ventes)
-      const ca = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_total), 0) as total FROM ventes`);
-      const chiffreAffaires = ca[0]?.total || 0;
+  try {
 
-      // Encaissements (montant réglé)
-      const enc = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_regle), 0) as total FROM ventes`);
-      const encaissements = enc[0]?.total || 0;
+    setLoading(
+      true
+    );
 
-      // Dépenses
-      const dep = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant), 0) as total FROM depenses`);
-      const depenses = dep[0]?.total || 0;
+    /**
+     * =====================
+     * VENTES
+     * =====================
+     */
+    const ventes =
+      await apiGet(
+        "/ventes"
+      );
 
-      // Salaires (payés, non annulés)
-      const sal = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_net), 0) as total FROM salaires WHERE annule = 0`);
-      const salaires = sal[0]?.total || 0;
+    /**
+     * =====================
+     * DEPENSES
+     * =====================
+     */
+    const depensesRows =
+      await apiGet(
+        "/depenses"
+      );
 
-      // Reste à recouvrer
-      const reste = await db.select<{ total: number }[]>(`SELECT COALESCE(SUM(montant_total - montant_regle), 0) as total FROM ventes WHERE statut != 'PAYEE'`);
-      const resteARecouvrer = reste[0]?.total || 0;
+    /**
+     * =====================
+     * SALAIRES
+     * =====================
+     */
+    const salairesRows =
+      await apiGet(
+        "/historique-salaires"
+      );
 
-      // Bénéfices
-      const totalDepenses = depenses + salaires;
-      const beneficeComptable = chiffreAffaires - totalDepenses;
-      const beneficeTresorerie = encaissements - totalDepenses;
+    /**
+     * =====================
+     * CHIFFRE AFFAIRES
+     * =====================
+     */
+    const chiffreAffaires =
 
-      setStats({
-        chiffreAffaires,
-        encaissements,
-        depenses,
-        salaires,
-        resteARecouvrer,
-        beneficeComptable,
-        beneficeTresorerie,
-      });
-    } catch (err) {
-      console.error('Erreur chargement bilan:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      (ventes || []).reduce(
+
+        (
+          total: number,
+          v: any
+        ) =>
+
+          total
+          +
+          Number(
+            v.montant_total || 0
+          ),
+
+        0
+      );
+
+    /**
+     * =====================
+     * ENCAISSEMENTS
+     * =====================
+     */
+    const encaissements =
+
+      (ventes || []).reduce(
+
+        (
+          total: number,
+          v: any
+        ) =>
+
+          total
+          +
+          Number(
+            v.montant_regle || 0
+          ),
+
+        0
+      );
+
+    /**
+     * =====================
+     * DEPENSES
+     * =====================
+     */
+    const depenses =
+
+      (depensesRows || []).reduce(
+
+        (
+          total: number,
+          d: any
+        ) =>
+
+          total
+          +
+          Number(
+            d.montant || 0
+          ),
+
+        0
+      );
+
+    /**
+     * =====================
+     * SALAIRES
+     * =====================
+     */
+    const salaires =
+
+      (salairesRows || []).reduce(
+
+        (
+          total: number,
+          s: any
+        ) =>
+
+          total
+          +
+          Number(
+            s.montant || 0
+          ),
+
+        0
+      );
+
+    /**
+     * =====================
+     * RESTE A RECOUVRER
+     * =====================
+     */
+    const resteARecouvrer =
+
+      (ventes || []).reduce(
+
+        (
+          total: number,
+          v: any
+        ) => {
+
+          const totalVente =
+            Number(
+              v.montant_total || 0
+            );
+
+          const regle =
+            Number(
+              v.montant_regle || 0
+            );
+
+          return (
+            total
+            +
+            (
+              totalVente
+              -
+              regle
+            )
+          );
+        },
+
+        0
+      );
+
+    /**
+     * =====================
+     * BENEFICES
+     * =====================
+     */
+    const totalDepenses =
+
+      depenses
+      +
+      salaires;
+
+    const beneficeComptable =
+
+      chiffreAffaires
+      -
+      totalDepenses;
+
+    const beneficeTresorerie =
+
+      encaissements
+      -
+      totalDepenses;
+
+    /**
+     * =====================
+     * STATE
+     * =====================
+     */
+    setStats({
+
+      chiffreAffaires,
+
+      encaissements,
+
+      depenses,
+
+      salaires,
+
+      resteARecouvrer,
+
+      beneficeComptable,
+
+      beneficeTresorerie,
+    });
+
+  } catch (err) {
+
+    console.error(
+      "Erreur chargement bilan:",
+      err
+    );
+
+  } finally {
+
+    setLoading(
+      false
+    );
+  }
+};
 
   const handleNav = (page: string) => {
     const routeMap: Record<string, string> = {

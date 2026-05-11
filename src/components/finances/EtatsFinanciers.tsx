@@ -25,13 +25,15 @@ import {
   IconInfoCircle,
   IconCalendar,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import { useReactToPrint } from 'react-to-print';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import {
+
+  apiGet
+
+} from '../../services/api';
 
 interface Ligne {
   date: string;
@@ -51,47 +53,221 @@ const EtatsFinanciers = () => {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const charger = async () => {
-    setLoading(true);
-    const db = await getDb();
+ const charger =
+async () => {
 
-    const ventes = await db.select<any[]>(`
-      SELECT date_vente as date, designation as motif, total as entree, 0 as sortie
-      FROM ventes
-    `);
+  try {
 
-    const depenses = await db.select<any[]>(`
-      SELECT date_depense as date, designation as motif, 0 as entree, montant as sortie
-      FROM depenses
-    `);
-
-    const salaires = await db.select<any[]>(`
-      SELECT date_paiement as date, 'Paiement salaire' as motif, 0 as entree, montant_net as sortie
-      FROM salaires
-    `);
-
-    const data = [...ventes, ...depenses, ...salaires];
-
-    const sorted = data.sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
+    setLoading(
+      true
     );
 
+    /**
+     * =====================
+     * VENTES
+     * =====================
+     */
+    const ventes =
+      (
+        await apiGet(
+          "/ventes"
+        )
+      ) || [];
+
+    /**
+     * =====================
+     * DEPENSES
+     * =====================
+     */
+    const depenses =
+      (
+        await apiGet(
+          "/depenses"
+        )
+      ) || [];
+
+    /**
+     * =====================
+     * SALAIRES
+     * =====================
+     */
+    const salaires =
+      (
+        await apiGet(
+          "/historique-salaires"
+        )
+      ) || [];
+
+    /**
+     * =====================
+     * FORMATAGE
+     * =====================
+     */
+    const ventesRows =
+
+      ventes.map(
+        (v: any) => ({
+
+          date:
+            v.date_vente,
+
+          motif:
+
+            v.designation
+            ||
+            v.client_nom
+            ||
+            "Vente",
+
+          entree:
+            Number(
+              v.montant_regle || 0
+            ),
+
+          sortie: 0
+        })
+      );
+
+    const depensesRows =
+
+      depenses.map(
+        (d: any) => ({
+
+          date:
+            d.date_depense,
+
+          motif:
+            d.designation,
+
+          entree: 0,
+
+          sortie:
+            Number(
+              d.montant || 0
+            )
+        })
+      );
+
+    const salairesRows =
+
+      salaires.map(
+        (s: any) => ({
+
+          date:
+            s.date,
+
+          motif:
+
+            `Salaire : ${
+              s.nom || ''
+            }`,
+
+          entree: 0,
+
+          sortie:
+            Number(
+              s.montant || 0
+            )
+        })
+      );
+
+    /**
+     * =====================
+     * FUSION
+     * =====================
+     */
+    const data = [
+
+      ...ventesRows,
+
+      ...depensesRows,
+
+      ...salairesRows
+    ];
+
+    /**
+     * =====================
+     * TRI
+     * =====================
+     */
+    const sorted =
+
+      data.sort(
+
+        (
+          a,
+          b
+        ) =>
+
+          new Date(
+            b.date
+          ).getTime()
+
+          -
+
+          new Date(
+            a.date
+          ).getTime()
+      );
+
+    /**
+     * =====================
+     * TOTAUX
+     * =====================
+     */
     let totalEntrees = 0;
+
     let totalSorties = 0;
 
     sorted.forEach(l => {
-      totalEntrees += Number(l.entree || 0);
-      totalSorties += Number(l.sortie || 0);
+
+      totalEntrees +=
+        Number(
+          l.entree || 0
+        );
+
+      totalSorties +=
+        Number(
+          l.sortie || 0
+        );
     });
 
-    setLignes(sorted);
+    /**
+     * =====================
+     * STATE
+     * =====================
+     */
+    setLignes(
+      sorted
+    );
+
     setTotaux({
+
       totalEntrees,
+
       totalSorties,
-      solde: totalEntrees - totalSorties
+
+      solde:
+
+        totalEntrees
+        -
+        totalSorties
     });
-    setLoading(false);
-  };
+
+  } catch (error) {
+
+    console.error(
+      "Erreur état financier:",
+      error
+    );
+
+  } finally {
+
+    setLoading(
+      false
+    );
+  }
+};
 
   useEffect(() => {
     charger();
@@ -102,118 +278,440 @@ const EtatsFinanciers = () => {
     documentTitle: "Etat financier"
   });
 
-  const exportExcel = async () => {
-    const path = await save({
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
-      defaultPath: 'etat_financier.xlsx'
-    });
-    if (!path) return;
+  const exportExcel =
+async () => {
 
-    const ws = XLSX.utils.json_to_sheet(lignes);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Etat");
-    const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-    await writeFile(path, buffer);
-  };
+  const ws =
+    XLSX.utils.json_to_sheet(
+      lignes
+    );
 
-  const exportPDF = async () => {
-    const path = await save({
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      defaultPath: 'etat_financier.pdf'
-    });
-    if (!path) return;
+  const wb =
+    XLSX.utils.book_new();
 
-    const doc = new jsPDF('landscape');
-    doc.setFontSize(18);
-    doc.text('État financier', 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Généré le : ${new Date().toLocaleString('fr-FR')}`, 14, 25);
+  XLSX.utils.book_append_sheet(
 
-    autoTable(doc, {
-      head: [['Date', 'Motif', 'Entrée (FCFA)', 'Sortie (FCFA)']],
-      body: lignes.map(l => [
-        new Date(l.date).toLocaleDateString('fr-FR'),
+    wb,
+
+    ws,
+
+    "Etat"
+  );
+
+  const buffer =
+    XLSX.write(
+
+      wb,
+
+      {
+        type: "array",
+        bookType: "xlsx"
+      }
+    );
+
+  const blob =
+    new Blob(
+
+      [buffer],
+
+      {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    );
+
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.href =
+    url;
+
+  link.download =
+    "etat_financier.xlsx";
+
+  document.body
+    .appendChild(link);
+
+  link.click();
+
+  document.body
+    .removeChild(link);
+
+  URL.revokeObjectURL(
+    url
+  );
+};
+
+ const exportPDF =
+async () => {
+
+  const doc =
+    new jsPDF(
+      'landscape'
+    );
+
+  doc.setFontSize(
+    18
+  );
+
+  doc.text(
+    'État financier',
+    14,
+    15
+  );
+
+  doc.setFontSize(
+    10
+  );
+
+  doc.text(
+
+    `Généré le : ${
+      new Date()
+        .toLocaleString(
+          'fr-FR'
+        )
+    }`,
+
+    14,
+
+    25
+  );
+
+  autoTable(doc, {
+
+    head: [[
+
+      'Date',
+
+      'Motif',
+
+      'Entrée (FCFA)',
+
+      'Sortie (FCFA)'
+    ]],
+
+    body:
+
+      lignes.map(l => [
+
+        new Date(
+          l.date
+        ).toLocaleDateString(
+          'fr-FR'
+        ),
+
         l.motif,
+
         l.entree.toLocaleString(),
+
         l.sortie.toLocaleString()
       ]),
-      startY: 35,
-      theme: 'striped',
-      headStyles: {
-        fillColor: [27, 54, 93],
-        textColor: 255,
-        fontStyle: 'bold',
-      },
-      styles: {
-        fontSize: 9,
-        cellPadding: 3,
-      },
-    });
 
-    const pdfBytes = doc.output('arraybuffer');
-    await writeFile(path, new Uint8Array(pdfBytes));
-  };
+    startY: 35,
 
-  const exportWord = async () => {
-    const path = await save({
-      filters: [{ name: 'Word', extensions: ['doc'] }],
-      defaultPath: 'etat_financier.doc'
-    });
-    if (!path) return;
+    theme: 'striped',
 
-    const rows = lignes.map(l => `
+    headStyles: {
+
+      fillColor:
+        [27, 54, 93],
+
+      textColor:
+        255,
+
+      fontStyle:
+        'bold',
+    },
+
+    styles: {
+
+      fontSize: 9,
+
+      cellPadding: 3,
+    },
+  });
+
+  /**
+   * Download direct
+   */
+  doc.save(
+    'etat_financier.pdf'
+  );
+};
+
+ const exportWord =
+async () => {
+
+  const rows =
+
+    lignes.map(l => `
+
       <tr>
-        <td style="border: 1px solid #ddd; padding: 8px;">${new Date(l.date).toLocaleDateString('fr-FR')}</td>
-        <td style="border: 1px solid #ddd; padding: 8px;">${l.motif}</td>
-        <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${l.entree.toLocaleString()} FCFA</td>
-        <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${l.sortie.toLocaleString()} FCFA</td>
+
+        <td style="border: 1px solid #ddd; padding: 8px;">
+          ${new Date(
+            l.date
+          ).toLocaleDateString(
+            'fr-FR'
+          )}
+        </td>
+
+        <td style="border: 1px solid #ddd; padding: 8px;">
+          ${l.motif}
+        </td>
+
+        <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">
+          ${l.entree.toLocaleString()} FCFA
+        </td>
+
+        <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">
+          ${l.sortie.toLocaleString()} FCFA
+        </td>
+
       </tr>
-    `).join('');
+    `)
+    .join('');
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>État financier</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 40px; }
-          h1 { color: #1b365d; border-bottom: 2px solid #1b365d; padding-bottom: 10px; }
-          .info { margin: 20px 0; color: #666; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th { background-color: #1b365d; color: white; padding: 10px; border: 1px solid #ddd; text-align: left; }
-          td { padding: 8px; border: 1px solid #ddd; }
-          tr:nth-child(even) { background-color: #f9f9f9; }
-          .totaux { margin-top: 20px; text-align: right; }
-        </style>
-      </head>
-      <body>
-        <h1>📊 État financier</h1>
-        <div class="info">
-          <p><strong>Date d'export :</strong> ${new Date().toLocaleString('fr-FR')}</p>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th><th>Motif</th><th>Entrée (FCFA)</th><th>Sortie (FCFA)</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <div class="totaux">
-          <p><strong>Total entrées :</strong> ${totaux.totalEntrees.toLocaleString()} FCFA</p>
-          <p><strong>Total sorties :</strong> ${totaux.totalSorties.toLocaleString()} FCFA</p>
-          <p><strong>Solde :</strong> ${totaux.solde.toLocaleString()} FCFA</p>
-        </div>
-      </body>
-      </html>
-    `;
+  const html = `
 
-    const encoder = new TextEncoder();
-    const data = encoder.encode(html);
-    await writeFile(path, data);
-  };
+    <!DOCTYPE html>
 
+    <html>
+
+    <head>
+
+      <meta charset="UTF-8">
+
+      <title>
+        État financier
+      </title>
+
+      <style>
+
+        body {
+
+          font-family:
+            Arial,
+            sans-serif;
+
+          margin: 40px;
+        }
+
+        h1 {
+
+          color: #1b365d;
+
+          border-bottom:
+            2px solid #1b365d;
+
+          padding-bottom: 10px;
+        }
+
+        .info {
+
+          margin: 20px 0;
+
+          color: #666;
+        }
+
+        table {
+
+          width: 100%;
+
+          border-collapse:
+            collapse;
+
+          margin-top: 20px;
+        }
+
+        th {
+
+          background-color:
+            #1b365d;
+
+          color: white;
+
+          padding: 10px;
+
+          border:
+            1px solid #ddd;
+
+          text-align: left;
+        }
+
+        td {
+
+          padding: 8px;
+
+          border:
+            1px solid #ddd;
+        }
+
+        tr:nth-child(even) {
+
+          background-color:
+            #f9f9f9;
+        }
+
+        .totaux {
+
+          margin-top: 20px;
+
+          text-align: right;
+        }
+
+      </style>
+
+    </head>
+
+    <body>
+
+      <h1>
+        📊 État financier
+      </h1>
+
+      <div class="info">
+
+        <p>
+
+          <strong>
+            Date d'export :
+          </strong>
+
+          ${new Date()
+            .toLocaleString(
+              'fr-FR'
+            )}
+
+        </p>
+
+      </div>
+
+      <table>
+
+        <thead>
+
+          <tr>
+
+            <th>Date</th>
+
+            <th>Motif</th>
+
+            <th>Entrée (FCFA)</th>
+
+            <th>Sortie (FCFA)</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${rows}
+
+        </tbody>
+
+      </table>
+
+      <div class="totaux">
+
+        <p>
+
+          <strong>
+            Total entrées :
+          </strong>
+
+          ${totaux.totalEntrees.toLocaleString()} FCFA
+
+        </p>
+
+        <p>
+
+          <strong>
+            Total sorties :
+          </strong>
+
+          ${totaux.totalSorties.toLocaleString()} FCFA
+
+        </p>
+
+        <p>
+
+          <strong>
+            Solde :
+          </strong>
+
+          ${totaux.solde.toLocaleString()} FCFA
+
+        </p>
+
+      </div>
+
+    </body>
+
+    </html>
+  `;
+
+  /**
+   * Blob Word
+   */
+  const blob =
+
+    new Blob(
+
+      [html],
+
+      {
+        type:
+          "application/msword"
+      }
+    );
+
+  /**
+   * URL
+   */
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+
+  /**
+   * Download
+   */
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.href =
+    url;
+
+  link.download =
+    "etat_financier.doc";
+
+  document.body
+    .appendChild(link);
+
+  link.click();
+
+  document.body
+    .removeChild(link);
+
+  /**
+   * Cleanup
+   */
+  URL.revokeObjectURL(
+    url
+  );
+};
   if (loading) {
     return (
       <Card withBorder radius="md" p="lg" pos="relative">

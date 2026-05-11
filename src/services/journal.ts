@@ -1,12 +1,21 @@
-import { getDb } from "../database/db";
 import {
+
+  apiPost
+
+} from "./api";
+
+import {
+
   getUtilisateurConnecte
-} from './session';
+
+} from "./session";
 
 interface JournalParams {
-  utilisateur: string;
+
+  utilisateur?: string;
 
   action:
+
     | 'CREATE'
     | 'UPDATE'
     | 'DELETE'
@@ -23,49 +32,80 @@ interface JournalParams {
   details: string;
 }
 
+/**
+ * =========================
+ * JOURNALISATION
+ * =========================
+ */
 export async function journaliserAction({
+
   utilisateur,
+
   action,
+
   table,
+
   idEnregistrement = '',
+
   details
+
 }: JournalParams) {
+
+  /**
+   * LES ACTIONS CRUD
+   * SONT MAINTENANT GÉRÉES
+   * PAR LES TRIGGERS POSTGRESQL
+   */
+  if (
+
+    action === 'CREATE'
+    ||
+    action === 'UPDATE'
+    ||
+    action === 'DELETE'
+
+  ) {
+
+    return;
+  }
 
   try {
 
-    const db = await getDb();
+    await apiPost(
 
-    await db.execute(
-      `
-      INSERT INTO journal_modifications (
-        utilisateur,
-        action,
-        table_concernee,
-        id_enregistrement,
-        details
-      )
-      VALUES (?, ?, ?, ?, ?)
-      `,
-      [
-        getUtilisateurConnecte()?.nom
-          || utilisateur,
+      "/journal",
+
+      {
+
+        utilisateur:
+
+          getUtilisateurConnecte()?.nom
+          ||
+          utilisateur
+          ||
+          'Utilisateur',
 
         action,
 
-        table,
+        table_concernee:
+          table,
 
-        String(idEnregistrement),
+        id_enregistrement:
+          String(
+            idEnregistrement
+          ),
 
         details
-      ]
+      }
     );
 
   } catch (error) {
 
     console.error(
+
       "Erreur journalisation:",
+
       error
     );
-
   }
 }

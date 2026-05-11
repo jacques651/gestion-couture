@@ -28,10 +28,13 @@ import {
   IconUser,
   IconInfoCircle,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
 import ModalFacture from './ModalFacture';
 import ModalRecu from '../paiements/ModalRecu';
+import {
 
+  apiGet
+
+} from '../../services/api';
 interface Vente {
   id: number;
   code_vente: string;
@@ -61,35 +64,68 @@ const FacturesRecus: React.FC = () => {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const itemsPerPage = 10;
 
-  const charger = async () => {
-    setLoading(true);
-    try {
-      const db = await getDb();
-      const res = await db.select<Vente[]>(`
-        SELECT 
-          v.id,
-          v.code_vente,
-          v.type_vente,
-          v.date_vente,
-          v.client_id,
-          v.client_nom,
-          v.mode_paiement,
-          v.montant_total,
-          v.montant_regle,
-          (v.montant_total - v.montant_regle) as montant_restant,
-          v.statut,
-          v.observation
-        FROM ventes v
-        ORDER BY v.date_vente DESC
-      `);
-      setVentes(res || []);
-    } catch (error) {
-      console.error("Erreur chargement:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+ const charger =
+async () => {
 
+  setLoading(true);
+
+  try {
+
+    const res =
+      await apiGet(
+        "/ventes"
+      );
+
+    const data =
+
+      (res || []).map(
+
+        (v: any) => ({
+
+          ...v,
+
+          montant_total:
+            Number(
+              v.montant_total || 0
+            ),
+
+          montant_regle:
+            Number(
+              v.montant_regle || 0
+            ),
+
+          montant_restant:
+
+            Number(
+              v.montant_total || 0
+            )
+
+            -
+
+            Number(
+              v.montant_regle || 0
+            )
+        })
+      );
+
+    setVentes(
+      data
+    );
+
+  } catch (error) {
+
+    console.error(
+
+      "Erreur chargement:",
+
+      error
+    );
+
+  } finally {
+
+    setLoading(false);
+  }
+};
   useEffect(() => { charger(); }, []);
 
   const getStatut = (vente: Vente) => {

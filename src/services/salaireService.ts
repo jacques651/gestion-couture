@@ -1,93 +1,117 @@
-import { getDb } from '../database/db';
+import {
+
+  apiGet,
+  apiPost
+
+} from "./api";
 
 export interface SalaireDetail {
+
   brut: number;
+
   retenues: number;
+
   net: number;
+
   dejaPaye: number;
+
   resteAPayer: number;
 }
 
-// 🔹 CALCUL SALAIRE
-export const calculerSalaireEmploye = async (employeId: number): Promise<SalaireDetail> => {
-  const db = await getDb();
+/**
+ * =========================
+ * CALCUL SALAIRE
+ * =========================
+ */
+export const calculerSalaireEmploye =
+async (
 
-  // 🔸 BRUT = prestations_realisees
-  const brutRes = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(total), 0) as total
-     FROM prestations_realisees
-     WHERE employe_id = ?`,
-    [employeId]
-  );
+  employeId: number
 
-  const brut = brutRes[0]?.total || 0;
+): Promise<SalaireDetail> => {
 
-  // 🔸 RETENUES = emprunts NON déduits
-  const retenueRes = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(montant), 0) as total
-     FROM emprunts
-     WHERE employe_id = ? AND deduit = 0`,
-    [employeId]
-  );
-
-  const retenues = retenueRes[0]?.total || 0;
-
-  // 🔸 NET
-  const net = brut - retenues;
-
-  // 🔸 DÉJÀ PAYÉ = paiements_salaires
-  const payeRes = await db.select<{ total: number }[]>(
-    `SELECT COALESCE(SUM(montant), 0) as total
-     FROM paiements_salaires
-     WHERE employe_id = ?`,
-    [employeId]
-  );
-
-  const dejaPaye = payeRes[0]?.total || 0;
-
-  // 🔸 RESTE
-  const resteAPayer = net - dejaPaye;
+  const res =
+    await apiGet(
+      `/salaires/${employeId}`
+    );
 
   return {
-    brut,
-    retenues,
-    net,
-    dejaPaye,
-    resteAPayer
+
+    brut:
+      Number(
+        res?.brut || 0
+      ),
+
+    retenues:
+      Number(
+        res?.retenues || 0
+      ),
+
+    net:
+      Number(
+        res?.net || 0
+      ),
+
+    dejaPaye:
+      Number(
+        res?.dejaPaye || 0
+      ),
+
+    resteAPayer:
+      Number(
+        res?.resteAPayer || 0
+      )
   };
 };
 
-// 🔹 PAIEMENT
-export const payerSalaire = async (
+/**
+ * =========================
+ * PAYER SALAIRE
+ * =========================
+ */
+export const payerSalaire =
+async (
+
   employeId: number,
+
   montant: number,
+
   mode: string,
+
   observation: string
+
 ) => {
-  const db = await getDb();
 
-  const salaire = await calculerSalaireEmploye(employeId);
+  /**
+   * VALIDATION
+   */
+  if (
 
-  if (montant <= 0) {
-    throw new Error("Montant invalide");
+    !montant
+    ||
+    montant <= 0
+
+  ) {
+
+    throw new Error(
+      "Montant invalide"
+    );
   }
 
-  if (montant > salaire.resteAPayer) {
-    throw new Error("Montant supérieur au reste à payer");
-  }
+  /**
+   * API
+   */
+  return await apiPost(
 
-  // 🔸 INSERT paiement
-  await db.execute(
-    `INSERT INTO paiements_salaires (employe_id, montant, mode, observation)
-     VALUES (?, ?, ?, ?)`,
-    [employeId, montant, mode, observation]
-  );
+    `/salaires/${employeId}/payer`,
 
-  // 🔸 Marquer emprunts comme déduits
-  await db.execute(
-    `UPDATE emprunts 
-     SET deduit = 1, date_deduction = CURRENT_TIMESTAMP
-     WHERE employe_id = ? AND deduit = 0`,
-    [employeId]
+    {
+
+      montant,
+
+      mode,
+
+      observation
+    }
   );
 };

@@ -36,11 +36,13 @@ import {
   IconTrendingUp,
   IconTrendingDown,
 } from '@tabler/icons-react';
-import { getDb } from "../../database/db";
 import html2pdf from "html2pdf.js";
 import * as XLSX from "xlsx";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import {
+
+  apiGet
+
+} from "../../services/api";
 
 interface LigneJournal {
   date: string;
@@ -71,88 +73,241 @@ const JournalCaisse = () => {
     applyFilters();
   }, [dateDebut, dateFin, mois, annee, transactions]);
 
-  const loadJournal = async () => {
-    setLoading(true);
-    try {
-      const db = await getDb();
+  const loadJournal =
+    async () => {
 
-      // 1. Encaissements des ventes (montants réglés)
-      const ventes = await db.select<any[]>(`
-        SELECT 
-          v.date_vente as date,
-          'Vente ' || v.code_vente || ' - ' || COALESCE(v.client_nom, 'Client comptoir') as description,
-          v.montant_regle as montant,
-          v.mode_paiement
-        FROM ventes v
-        WHERE v.montant_regle > 0
-        ORDER BY v.date_vente
-      `);
+      setLoading(true);
 
-      // 2. Dépenses
-      const depenses = await db.select<any[]>(`
-        SELECT 
-          date_depense as date,
-          'Dépense : ' || designation || COALESCE(' (' || categorie || ')', '') as description,
-          montant
-        FROM depenses
-        ORDER BY date_depense
-      `);
+      try {
 
-      // 3. Salaires payés
-      const salaires = await db.select<any[]>(`
-        SELECT 
-          s.date_paiement as date,
-          'Salaire : ' || e.nom_prenom || ' (' || s.montant_net || ' FCFA)' as description,
-          s.montant_net as montant
-        FROM salaires s
-        LEFT JOIN employes e ON e.id = s.employe_id
-        WHERE s.annule = 0
-        ORDER BY s.date_paiement
-      `);
+        /**
+         * =====================
+         * VENTES
+         * =====================
+         */
+        const ventes =
+          (
+            await apiGet(
+              "/ventes"
+            )
+          ) || [];
 
-      // 4. Remboursements emprunts (déjà inclus dans les salaires, mais on peut les tracer)
+        /**
+         * =====================
+         * DEPENSES
+         * =====================
+         */
+        const depenses =
+          (
+            await apiGet(
+              "/depenses"
+            )
+          ) || [];
 
-      const allTransactions: { date: string; description: string; montant: number; type: 'entree' | 'sortie' }[] = [];
+        /**
+         * =====================
+         * SALAIRES
+         * =====================
+         */
+        const salaires =
+          (
+            await apiGet(
+              "/historique-salaires"
+            )
+          ) || [];
 
-      // Encaissements = entrées
-      ventes.forEach(v => {
-        if (v.montant > 0) {
-          allTransactions.push({ date: v.date, description: v.description, montant: v.montant, type: 'entree' });
-        }
-      });
+        const allTransactions: {
 
-      // Dépenses = sorties
-      depenses.forEach(d => {
-        allTransactions.push({ date: d.date, description: d.description, montant: d.montant, type: 'sortie' });
-      });
+          date: string;
 
-      // Salaires = sorties
-      salaires.forEach(s => {
-        allTransactions.push({ date: s.date, description: s.description, montant: s.montant, type: 'sortie' });
-      });
+          description: string;
 
-      // Emprunts remboursés ne sont PAS ajoutés car déjà inclus dans les salaires
-      // (le salaire total inclut déjà la retenue)
+          montant: number;
 
-      // Tri par date
-      allTransactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          type:
+          'entree'
+          |
+          'sortie'
 
-      // Calcul du solde progressif
-      let solde = 0;
-      const journal: LigneJournal[] = allTransactions.map(t => {
-        const entree = t.type === 'entree' ? t.montant : 0;
-        const sortie = t.type === 'sortie' ? t.montant : 0;
-        solde = solde + entree - sortie;
-        return { date: t.date, description: t.description, entree, sortie, solde };
-      });
+        }[] = [];
 
-      setTransactions(journal);
-    } catch (err) {
-      console.error("Erreur chargement journal:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        /**
+         * =====================
+         * ENCAISSEMENTS
+         * =====================
+         */
+        ventes.forEach((v: any) => {
+
+          const montant =
+            Number(
+              v.montant_regle || 0
+            );
+
+          if (montant > 0) {
+
+            allTransactions.push({
+
+              date:
+                v.date_vente,
+
+              description:
+
+                `Vente ${v.code_vente || ''
+                } - ${v.client_nom
+                ||
+                'Client comptoir'
+                }`,
+
+              montant,
+
+              type:
+                'entree'
+            });
+          }
+        });
+
+        /**
+         * =====================
+         * DEPENSES
+         * =====================
+         */
+        depenses.forEach((d: any) => {
+
+          allTransactions.push({
+
+            date:
+              d.date_depense,
+
+            description:
+
+              `Dépense : ${d.designation || ''
+              }`,
+
+            montant:
+              Number(
+                d.montant || 0
+              ),
+
+            type:
+              'sortie'
+          });
+        });
+
+        /**
+         * =====================
+         * SALAIRES
+         * =====================
+         */
+        salaires.forEach((s: any) => {
+
+          allTransactions.push({
+
+            date:
+              s.date,
+
+            description:
+
+              `Salaire : ${s.nom || ''
+              }`,
+
+            montant:
+              Number(
+                s.montant || 0
+              ),
+
+            type:
+              'sortie'
+          });
+        });
+
+        /**
+         * =====================
+         * TRI
+         * =====================
+         */
+        allTransactions.sort(
+
+          (
+            a,
+            b
+          ) =>
+
+            new Date(a.date)
+              .getTime()
+
+            -
+
+            new Date(b.date)
+              .getTime()
+        );
+
+        /**
+         * =====================
+         * SOLDE PROGRESSIF
+         * =====================
+         */
+        let solde = 0;
+
+        const journal:
+          LigneJournal[] =
+
+          allTransactions.map(t => {
+
+            const entree =
+
+              t.type === 'entree'
+
+                ? t.montant
+
+                : 0;
+
+            const sortie =
+
+              t.type === 'sortie'
+
+                ? t.montant
+
+                : 0;
+
+            solde =
+              solde
+              +
+              entree
+              -
+              sortie;
+
+            return {
+
+              date:
+                t.date,
+
+              description:
+                t.description,
+
+              entree,
+
+              sortie,
+
+              solde
+            };
+          });
+
+        setTransactions(
+          journal
+        );
+
+      } catch (err) {
+
+        console.error(
+          "Erreur chargement journal:",
+          err
+        );
+
+      } finally {
+
+        setLoading(false);
+      }
+    };
 
   const applyFilters = () => {
     let filteredData = [...transactions];
@@ -201,30 +356,114 @@ const JournalCaisse = () => {
     return n.toLocaleString() + " francs CFA";
   };
 
-  const exportExcel = async () => {
-    const ws = XLSX.utils.json_to_sheet(
-      filtered.map(t => ({
-        Date: new Date(t.date).toLocaleDateString('fr-FR'),
-        Description: t.description,
-        'Entrée (FCFA)': t.entree,
-        'Sortie (FCFA)': t.sortie,
-        'Solde (FCFA)': t.solde
-      }))
-    );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Journal");
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const filePath = await save({ 
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }], 
-      defaultPath: `journal-caisse-${new Date().toISOString().slice(0, 10)}.xlsx` 
-    });
-    if (filePath) {
-      await writeFile(filePath, new Uint8Array(excelBuffer));
-      setSuccessMessage('Export Excel réussi');
+  const exportExcel =
+    async () => {
+
+      const ws =
+        XLSX.utils.json_to_sheet(
+
+          filtered.map(t => ({
+
+            Date:
+              new Date(
+                t.date
+              ).toLocaleDateString(
+                'fr-FR'
+              ),
+
+            Description:
+              t.description,
+
+            'Entrée (FCFA)':
+              t.entree,
+
+            'Sortie (FCFA)':
+              t.sortie,
+
+            'Solde (FCFA)':
+              t.solde
+          }))
+        );
+
+      const wb =
+        XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(
+
+        wb,
+
+        ws,
+
+        "Journal"
+      );
+
+      const excelBuffer =
+        XLSX.write(
+
+          wb,
+
+          {
+            bookType: 'xlsx',
+            type: 'array'
+          }
+        );
+
+      const blob =
+
+        new Blob(
+
+          [excelBuffer],
+
+          {
+            type:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          }
+        );
+
+      const url =
+        URL.createObjectURL(
+          blob
+        );
+
+      const link =
+        document.createElement(
+          "a"
+        );
+
+      link.href =
+        url;
+
+      link.download =
+
+        `journal-caisse-${new Date()
+          .toISOString()
+          .slice(0, 10)
+        }.xlsx`;
+
+      document.body
+        .appendChild(link);
+
+      link.click();
+
+      document.body
+        .removeChild(link);
+
+      URL.revokeObjectURL(
+        url
+      );
+
+      setSuccessMessage(
+        'Export Excel réussi'
+      );
+
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }
-  };
+
+      setTimeout(
+        () =>
+          setShowSuccess(false),
+        3000
+      );
+    };
 
   const exportWord = async () => {
     const rows = filtered.map(t => `
@@ -255,42 +494,172 @@ const JournalCaisse = () => {
     </body></html>`;
 
     const blob = new Blob([htmlContent], { type: 'application/msword' });
-    const filePath = await save({ 
-      filters: [{ name: 'Word', extensions: ['doc'] }], 
-      defaultPath: `journal-caisse-${new Date().toISOString().slice(0, 10)}.doc` 
-    });
-    if (filePath) {
-      const buffer = await blob.arrayBuffer();
-      await writeFile(filePath, new Uint8Array(buffer));
-      setSuccessMessage('Export Word réussi');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement(
+        "a"
+      );
+
+    link.href =
+      url;
+
+    link.download =
+
+      `journal-caisse-${new Date()
+        .toISOString()
+        .slice(0, 10)
+      }.doc`;
+
+    document.body
+      .appendChild(link);
+
+    link.click();
+
+    document.body
+      .removeChild(link);
+
+    URL.revokeObjectURL(
+      url
+    );
+
+    setSuccessMessage(
+      'Export Word réussi'
+    );
+
+    setShowSuccess(true);
+
+    setTimeout(
+      () =>
+        setShowSuccess(false),
+      3000
+    );
+  };
+
+ const exportPDF =
+async () => {
+
+  const element =
+    document.getElementById(
+      "journal-print"
+    );
+
+  if (!element)
+    return;
+
+  const opt = {
+
+    margin: 10,
+
+    filename:
+
+      `journal-caisse-${
+        new Date()
+          .toISOString()
+          .slice(0, 10)
+      }.pdf`,
+
+    image: {
+
+      type: 'jpeg',
+
+      quality: 0.98
+
+    } as const,
+
+    html2canvas: {
+
+      scale: 2
+    },
+
+    jsPDF: {
+
+      unit: 'mm',
+
+      format: 'a4',
+
+      orientation:
+        'landscape' as const
     }
   };
 
-  const exportPDF = async () => {
-    const element = document.getElementById("journal-print");
-    if (!element) return;
-    const opt = {
-      margin: 10,
-      filename: `journal-caisse-${new Date().toISOString().slice(0, 10)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 } as const,
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' as const }
-    };
-    const pdfBlob = await html2pdf().from(element).set(opt).output('blob');
-    const filePath = await save({ 
-      filters: [{ name: 'PDF', extensions: ['pdf'] }], 
-      defaultPath: `journal-caisse-${new Date().toISOString().slice(0, 10)}.pdf` 
-    });
-    if (filePath) {
-      const buffer = await pdfBlob.arrayBuffer();
-      await writeFile(filePath, new Uint8Array(buffer));
-      setSuccessMessage('Export PDF réussi');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }
-  };
+  /**
+   * PDF Blob
+   */
+  const pdfBlob =
+    await html2pdf()
+
+      .from(element)
+
+      .set(opt)
+
+      .output('blob');
+
+  /**
+   * URL
+   */
+  const url =
+    URL.createObjectURL(
+      pdfBlob
+    );
+
+  /**
+   * Download
+   */
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.href =
+    url;
+
+  link.download =
+
+    `journal-caisse-${
+      new Date()
+        .toISOString()
+        .slice(0, 10)
+    }.pdf`;
+
+  document.body
+    .appendChild(link);
+
+  link.click();
+
+  document.body
+    .removeChild(link);
+
+  /**
+   * Cleanup
+   */
+  URL.revokeObjectURL(
+    url
+  );
+
+  /**
+   * Notification
+   */
+  setSuccessMessage(
+    'Export PDF réussi'
+  );
+
+  setShowSuccess(
+    true
+  );
+
+  setTimeout(
+
+    () =>
+      setShowSuccess(false),
+
+    3000
+  );
+};
 
   const handlePrint = () => {
     window.print();

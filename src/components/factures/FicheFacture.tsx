@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { getDb } from '../../database/db';
 import { toWords } from 'number-to-words';
+import {
+
+  apiGet
+
+} from '../../services/api';
 
 // ==============================
 // TYPES
@@ -53,24 +57,52 @@ const FicheFacture: React.FC<Props> = ({
   // ==============================
   // LOAD CONFIG
   // ==============================
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const db = await getDb();
+useEffect(() => {
 
-        const res = await db.select<ConfigAtelier[]>(
-          "SELECT * FROM atelier WHERE id = 1"
+  const load =
+  async () => {
+
+    try {
+
+      const res =
+        await apiGet(
+          "/atelier"
         );
 
-        setConfig(res[0] || null);
+      /**
+       * PREMIER ENREGISTREMENT
+       */
+      if (
 
-      } catch (error) {
-        console.error("Erreur config atelier", error);
+        Array.isArray(res)
+        &&
+        res.length > 0
+
+      ) {
+
+        setConfig(
+          res[0]
+        );
+
+      } else {
+
+        setConfig(null);
       }
-    };
 
-    load();
-  }, []);
+    } catch (error) {
+
+      console.error(
+
+        "Erreur config atelier",
+
+        error
+      );
+    }
+  };
+
+  load();
+
+}, []);
 
   return (
     <div className="p-8 bg-white text-sm">

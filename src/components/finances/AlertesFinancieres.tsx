@@ -15,51 +15,125 @@ import {
   IconUsers,
   IconMoneybag,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
 
-interface CountResult {
-  total: number;
-}
+  apiGet
+
+} from '../../services/api';
+
 
 const AlertesFinancieres = () => {
   const [clientsDette, setClientsDette] = useState(0);
   const [employesDette, setEmployesDette] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const db = await getDb();
+ useEffect(() => {
 
-        const clients = await db.select<CountResult[]>(`
-          SELECT COUNT(*) as total
-          FROM commandes c
-          LEFT JOIN (
-            SELECT commande_id, SUM(montant) as total_paye
-            FROM paiements_commandes
-            GROUP BY commande_id
-          ) p ON p.commande_id = c.id
-          WHERE (c.total - IFNULL(p.total_paye,0)) > 0
-        `);
+  const load =
+  async () => {
 
-        const employes = await db.select<CountResult[]>(`
-          SELECT COUNT(*) as total
-          FROM emprunts
-          WHERE deduit = 0
-        `);
+    try {
 
-        setClientsDette(clients?.[0]?.total ?? 0);
-        setEmployesDette(employes?.[0]?.total ?? 0);
-      } catch (error) {
-        console.error("Erreur alertes financières :", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      setLoading(
+        true
+      );
 
-    load();
-  }, []);
+      /**
+       * =====================
+       * VENTES
+       * =====================
+       */
+      const ventes =
+        (
+          await apiGet(
+            "/ventes"
+          )
+        ) || [];
 
+      /**
+       * =====================
+       * EMPRUNTS
+       * =====================
+       */
+      const emprunts =
+        (
+          await apiGet(
+            "/emprunts"
+          )
+        ) || [];
+
+      /**
+       * =====================
+       * CLIENTS IMPAYES
+       * =====================
+       */
+      const clientsImpayes =
+
+        ventes.filter(
+          (v: any) => {
+
+            const total =
+              Number(
+                v.montant_total || 0
+              );
+
+            const regle =
+              Number(
+                v.montant_regle || 0
+              );
+
+            return (
+              total - regle
+            ) > 0;
+          }
+        );
+
+      /**
+       * =====================
+       * EMPRUNTS NON DEDUITS
+       * =====================
+       */
+      const empruntsNonDeduits =
+
+        emprunts.filter(
+          (e: any) =>
+
+            Number(
+              e.deduit || 0
+            ) === 0
+        );
+
+      /**
+       * =====================
+       * STATE
+       * =====================
+       */
+      setClientsDette(
+        clientsImpayes.length
+      );
+
+      setEmployesDette(
+        empruntsNonDeduits.length
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Erreur alertes financières :",
+        error
+      );
+
+    } finally {
+
+      setLoading(
+        false
+      );
+    }
+  };
+
+  load();
+
+}, []);
   const totalAlertes = clientsDette + employesDette;
 
   if (loading) {

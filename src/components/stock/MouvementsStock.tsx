@@ -11,7 +11,11 @@ import {
   IconBox, IconSearch, IconRefresh, IconInfoCircle, IconCalendar,
   IconArrowUp, IconArrowDown,
 } from '@tabler/icons-react';
-import { getDb } from '../../database/db';
+import {
+
+  apiGet
+
+} from '../../services/api';
 import { notifications } from '@mantine/notifications';
 
 interface MouvementStock {
@@ -34,33 +38,43 @@ const MouvementsStock: React.FC = () => {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const itemsPerPage = 10;
 
-  const chargerMouvements = async () => {
-    setLoading(true);
-    const db = await getDb();
-    try {
-      const result = await db.select<MouvementStock[]>(`
-        SELECT e.id, 'entree' as type_mouvement, e.code_entree as code_mouvement,
-          COALESCE(mat.designation, art.code_article) as designation,
-          e.quantite, e.cout_unitaire, e.date_entree as date_mouvement,
-          NULL as motif, e.observation
-        FROM entrees_stock e
-        LEFT JOIN matieres mat ON e.matiere_id = mat.id
-        LEFT JOIN articles art ON e.article_id = art.id
-        UNION ALL
-        SELECT s.id, 'sortie' as type_mouvement, s.code_sortie as code_mouvement,
-          COALESCE(mat2.designation, art2.code_article) as designation,
-          s.quantite, s.cout_unitaire, s.date_sortie as date_mouvement,
-          s.motif, s.observation
-        FROM sorties_stock s
-        LEFT JOIN matieres mat2 ON s.matiere_id = mat2.id
-        LEFT JOIN articles art2 ON s.article_id = art2.id
-        ORDER BY date_mouvement DESC
-      `);
-      setMouvements(result || []);
-    } catch (error) {
-      notifications.show({ title: 'Erreur', message: 'Erreur de chargement', color: 'red' });
-    } finally { setLoading(false); }
-  };
+ const chargerMouvements =
+async () => {
+
+  setLoading(true);
+
+  try {
+
+    const result =
+      await apiGet(
+        "/stock/mouvements"
+      );
+
+    setMouvements(
+      result || []
+    );
+
+  } catch (error) {
+
+    console.error(error);
+
+    notifications.show({
+
+      title:
+        'Erreur',
+
+      message:
+        'Erreur de chargement',
+
+      color:
+        'red'
+    });
+
+  } finally {
+
+    setLoading(false);
+  }
+};
 
   useEffect(() => { chargerMouvements(); }, []);
 
