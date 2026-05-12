@@ -391,6 +391,14 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
             />
 
+            <NavItem
+              label="Historique des paiements"
+              path="/historique-paiements"  // 👈 Chemin corrigé
+              icon={<IconReceipt size={18} color="white" stroke={1.5} />}  // 👈 Icône changée
+              roles={allUsers}
+              userRole={userRole}
+            />
+
           </NavSection>
 
           {/* ================= SECTION FINANCES ================= */}

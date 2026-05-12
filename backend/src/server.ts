@@ -28,7 +28,7 @@ import empruntsRoutes from "./routes/emprunts";
 import adminRoutes from './routes/admin';
 import financesRoutes from "./routes/finances";
 import stockRoutes from "./routes/stock";
-
+import paiementsRoutes from './routes/paiements';
 
 dotenv.config();
 
@@ -65,6 +65,8 @@ app.use("/emprunts", empruntsRoutes);
 app.use('/admin',adminRoutes);
 app.use("/finances",financesRoutes);
 app.use("/stock",stockRoutes);
+app.use('/api/paiements-ventes', paiementsRoutes);
+
 
 async function initDatabase() {
   try {

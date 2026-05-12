@@ -10,7 +10,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
-import {apiGet} from './services/api';
+import { apiGet } from './services/api';
+import HistoriquePaiements from './components/ventes/HistoriquePaiements';
+
 
 
 // ==================== AUTH ====================
@@ -85,77 +87,77 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
   const [hasAccess, setHasAccess] = useState(true);
   const [checking, setChecking] = useState(true);
 
- useEffect(() => {
+  useEffect(() => {
 
-  const check =
-    async () => {
+    const check =
+      async () => {
 
-      try {
+        try {
 
-        if (
+          if (
 
-          fonctionnalite
+            fonctionnalite
 
-          &&
+            &&
 
-          user?.role !== 'admin'
+            user?.role !== 'admin'
 
-        ) {
+          ) {
 
-          const perms =
-            await apiGet(
+            const perms =
+              await apiGet(
 
-              `/permissions/${user?.id || 0}`
+                `/permissions/${user?.id || 0}`
+              );
+
+            const p =
+              perms.find(
+
+                (x: any) =>
+
+                  x.fonctionnalite
+                  === fonctionnalite
+              );
+
+            setHasAccess(
+
+              p?.lecture === 1
+              ||
+              p?.lecture === true
             );
+          }
 
-          const p =
-            perms.find(
+        } catch (error) {
 
-              (x: any) =>
-
-                x.fonctionnalite
-                === fonctionnalite
-            );
-
-          setHasAccess(
-
-            p?.lecture === 1
-            ||
-            p?.lecture === true
+          console.error(
+            error
           );
+
+          setHasAccess(false);
+
+        } finally {
+
+          setChecking(false);
         }
+      };
 
-      } catch (error) {
+    if (isAuthenticated) {
 
-        console.error(
-          error
-        );
+      check();
 
-        setHasAccess(false);
+    } else {
 
-      } finally {
+      setChecking(false);
+    }
 
-        setChecking(false);
-      }
-    };
+  }, [
 
-  if (isAuthenticated) {
+    fonctionnalite,
 
-    check();
+    user,
 
-  } else {
-
-    setChecking(false);
-  }
-
-}, [
-
-  fonctionnalite,
-
-  user,
-
-  isAuthenticated
-]);
+    isAuthenticated
+  ]);
 
   if (!isAuthenticated) return <Login />;
   if (checking) return <LoadingFallback />;
@@ -242,6 +244,7 @@ function AuthenticatedApp() {
       aide: '/aide',
       support: '/support',
       SuiviRendezVous: '/SuiviRendezVous',
+      HistoriquePaiements: '/HistoriquePaiements',
       export_support: '/export-support',
     };
     navigate(routeMap[page] || '/');
@@ -353,6 +356,12 @@ function AuthenticatedApp() {
             <Route path="/rendezvous" element={
               <RouteGuard roles={['admin', 'caissier', 'couturier']}>
                 <SuiviRendezVous />
+              </RouteGuard>
+            } />
+
+            <Route path="/historique-paiements" element={
+              <RouteGuard roles={['admin', 'caissier']}>
+                <HistoriquePaiements />
               </RouteGuard>
             } />
 
