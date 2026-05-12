@@ -17,7 +17,7 @@ import atelierRoutes from "./routes/atelier";
 import typesPrestationsRoutes from "./routes/typesPrestations";
 import ventesRoutes from "./routes/ventes";
 import depensesRoutes from "./routes/depenses";
-import rendezVousRoutes from "./routes/rendezvous_commandes";
+import rendezVousRoutes from "./routes/rendezvous";
 import utilisateursRoutes from "./routes/utilisateurs";
 import journalRoutes from "./routes/journal";
 import employesRoutes from "./routes/employes";
@@ -27,6 +27,7 @@ import historiqueSalairesRoutes from "./routes/historique-salaires";
 import empruntsRoutes from "./routes/emprunts";
 import adminRoutes from './routes/admin';
 import financesRoutes from "./routes/finances";
+import stockRoutes from "./routes/stock";
 
 
 dotenv.config();
@@ -49,7 +50,11 @@ app.use("/atelier", atelierRoutes);
 app.use("/types-prestations", typesPrestationsRoutes);
 app.use("/ventes", ventesRoutes);
 app.use("/depenses", depensesRoutes);
-app.use("/rendezvous_commandes", rendezVousRoutes);
+console.log(
+  "RENDEZVOUS ROUTE:",
+  rendezVousRoutes
+);
+app.use("/rendezvous", rendezVousRoutes);
 app.use("/utilisateurs", utilisateursRoutes)
 app.use("/journal", journalRoutes);
 app.use("/employes", employesRoutes);
@@ -59,6 +64,7 @@ app.use("/historique-salaires", historiqueSalairesRoutes);
 app.use("/emprunts", empruntsRoutes);
 app.use('/admin',adminRoutes);
 app.use("/finances",financesRoutes);
+app.use("/stock",stockRoutes);
 
 async function initDatabase() {
   try {

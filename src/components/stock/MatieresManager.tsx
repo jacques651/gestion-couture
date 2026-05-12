@@ -108,6 +108,221 @@ const MatieresManager: React.FC = () => {
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
+  // Fonction d'impression
+  const handlePrint = () => {
+    // Créer un iframe invisible pour l'impression
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    document.body.appendChild(iframe);
+    
+    const filteredMatieres = matieres.filter(
+      (matiere) =>
+        matiere.designation.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        matiere.code_matiere.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    
+    // Générer le contenu HTML à imprimer
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Liste des matières</title>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, Helvetica, sans-serif; 
+            padding: 20px; 
+            background: white; 
+            color: black;
+          }
+          .print-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #333;
+          }
+          .print-header h1 { 
+            margin-bottom: 10px; 
+            font-size: 24px;
+          }
+          .print-header p { color: #666; font-size: 14px; }
+          .print-date { 
+            text-align: right; 
+            margin-bottom: 20px; 
+            font-size: 12px; 
+            color: #666;
+          }
+          .print-summary {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+          }
+          .summary-item {
+            flex: 1;
+            text-align: center;
+          }
+          .summary-item .label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+          }
+          .summary-item .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1b365d;
+          }
+          .summary-item .unit {
+            font-size: 10px;
+            color: #999;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+          }
+          th, td { 
+            border: 1px solid #333; 
+            padding: 10px 8px; 
+            text-align: left; 
+            vertical-align: middle;
+          }
+          th { 
+            background: #1b365d;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+          }
+          td { font-size: 12px; }
+          .text-right { text-align: right; }
+          .text-center { text-align: center; }
+          .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+          }
+          .badge-green { background: #d4edda; color: #155724; }
+          .badge-orange { background: #fff3cd; color: #856404; }
+          .badge-red { background: #f8d7da; color: #721c24; }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+          }
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <h1>📦 Gestion des Matières</h1>
+          <p>Inventaire des matières premières (tissus, fils, fournitures...)</p>
+        </div>
+        ${searchTerm ? `
+          <div style="margin-bottom: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+            <strong>🔍 Recherche :</strong> "${searchTerm}"
+          </div>
+        ` : ''}
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Désignation</th>
+              <th>Catégorie</th>
+              <th>Emplacement</th>
+              <th class="text-center">Stock</th>
+              <th class="text-right">Prix achat</th>
+              <th class="text-right">Valeur totale</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredMatieres.map(matiere => {
+              const categorie = categories.find((c) => c.id === matiere.categorie_id);
+              const stockStatus = matiere.stock_actuel <= 0 ? 'rupture' : matiere.stock_actuel <= matiere.seuil_alerte ? 'faible' : 'normal';
+              const stockClass = stockStatus === 'normal' ? 'badge-green' : stockStatus === 'faible' ? 'badge-orange' : 'badge-red';
+              const stockText = stockStatus === 'normal' ? 'En stock' : stockStatus === 'faible' ? 'Stock faible' : 'Rupture';
+              const valeurTotale = matiere.stock_actuel * matiere.prix_achat;
+              
+              return `
+                <tr>
+                  <td><strong>${matiere.code_matiere}</strong></td>
+                  <td>
+                    ${matiere.designation}
+                    ${matiere.reference_fournisseur ? `<div style="font-size: 10px; color: #666;">Réf: ${matiere.reference_fournisseur}</div>` : ''}
+                  </td>
+                  <td>${categorie ? categorie.nom_categorie : '-'}</td>
+                  <td>${matiere.emplacement || '-'}</td>
+                  <td class="text-center">
+                    <span class="badge ${stockClass}">${stockText}</span>
+                    <div style="margin-top: 4px;"><strong>${matiere.stock_actuel}</strong> ${matiere.unite}</div>
+                  </td>
+                  <td class="text-right">${matiere.prix_achat.toLocaleString()} FCFA</td>
+                  <td class="text-right"><strong>${valeurTotale.toLocaleString()} FCFA</strong></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>Logiciel de gestion de couture - Version 1.0</p>
+          <p>Document généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Écrire le contenu dans l'iframe
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
+      
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 100);
+      };
+      
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 100);
+        }
+      }, 500);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -181,102 +396,57 @@ const MatieresManager: React.FC = () => {
   };
 
   const handleSave = async () => {
-
     if (!formData.designation.trim()) {
-
-      setError(
-        'La désignation est requise'
-      );
-
+      setError('La désignation est requise');
       return;
     }
 
     if (!formData.categorie_id) {
-
-      setError(
-        'La catégorie est requise'
-      );
-
+      setError('La catégorie est requise');
       return;
     }
 
     try {
-
       setSaving(true);
-
       setError(null);
 
       if (editingMatiere) {
-
-        await apiPut(
-          `/matieres/${editingMatiere.id}`,
-          formData
-        );
-
+        await apiPut(`/matieres/${editingMatiere.id}`, formData);
       } else {
-
-        await apiPost(
-          "/matieres",
-          formData
-        );
+        await apiPost("/matieres", formData);
       }
 
       closeModal();
-
       await loadData();
-
       resetForm();
-
     } catch (err: any) {
-
       console.error(err);
-
-      setError(
-        err.message ||
-        "Erreur lors de l'enregistrement"
-      );
-
+      setError(err.message || "Erreur lors de l'enregistrement");
     } finally {
-
       setSaving(false);
     }
   };
-  const handleStockUpdate = async () => {
 
-    if (
-      !selectedMatiere ||
-      stockQuantity <= 0
-    ) return;
+  const [newCategorieName, setNewCategorieName] = useState('');
+
+  const handleStockUpdate = async () => {
+    if (!selectedMatiere || stockQuantity <= 0) return;
 
     try {
-
       setSaving(true);
-
       setError(null);
 
-      await apiPut(
-        `/matieres/${selectedMatiere.id}/stock`,
-        {
-          quantite: stockQuantity,
-          action: stockAction
-        }
-      );
+      await apiPut(`/matieres/${selectedMatiere.id}/stock`, {
+        quantite: stockQuantity,
+        action: stockAction
+      });
 
       closeStockModal();
-
       await loadData();
-
     } catch (err: any) {
-
       console.error(err);
-
-      setError(
-        err.message ||
-        'Erreur lors de la mise à jour du stock'
-      );
-
+      setError(err.message || 'Erreur lors de la mise à jour du stock');
     } finally {
-
       setSaving(false);
     }
   };
@@ -286,9 +456,7 @@ const MatieresManager: React.FC = () => {
     try {
       setSaving(true);
       setError(null);
-      await apiDelete(
-        `/matieres/${deleteId}`
-      );
+      await apiDelete(`/matieres/${deleteId}`);
       closeDeleteModalHandler();
       await loadData();
     } catch (err: any) {
@@ -307,8 +475,6 @@ const MatieresManager: React.FC = () => {
     if (stock <= seuil) return { text: 'Stock faible', color: 'orange' as const };
     return { text: 'En stock', color: 'green' as const };
   };
-
-  const [newCategorieName, setNewCategorieName] = useState('');
 
   // Filtrer les matières
   const filteredMatieres = useMemo(() => {
@@ -348,17 +514,34 @@ const MatieresManager: React.FC = () => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(19, 65, 134, 0.2)' }}>
-                  <IconCube size={30} color="black" />
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconCube size={30} color="white" />
                 </Avatar>
                 <Box>
                   <Title order={1} c="white" size="h2">Gestion des Matières</Title>
                   <Text c="gray.3" size="sm">Gérez vos stocks de tissus, fils et fournitures</Text>
                 </Box>
               </Group>
-              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">
-                Instructions
-              </Button>
+              <Group>
+                <Button
+                  variant="light"
+                  color="white"
+                  leftSection={<IconPrinter size={18} />}
+                  onClick={handlePrint}
+                  radius="md"
+                >
+                  Imprimer
+                </Button>
+                <Button
+                  variant="light"
+                  color="white"
+                  leftSection={<IconInfoCircle size={18} />}
+                  onClick={() => setInfoModalOpen(true)}
+                  radius="md"
+                >
+                  Instructions
+                </Button>
+              </Group>
             </Group>
           </Card>
 
@@ -373,17 +556,14 @@ const MatieresManager: React.FC = () => {
                     {filteredMatieres.length} matière{filteredMatieres.length > 1 ? 's' : ''} trouvée{filteredMatieres.length > 1 ? 's' : ''}
                   </Text>
                 </Box>
-                <Group>
-                  <Button leftSection={<IconPrinter size={16} />} onClick={() => window.print()} variant="outline" color="teal">Imprimer</Button>
-                  <Button
-                    leftSection={<IconPlus size={16} />}
-                    onClick={openAddModal}
-                    variant="gradient"
-                    gradient={{ from: '#1b365d', to: '#2a4a7a' }}
-                  >
-                    Nouvelle matière
-                  </Button>
-                </Group>
+                <Button
+                  leftSection={<IconPlus size={16} />}
+                  onClick={openAddModal}
+                  variant="gradient"
+                  gradient={{ from: '#1b365d', to: '#2a4a7a' }}
+                >
+                  Nouvelle matière
+                </Button>
               </Group>
 
               <Divider />
@@ -573,45 +753,22 @@ const MatieresManager: React.FC = () => {
                             return;
                           }
                           try {
-
-                            // Recharger les catégories
-                            const cats =
-                              await apiGet(
-                                "/categories-matieres"
-                              );
-
+                            const cats = await apiGet("/categories-matieres");
                             setCategories(cats);
-
-                            const newCategorie =
-                              cats.find(
-                                (c: any) =>
-                                  c.nom_categorie ===
-                                  newCategorieName.trim()
-                              );
-
+                            const newCategorie = cats.find((c: any) => c.nom_categorie === newCategorieName.trim());
                             if (newCategorie) {
-
-                              setFormData({
-                                ...formData,
-                                categorie_id:
-                                  newCategorie.id
-                              });
+                              setFormData({ ...formData, categorie_id: newCategorie.id });
                             }
-
                             setNewCategorieName('');
-
                             notifications.show({
                               title: 'Succès',
                               message: 'Catégorie créée',
                               color: 'green'
                             });
-
                           } catch (err: any) {
-
                             notifications.show({
                               title: 'Erreur',
-                              message:
-                                err.message,
+                              message: err.message,
                               color: 'red'
                             });
                           }
@@ -701,7 +858,7 @@ const MatieresManager: React.FC = () => {
             </form>
           </Modal>
 
-          {/* Modal gestion stock (Ajout/Retrait avec historique) */}
+          {/* Modal gestion stock */}
           <Modal
             opened={stockModalOpened}
             onClose={closeStockModal}
@@ -740,7 +897,7 @@ const MatieresManager: React.FC = () => {
                 label={stockAction === 'add' ? "Coût unitaire d'achat (FCFA)" : "Valeur unitaire (FCFA)"}
                 placeholder="0"
                 value={formData.prix_achat || 0}
-                onChange={(_value) => {/* Optionnel : stocker le coût */ }}
+                onChange={(_value) => {/* Optionnel : stocker le coût */}}
                 size="md" radius="md" leftSection={<Text size="sm" fw={600}>FCFA</Text>} thousandSeparator=" " hideControls
               />
 
@@ -777,6 +934,7 @@ const MatieresManager: React.FC = () => {
               </Group>
             </Stack>
           </Modal>
+
           {/* Modal confirmation suppression */}
           <Modal
             opened={deleteModalOpened}

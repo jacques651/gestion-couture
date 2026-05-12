@@ -13,21 +13,17 @@ import {
   Table,
   Box,
   Image,
-  LoadingOverlay,
   Center,
   NumberInput,
   Select,
   Badge,
+  Loader,
 } from '@mantine/core';
 import {
   IconPrinter,
   IconX,
   IconCash,
 } from '@tabler/icons-react';
-import {
-  apiGet
-}
-  from "../../services/api";
 
 interface LigneFacture {
   designation: string;
@@ -54,23 +50,46 @@ interface ConfigurationAtelier {
   message_facture_defaut?: string;
 }
 interface VenteFacture {
+
   id?: number;
+
   code_vente?: string;
-  type_vente?: 'commande' | 'pret_a_porter' | 'matiere';
+
+  type_vente?:
+  | 'commande'
+  | 'pret_a_porter'
+  | 'matiere';
+
   date_vente?: string;
+
   client_id?: string;
+
   client_nom?: string;
+
+  client_telephone?: string;
+
   mode_paiement?: string;
+
   montant_total?: number;
+
   montant_regle?: number;
+
   montant_restant?: number;
+
   statut?: string;
+
   observation?: string;
+
   lignes?: LigneFacture[];
+
   total_general?: number;
+
   avance?: number;
+
   reste?: number;
+
   numero?: string;
+
   date_commande?: string;
 }
 
@@ -83,12 +102,48 @@ interface ModalFactureProps {
 
 const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPaiement, onRefresh }) => {
   const printRef = useRef<HTMLDivElement>(null);
-  const [atelier, setAtelier] = useState<ConfigurationAtelier | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [atelier] = useState<ConfigurationAtelier | null>(null);
+const [
+
+  loading,
+
+  setLoading
+
+] = useState(false);
   const [montantPaiement, setMontantPaiement] = useState(0);
   const [modePaiement, setModePaiement] = useState('Espèces');
   const [showPaiementModal, setShowPaiementModal] = useState(false);
   const [lignes, setLignes] = useState<LigneFacture[]>(vente.lignes || []);
+  useEffect(() => {
+
+    if (!vente?.id) return;
+
+    const chargerDetails = async () => {
+
+      try {
+
+        const response =
+          await fetch(
+            `http://localhost:3001/ventes/${vente.id}/details`
+          );
+
+        const data =
+          await response.json();
+
+        setLignes(data);
+
+      } catch (error) {
+
+        console.error(
+          "Erreur chargement détails",
+          error
+        );
+      }
+    };
+
+    chargerDetails();
+
+  }, [vente]);
 
   const total = vente?.total_general ?? vente?.montant_total ?? 0;
   const regle = vente?.avance ?? vente?.montant_regle ?? 0;
@@ -102,67 +157,59 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
 
   useEffect(() => {
 
-    const load = async () => {
+  if (!vente?.id) {
+
+    setLignes([]);
+
+    setLoading(false);
+
+    return;
+  }
+
+  const chargerDetails =
+    async () => {
 
       try {
 
-        /**
-         * Atelier
-         */
-        const conf =
-          await apiGet(
-            "/atelier"
-          );
-
-        setAtelier(
-          conf
+        console.log(
+          "FACTURE VENTE ID:",
+          vente.id
         );
 
-        /**
-         * Détails vente
-         */
-        if (
-          (!lignes || lignes.length === 0)
-          &&
-          vente.id
-        ) {
+        setLoading(true);
 
-          const details =
-            await apiGet(
-              `/ventes/${vente.id}/details`
-            );
-
-          const lignesFormatted =
-            details.map((d: any) => ({
-
-              designation:
-                d.designation ||
-                "Sans désignation",
-
-              quantite:
-                d.quantite || 0,
-
-              prix_unitaire:
-                d.prix_unitaire || 0,
-
-              total:
-                d.total || 0,
-
-              type:
-                d.type_ligne
-            }));
-
-          setLignes(
-            lignesFormatted
+        const response =
+          await fetch(
+            `http://localhost:4000/ventes/${vente.id}/details`
           );
-        }
 
-      } catch (e) {
+        console.log(
+          "STATUS:",
+          response.status
+        );
+
+        const data =
+          await response.json();
+
+        console.log(
+          "DETAILS FACTURE:",
+          data
+        );
+
+        setLignes(
+          Array.isArray(data)
+            ? data
+            : []
+        );
+
+      } catch (error) {
 
         console.error(
-          "Erreur chargement facture",
-          e
+          "ERREUR FACTURE:",
+          error
         );
+
+        setLignes([]);
 
       } finally {
 
@@ -170,9 +217,10 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
       }
     };
 
-    load();
+  chargerDetails();
 
-  }, [vente.id]);
+}, [vente?.id]);
+
   const handlePrint = () => {
     const printContent = printRef.current;
     if (!printContent) return;
@@ -237,7 +285,7 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
 
         details:
           `Impression facture : ${codeVente} - ` +
-          `${vente.client_nom || 'Client inconnu'}`
+          `${vente.client_nom || 'Client comptoir'}`
       });
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
@@ -344,12 +392,16 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
   };
 
   if (loading) {
-    return (
-      <Modal opened={true} onClose={onClose} size="xl" centered title="Facture">
-        <Center style={{ height: 200 }}><LoadingOverlay visible={true} /></Center>
-      </Modal>
-    );
-  }
+
+  return (
+
+    <Center py="xl">
+
+      <Loader />
+
+    </Center>
+  );
+}
 
   return (
     <>
@@ -399,7 +451,11 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
                   <Box>
                     <Text size="xs" c="dimmed">CLIENT</Text>
                     <Text size="sm" fw={600}>{vente.client_nom || 'Client non renseigné'}</Text>
-                    {vente.client_id && <Text size="xs" c="dimmed">Tél : {vente.client_id}</Text>}
+                    {vente.client_telephone && (
+                      <Text size="xs" c="dimmed">
+                        Tél : {vente.client_telephone}
+                      </Text>
+                    )}
                   </Box>
                 </Group>
                 <Box ta="right">

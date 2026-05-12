@@ -20,7 +20,6 @@ import {
   Modal,
   Divider,
   ThemeIcon,
-  SimpleGrid,
   Container,
   Avatar,
   Center,
@@ -35,9 +34,9 @@ import {
   IconSearch,
   IconRefresh,
   IconInfoCircle,
-  IconCoin,
   IconTag,
   IconCheck,
+  IconPrinter,
 } from '@tabler/icons-react';
 import {
   apiGet,
@@ -59,37 +58,24 @@ const ListeTypesPrestations: React.FC = () => {
   const itemsPerPage = 10;
 
   const chargerTypes = async () => {
-
     try {
-
       setLoading(true);
-
-      const result =
-        await apiGet(
-          "/types-prestations"
-        );
-
+      const result = await apiGet("/types-prestations");
       setTypes(result || []);
-
     } catch (error) {
-
       console.error(error);
-
     } finally {
-
       setLoading(false);
     }
   };
+
   useEffect(() => {
     chargerTypes();
   }, []);
 
   const supprimerType = async (id: number, nom: string) => {
-    if (!
-      globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
-    await apiDelete(
-      `/types-prestations/${id}`
-    );
+    if (!globalThis.confirm(`Supprimer le type "${nom}" ?`)) return;
+    await apiDelete(`/types-prestations/${id}`);
     await chargerTypes();
     setSuccessMessage(`Type "${nom}" supprimé avec succès`);
     setShowSuccess(true);
@@ -102,6 +88,172 @@ const ListeTypesPrestations: React.FC = () => {
     setCurrentPage(1);
   };
 
+  // Fonction d'impression
+  const handlePrint = () => {
+    // Créer un iframe invisible pour l'impression
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    document.body.appendChild(iframe);
+    
+    const typesFiltres = types.filter(t =>
+      t.nom.toLowerCase().includes(recherche.toLowerCase())
+    );
+    
+    // Générer le contenu HTML à imprimer
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Liste des types de prestations</title>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, Helvetica, sans-serif; 
+            padding: 20px; 
+            background: white; 
+            color: black;
+          }
+          .print-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #333;
+          }
+          .print-header h1 { 
+            margin-bottom: 10px; 
+            font-size: 24px;
+          }
+          .print-header p { color: #666; font-size: 14px; }
+          .print-date { 
+            text-align: right; 
+            margin-bottom: 20px; 
+            font-size: 12px; 
+            color: #666;
+          }
+                   
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+          }
+          th, td { 
+            border: 1px solid #333; 
+            padding: 10px 8px; 
+            text-align: left; 
+            vertical-align: middle;
+          }
+          th { 
+            background: #1b365d;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+          }
+          td { font-size: 12px; }
+          .text-right { text-align: right; }
+          .text-center { text-align: center; }
+          .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+          }
+          .badge-primary { background: #e3f2fd; color: #1976d2; }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+          }
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <h1>📋 Types de Prestations</h1>
+          <p>Gestion des différents types de prestations de l'atelier</p>
+        </div>
+        <div class="print-date">
+          Date d'impression : ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
+        </div>
+        ${recherche ? `
+          <div style="margin-bottom: 20px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+            <strong>🔍 Recherche :</strong> "${recherche}"
+          </div>
+        ` : ''}
+        <table>
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th class="text-right">Valeur par défaut</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${typesFiltres.map(type => `
+              <tr>
+                <td>
+                  <strong>${type.nom}</strong>
+                 </td>
+                <td class="text-right">
+                  <span class="badge badge-primary">${(type.prix_par_defaut || 0).toLocaleString()} FCFA</span>
+                 </td>
+               </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>Logiciel de gestion de couture - Version 1.0</p>
+          <p>Document généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Écrire le contenu dans l'iframe
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
+      
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 100);
+      };
+      
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 100);
+        }
+      }, 500);
+    }
+  };
+
   const typesFiltres = types.filter(t =>
     t.nom.toLowerCase().includes(recherche.toLowerCase())
   );
@@ -110,17 +262,6 @@ const ListeTypesPrestations: React.FC = () => {
   const paginatedData = typesFiltres.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
-  );
-
-  const totalValeur =
-
-  typesFiltres.reduce(
-
-    (sum, t) =>
-
-      sum + (t.prix_par_defaut || 0),
-
-    0
   );
 
   if (loading) {
@@ -156,7 +297,7 @@ const ListeTypesPrestations: React.FC = () => {
 
   return (
     <Box p="md">
-      <Container size="full ">
+      <Container size="full">
         <Stack gap="lg">
           {/* Notification de succès */}
           {showSuccess && (
@@ -175,8 +316,8 @@ const ListeTypesPrestations: React.FC = () => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(19, 65, 134, 0.2)' }}>
-                  <IconLayersOff size={30} color="black" />
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconLayersOff size={30} color="white" />
                 </Avatar>
                 <Box>
                   <Title order={1} c="white" size="h2">Types de prestations</Title>
@@ -190,55 +331,28 @@ const ListeTypesPrestations: React.FC = () => {
                   </Group>
                 </Box>
               </Group>
-              <Button
-                variant="light"
-                color="white"
-                leftSection={<IconInfoCircle size={18} />}
-                onClick={() => setInfoModalOpen(true)}
-                radius="md"
-              >
-                Instructions
-              </Button>
+              <Group>
+                <Button
+                  variant="light"
+                  color="white"
+                  leftSection={<IconPrinter size={18} />}
+                  onClick={handlePrint}
+                  radius="md"
+                >
+                  Imprimer
+                </Button>
+                <Button
+                  variant="light"
+                  color="white"
+                  leftSection={<IconInfoCircle size={18} />}
+                  onClick={() => setInfoModalOpen(true)}
+                  radius="md"
+                >
+                  Instructions
+                </Button>
+              </Group>
             </Group>
           </Card>
-
-          {/* Statistiques KPI */}
-          <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-            <Paper p="md" radius="lg" withBorder>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Total prestations</Text>
-                <ThemeIcon size="lg" radius="md" color="blue" variant="light">
-                  <IconLayersOff size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={700} size="xl" c="blue">{types.length}</Text>
-              <Text size="xs" c="dimmed" mt={4}>Types de prestations</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#e8f4fd' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Valeur totale</Text>
-                <ThemeIcon size="lg" radius="md" color="cyan" variant="light">
-                  <IconCoin size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={700} size="xl" c="cyan">{totalValeur.toLocaleString()} FCFA</Text>
-              <Text size="xs" c="dimmed" mt={4}>Somme des valeurs par défaut</Text>
-            </Paper>
-
-            <Paper p="md" radius="lg" withBorder style={{ backgroundColor: '#ebfbee' }}>
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={600}>Valeur moyenne</Text>
-                <ThemeIcon size="lg" radius="md" color="green" variant="light">
-                  <IconCoin size={18} />
-                </ThemeIcon>
-              </Group>
-              <Text fw={700} size="xl" c="green">
-                {types.length > 0 ? Math.round(totalValeur / types.length).toLocaleString() : 0} FCFA
-              </Text>
-              <Text size="xs" c="dimmed" mt={4}>Par type de prestation</Text>
-            </Paper>
-          </SimpleGrid>
 
           {/* Barre d'outils */}
           <Card withBorder radius="lg" shadow="sm" p="md">
@@ -337,15 +451,7 @@ const ListeTypesPrestations: React.FC = () => {
                                 size="md"
                                 variant="subtle"
                                 color="red"
-                                onClick={() =>
-
-  supprimerType(
-
-    t.id || 0,
-
-    t.nom
-  )
-}
+                                onClick={() => supprimerType(t.id || 0, t.nom)}
                               >
                                 <IconTrash size={18} />
                               </ActionIcon>

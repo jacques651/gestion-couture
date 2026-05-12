@@ -54,9 +54,21 @@ const FacturesRecus: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [showFacture, setShowFacture] = useState(false);
-  const [showRecu, setShowRecu] = useState(false);
+  const [
+
+    showRecu,
+
+    setShowRecu
+
+  ] = useState(false);
   const [factureData, setFactureData] = useState<any>(null);
-  const [recuVenteId, setRecuVenteId] = useState<number | null>(null);
+  const [
+
+    recuData,
+
+    setRecuData
+
+  ] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -64,74 +76,74 @@ const FacturesRecus: React.FC = () => {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const itemsPerPage = 10;
 
- const charger =
-async () => {
+  const charger =
+    async () => {
 
-  setLoading(true);
+      setLoading(true);
 
-  try {
+      try {
 
-    const res =
-      await apiGet(
-        "/ventes"
-      );
+        const res =
+          await apiGet(
+            "/ventes"
+          );
 
-    const data =
+        const data =
 
-      (res || []).map(
+          (res || []).map(
 
-        (v: any) => ({
+            (v: any) => ({
 
-          ...v,
+              ...v,
 
-          montant_total:
-            Number(
-              v.montant_total || 0
-            ),
+              montant_total:
+                Number(
+                  v.montant_total || 0
+                ),
 
-          montant_regle:
-            Number(
-              v.montant_regle || 0
-            ),
+              montant_regle:
+                Number(
+                  v.montant_regle || 0
+                ),
 
-          montant_restant:
+              montant_restant:
 
-            Number(
-              v.montant_total || 0
-            )
+                Number(
+                  v.montant_total || 0
+                )
 
-            -
+                -
 
-            Number(
-              v.montant_regle || 0
-            )
-        })
-      );
+                Number(
+                  v.montant_regle || 0
+                )
+            })
+          );
 
-    setVentes(
-      data
-    );
+        setVentes(
+          data
+        );
 
-  } catch (error) {
+      } catch (error) {
 
-    console.error(
+        console.error(
 
-      "Erreur chargement:",
+          "Erreur chargement:",
 
-      error
-    );
+          error
+        );
 
-  } finally {
+      } finally {
 
-    setLoading(false);
-  }
-};
+        setLoading(false);
+      }
+    };
   useEffect(() => { charger(); }, []);
 
   const getStatut = (vente: Vente) => {
-    if (vente.statut === 'PAYEE' || vente.montant_restant <= 0) 
+    if (vente.statut === 'PAYEE' || vente.montant_restant <= 0)
       return { label: 'Payé', color: 'green' };
-    if (vente.montant_regle > 0) 
+    if (vente.montant_regle > 0)
       return { label: 'Partiel', color: 'orange' };
     return { label: 'Non payé', color: 'red' };
   };
@@ -147,28 +159,97 @@ async () => {
 
   const ouvrirFacture = (vente: Vente) => {
     if (vente.type_vente !== 'commande') return;
-    
+
     setFactureData({
-      client: {
-        nom_prenom: vente.client_nom || 'Client non renseigné',
-        telephone_id: vente.client_id || '',
-      },
-      lignes: [],
-      total_general: vente.montant_total || 0,
-      avance: vente.montant_regle || 0,
-      reste: vente.montant_restant || 0,
-      numero: vente.code_vente || 'N/A',
-      date_commande: vente.date_vente || new Date().toISOString(),
-      id: vente.id,
-      statut: vente.statut,
+
+      id:
+        vente.id,
+
+      code_vente:
+        vente.code_vente,
+
+      type_vente:
+        vente.type_vente,
+
+      date_vente:
+        vente.date_vente,
+
+      client_id:
+        vente.client_id,
+
+      client_nom:
+        vente.client_nom,
+
+      client_telephone:
+        '',
+
+      montant_total:
+        vente.montant_total || 0,
+
+      montant_regle:
+        vente.montant_regle || 0,
+
+      montant_restant:
+        vente.montant_restant || 0,
+
+      statut:
+        vente.statut,
+
+      observation:
+        vente.observation,
+
+      lignes: []
     });
     setShowFacture(true);
   };
+  const ouvrirRecu = (
 
-  const ouvrirRecu = (vente: Vente) => {
-    if (vente.montant_regle <= 0) return;
-    setRecuVenteId(vente.id);
-    setShowRecu(true);
+    vente: Vente
+
+  ) => {
+
+    if (
+
+      vente.montant_regle <= 0
+
+    ) return;
+
+    setRecuData({
+
+      id:
+        vente.id,
+
+      code_vente:
+        vente.code_vente,
+
+      client_nom:
+        vente.client_nom,
+
+      client_id:
+        vente.client_id,
+
+      date_vente:
+        vente.date_vente,
+
+      montant_total:
+        vente.montant_total,
+
+      montant_regle:
+        vente.montant_regle,
+
+      montant_restant:
+        vente.montant_restant,
+
+      mode_paiement:
+        vente.mode_paiement,
+
+      statut:
+        vente.statut
+    });
+
+    setShowRecu(
+      true
+    );
   };
 
   const handleCloseFacture = () => {
@@ -178,14 +259,21 @@ async () => {
   };
 
   const handleCloseRecu = () => {
-    setShowRecu(false);
-    setRecuVenteId(null);
+
+    setShowRecu(
+      false
+    );
+
+    setRecuData(
+      null
+    );
+
     charger();
   };
 
   const ventesFiltrees = ventes.filter(vente => {
     const matchSearch = (vente.client_nom?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-                        (vente.code_vente?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+      (vente.code_vente?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     if (!matchSearch) return false;
     if (filterType !== 'all' && vente.type_vente !== filterType) return false;
     if (filterStatus === 'paye') return vente.montant_restant <= 0;
@@ -227,10 +315,10 @@ async () => {
     );
   }
 
-  if (showRecu && recuVenteId) {
+  if (showRecu && recuData) {
     return (
       <ModalRecu
-        commande={{ id: recuVenteId }}
+        commande={recuData}
         onClose={handleCloseRecu}
       />
     );
@@ -348,10 +436,10 @@ async () => {
                                   <IconFileText size={14} /> Facture
                                 </Button>
                               )}
-                              <Button 
-                                variant="light" 
-                                color="green" 
-                                size="compact-sm" 
+                              <Button
+                                variant="light"
+                                color="green"
+                                size="compact-sm"
                                 onClick={() => ouvrirRecu(vente)}
                                 disabled={!aDesPaiements}
                               >

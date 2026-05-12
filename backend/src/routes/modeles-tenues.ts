@@ -33,5 +33,77 @@ router.get(
     }
   }
 );
+router.post(
 
+  "/",
+
+  async (req, res) => {
+
+    try {
+
+      const {
+
+        designation,
+        description,
+        image_url,
+        categorie,
+        est_actif
+
+      } = req.body;
+
+      const code_modele =
+        `MOD-${
+          Date.now()
+        }`;
+
+      const result =
+        await pool.query(
+          `
+          INSERT INTO modeles_tenues (
+
+            designation,
+            description,
+            code_modele,
+            image_url,
+            categorie,
+            est_actif
+
+          )
+
+          VALUES (
+
+            $1, $2, $3,
+            $4, $5, $6
+
+          )
+
+          RETURNING *
+          `,
+          [
+
+            designation,
+            description,
+            code_modele,
+            image_url,
+            categorie,
+            est_actif
+          ]
+        );
+
+      res.json(
+        result.rows[0]
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+
+        error:
+          "Erreur création modèle"
+      });
+    }
+  }
+);
 export default router;

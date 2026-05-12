@@ -116,33 +116,33 @@ router.post(
 
           await client.query(
             `
-            INSERT INTO vente_details (
+    INSERT INTO vente_details (
 
-              vente_id,
+      vente_id,
 
-              article_id,
-              matiere_id,
+      article_id,
+      matiere_id,
 
-              designation,
+      designation,
 
-              quantite,
+      quantite,
 
-              prix_unitaire,
+      prix_unitaire,
 
-              total,
+      total,
 
-              taille_libelle
+      taille_libelle
 
-            )
+    )
 
-            VALUES (
+    VALUES (
 
-              $1, $2, $3,
-              $4, $5, $6,
-              $7, $8
+      $1, $2, $3,
+      $4, $5, $6,
+      $7, $8
 
-            )
-            `,
+    )
+    `,
             [
 
               vente.id,
@@ -161,7 +161,54 @@ router.post(
               item.taille_libelle || null
             ]
           );
+
+          await client.query(
+            `
+    INSERT INTO mouvements_stock (
+
+      type_mouvement,
+
+      code_mouvement,
+
+      designation,
+
+      quantite,
+
+      cout_unitaire,
+
+      motif,
+
+      observation
+
+    )
+
+    VALUES (
+
+      $1, $2, $3,
+      $4, $5, $6,
+      $7
+
+    )
+    `,
+            [
+
+              'sortie',
+
+              code_vente,
+
+              item.designation,
+
+              item.quantite,
+
+              item.prix_unitaire,
+
+              'Vente produit',
+
+              observation || null
+            ]
+          );
         }
+
       }
 
       await client.query(
@@ -209,11 +256,43 @@ router.get(
       const result =
         await pool.query(
           `
-          SELECT *
-          FROM ventes
-          WHERE COALESCE(est_supprime, 0) = 0
-          ORDER BY date_vente DESC
-          `
+    SELECT
+
+      v.*,
+
+      c.nom_prenom
+      AS client_nom,
+
+      COALESCE(
+
+        SUM(
+          vd.quantite * vd.prix_unitaire
+        ),
+
+        0
+
+      ) AS montant_total
+
+    FROM ventes v
+
+    LEFT JOIN clients c
+      ON c.id = v.client_id
+
+    LEFT JOIN vente_details vd
+      ON vd.vente_id = v.id
+
+    WHERE COALESCE(
+      v.est_supprime,
+      0
+    ) = 0
+
+    GROUP BY
+      v.id,
+      c.nom_prenom
+
+    ORDER BY
+      v.date_vente DESC
+    `
         );
 
       res.json(
@@ -222,29 +301,123 @@ router.get(
 
           ...r,
 
-          quantite:
-            Number(r.quantite),
+          montant_total:
+            Number(r.montant_total || 0),
 
-          prix_unitaire:
-            Number(r.prix_unitaire),
-
-          total:
-            Number(r.total)
+          montant_regle:
+            Number(r.montant_regle || 0)
         }))
       );
+
+    } catch (error: any) {
+
+      console.error(
+        "❌ ERREUR SQL VENTES:",
+        error
+      );
+
+      res.status(500).json({
+
+        error:
+          error.message,
+
+        detail:
+          error.detail || null,
+
+        stack:
+          error.stack || null
+      });
+    }
+  }
+);
+
+router.get(
+
+  "/generate-code",
+
+  async (_, res) => {
+
+    try {
+
+      const year =
+        new Date()
+          .getFullYear();
+
+      const result =
+        await pool.query(
+          `
+          SELECT COUNT(*)::int AS total
+          FROM ventes
+          `
+        );
+
+      const total =
+        result.rows[0].total + 1;
+
+      const code =
+        `VTE-${year}-${String(total)
+          .padStart(4, '0')}`;
+
+      res.json({
+        code
+      });
 
     } catch (error) {
 
       console.error(error);
 
       res.status(500).json({
+
         error:
-          "Erreur récupération ventes"
+          "Erreur génération code"
       });
     }
   }
 );
 
+router.get(
+
+  "/generate-code",
+
+  async (_, res) => {
+
+    try {
+
+      const year =
+        new Date()
+          .getFullYear();
+
+      const result =
+        await pool.query(
+          `
+          SELECT COUNT(*)::int AS total
+          FROM ventes
+          `
+        );
+
+      const total =
+        result.rows[0].total + 1;
+
+      const code =
+        `VTE-${year}-${String(total)
+          .padStart(4, '0')}`;
+
+      res.json({
+        code
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+
+        error:
+          "Erreur génération code"
+      });
+    }
+  }
+);
 /**
  * =========================
  * DELETE VENTE
@@ -444,6 +617,7 @@ router.put(
  * =========================
  */
 router.get(
+
   "/:id/details",
 
   async (req, res) => {
@@ -456,33 +630,64 @@ router.get(
       const result =
         await pool.query(
           `
-          SELECT
+    SELECT
 
-            vd.*,
+      vd.id,
 
-            CASE
+      vd.vente_id,
 
-              WHEN vd.article_id
-                IS NOT NULL
-              THEN 'article'
+      vd.article_id,
 
-              WHEN vd.matiere_id
-                IS NOT NULL
-              THEN 'matiere'
+      vd.matiere_id,
 
-              ELSE 'prestation'
+      vd.designation,
 
-            END as type_ligne
+      vd.quantite,
 
-          FROM vente_details vd
+      vd.prix_unitaire,
 
-          WHERE vd.vente_id = $1
-          `,
+      vd.total,
+
+      vd.taille_libelle,
+
+      CASE
+
+        WHEN vd.article_id
+          IS NOT NULL
+        THEN 'article'
+
+        WHEN vd.matiere_id
+          IS NOT NULL
+        THEN 'matiere'
+
+        ELSE 'prestation'
+
+      END AS type_ligne
+
+    FROM vente_details vd
+
+    WHERE vd.vente_id = $1
+
+    ORDER BY vd.id ASC
+    `,
           [id]
         );
 
       res.json(
-        result.rows
+
+        result.rows.map(r => ({
+
+          ...r,
+
+          quantite:
+            Number(r.quantite || 0),
+
+          prix_unitaire:
+            Number(r.prix_unitaire || 0),
+
+          total:
+            Number(r.total || 0)
+        }))
       );
 
     } catch (error) {
@@ -490,6 +695,7 @@ router.get(
       console.error(error);
 
       res.status(500).json({
+
         error:
           "Erreur détails vente"
       });

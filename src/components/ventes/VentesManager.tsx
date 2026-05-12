@@ -65,16 +65,10 @@ const VentesManager: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [loading, setLoading] = useState(false);
   const [ventes, setVentes] = useState<Vente[]>([]);
-  const [
-    ,
-    setSelectedDetails
-  ] = useState<any[]>(
-    []
-  );
+  const [selectedDetails, setSelectedDetails] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
-  const [details] = useState<any[]>([]);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const itemsPerPage = 10;
   const [venteType, setVenteType] = useState<VenteType>('commande');
@@ -459,7 +453,7 @@ const VentesManager: React.FC = () => {
 
         setLoading(true);
 
-        const details =
+        const detailsData =
           await getVenteDetails(
             vente.id
           );
@@ -467,7 +461,7 @@ const VentesManager: React.FC = () => {
         setSelectedVente(vente);
 
         setSelectedDetails(
-          details || []
+          detailsData || []
         );
 
         setDetailsModalOpen(true);
@@ -488,6 +482,7 @@ const VentesManager: React.FC = () => {
         setLoading(false);
       }
     };
+    
   const handleEditVente =
     async (vente: Vente) => {
 
@@ -506,7 +501,7 @@ const VentesManager: React.FC = () => {
         /**
          * Détails
          */
-        const details =
+        const detailsData =
           await getVenteDetails(
             vente.id
           );
@@ -519,7 +514,7 @@ const VentesManager: React.FC = () => {
           ...data,
 
           lignes:
-            details || []
+            detailsData || []
         });
 
         setEditModalOpen(true);
@@ -1273,7 +1268,7 @@ const VentesManager: React.FC = () => {
       <Box p="md"><Container size="full"><Stack gap="lg">
         <Card withBorder radius="lg" p="lg" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
           <Group justify="space-between">
-            <Group gap="md"><Avatar size={50} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><IconShoppingBag size={24} color="black" /></Avatar><Box><Title order={2} c="white">Gestion des Ventes</Title><Text c="gray.3" size="sm">Consultez l'historique et créez de nouvelles ventes</Text></Box></Group>
+            <Group gap="md"><Avatar size={50} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><IconShoppingBag size={24} color="white" /></Avatar><Box><Title order={2} c="white">Gestion des Ventes</Title><Text c="gray.3" size="sm">Consultez l'historique et créez de nouvelles ventes</Text></Box></Group>
             <Button leftSection={<IconPlus size={16} />} onClick={() => { resetForm(); generateCode(); loadFormData(); setViewMode('form'); }} variant="white" color="dark">Nouvelle vente</Button>
           </Group>
         </Card>
@@ -1415,24 +1410,33 @@ const VentesManager: React.FC = () => {
           </Card>
 
           <Table striped highlightOnHover>
-            <Table.Thead><Table.Tr><Table.Th>Code</Table.Th><Table.Th>Type</Table.Th><Table.Th>Date</Table.Th><Table.Th>Client</Table.Th><Table.Th>Total</Table.Th><Table.Th>Réglé</Table.Th><Table.Th>Reste</Table.Th><Table.Th>Statut</Table.Th><Table.Th>
-              Actions
-            </Table.Th><Table.Th style={{ textAlign: 'center' }}>Actions</Table.Th></Table.Tr></Table.Thead>
+            <Table.Thead><Table.Tr><Table.Th>Code</Table.Th><Table.Th>Type</Table.Th><Table.Th>Date</Table.Th><Table.Th>Client</Table.Th><Table.Th>Total</Table.Th><Table.Th>Réglé</Table.Th><Table.Th>Reste</Table.Th><Table.Th>Statut</Table.Th><Table.Th colSpan={2} style={{ textAlign: 'center' }}>Actions</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>
               {paginatedVentes.length === 0 ? <Table.Tr><Table.Td colSpan={10} style={{ textAlign: 'center' }}>Aucune vente trouvée</Table.Td></Table.Tr> :
                 paginatedVentes.map((vente) => {
-                  const isCommandeSurMesure = vente.type_vente === 'commande';
+
+                  const montantRestant =
+
+                    Number(vente.montant_total || 0)
+
+                    -
+
+                    Number(vente.montant_regle || 0);
+
+                  const isCommandeSurMesure =
+                    vente.type_vente === 'commande';
+
                   return (
                     <Table.Tr key={vente.id}>
                       <Table.Td><Badge variant="light" color="blue">{vente.code_vente}</Badge></Table.Td>
-                      <Table.Td><Badge size="sm" variant="light" color={isCommandeSurMesure ? 'violet' : 'cyan'}>{isCommandeSurMesure ? '📝 Sur mesure' : vente.type_vente === 'pret_a_porter' ? '👕 Prêt-à-porter' : '📦 Matière'}</Badge></Table.Td>
+                      <Table.Td><Badge size="sm" variant="light" color={isCommandeSurMesure ? 'violet' : vente.type_vente === 'pret_a_porter' ? 'cyan' : 'teal'}>{isCommandeSurMesure ? '📝 Sur mesure' : vente.type_vente === 'pret_a_porter' ? '👕 Prêt-à-porter' : '📦 Matière'}</Badge></Table.Td>
                       <Table.Td>{new Date(vente.date_vente).toLocaleDateString('fr-FR')}</Table.Td>
                       <Table.Td>{vente.client_nom || '-'}</Table.Td>
                       <Table.Td>{formatPrice(vente.montant_total)}</Table.Td>
                       <Table.Td>{formatPrice(vente.montant_regle)}</Table.Td>
-                      <Table.Td>{formatPrice(vente.montant_restant)}</Table.Td>
+                      <Table.Td>{formatPrice(montantRestant)}</Table.Td>
                       <Table.Td>{getStatusBadge(vente.statut)}</Table.Td>
-                      <Table.Td>
+                      <Table.Td colSpan={2}>
                         <Group gap={4} justify="center" wrap="nowrap">
                           <Tooltip label="Voir les détails">
                             <ActionIcon variant="light" color="blue" size="sm" onClick={() => handleViewDetails(vente)}>
@@ -1493,15 +1497,522 @@ const VentesManager: React.FC = () => {
         </Card>
       </Stack></Container>
 
-        {/* MODALS DE LA LISTE - À L'INTÉRIEUR DU RETURN */}
-        <Modal opened={detailsModalOpen} onClose={() => setDetailsModalOpen(false)} title={<Group gap="sm"><IconEye size={20} color="white" /><Text fw={700} c="white">Détails vente {selectedVente?.code_vente}</Text></Group>} size="lg" centered radius="md" styles={{ header: { backgroundColor: '#1b365d', padding: '14px 20px' }, title: { color: 'white' }, body: { padding: '20px' } }}>
-          {selectedVente && <Stack gap="md">
-            <Paper p="md" radius="md" withBorder bg="gray.0"><SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md"><Box><Text size="xs" c="dimmed">Type</Text><Badge variant="light" color={selectedVente.type_vente === 'commande' ? 'violet' : selectedVente.type_vente === 'pret_a_porter' ? 'cyan' : 'teal'}>{selectedVente.type_vente === 'commande' ? 'Sur mesure' : selectedVente.type_vente === 'pret_a_porter' ? 'Prêt-à-porter' : 'Matière'}</Badge></Box><Box><Text size="xs" c="dimmed">Client</Text><Text size="sm" fw={500}>{selectedVente.client_nom || '-'}</Text></Box><Box><Text size="xs" c="dimmed">Date</Text><Text size="sm">{new Date(selectedVente.date_vente).toLocaleDateString('fr-FR')}</Text></Box><Box><Text size="xs" c="dimmed">Paiement</Text><Text size="sm">{selectedVente.mode_paiement || '-'}</Text></Box></SimpleGrid></Paper>
-            <Paper p="md" radius="md" withBorder><Text fw={600} size="sm" mb="sm">📋 Articles</Text><Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Désignation</Table.Th><Table.Th ta="center">Qté</Table.Th><Table.Th ta="right">Prix unit.</Table.Th><Table.Th ta="right">Total</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{details.map((d, i) => (<Table.Tr key={d.id || i}><Table.Td><Text size="sm" fw={500}>{d.designation}</Text>{d.taille_libelle && d.taille_libelle !== 'null' && <Text size="xs" c="dimmed">{d.taille_libelle}</Text>}</Table.Td><Table.Td ta="center">{d.quantite}</Table.Td><Table.Td ta="right">{formatPrice(d.prix_unitaire)}</Table.Td><Table.Td ta="right"><Text fw={600}>{formatPrice(d.total)}</Text></Table.Td></Table.Tr>))}</Table.Tbody></Table><Divider my="sm" /><Group justify="space-between"><Text fw={700}>Total général</Text><Text fw={700} size="lg" c="blue">{formatPrice(selectedVente.montant_total)}</Text></Group><Group justify="space-between" mt={4}><Text size="sm" c="dimmed">Réglé</Text><Text size="sm" c="green">{formatPrice(selectedVente.montant_regle)}</Text></Group><Group justify="space-between"><Text size="sm" c="dimmed">Reste</Text><Text size="sm" c="red">{formatPrice(selectedVente.montant_restant)}</Text></Group></Paper>
-            {selectedVente.observation && <Paper p="md" radius="md" withBorder bg="gray.0"><Text size="xs" c="dimmed" mb={4}>📝 Observation</Text><Text size="sm">{selectedVente.observation}</Text></Paper>}
-            <Group justify="flex-end" gap="sm"><Button variant="light" onClick={() => setDetailsModalOpen(false)}>Fermer</Button><Button leftSection={<IconReceipt size={16} />} variant="light" color="grape" onClick={() => { setDetailsModalOpen(false); handleShowRecu(selectedVente); }}>Reçu</Button>{selectedVente.type_vente === 'commande' && <Button leftSection={<IconFileInvoice size={16} />} variant="light" color="teal" onClick={() => { setDetailsModalOpen(false); handleShowFacture(selectedVente); }}>Facture</Button>}</Group>
-          </Stack>}
-        </Modal>
+        {/* MODAL DETAILS VENTE */}
+
+<Modal
+
+  opened={detailsModalOpen}
+
+  onClose={() => setDetailsModalOpen(false)}
+
+  title={
+
+    <Group gap="sm">
+
+      <IconEye
+        size={20}
+        color="white"
+      />
+
+      <Text
+        fw={700}
+        c="white"
+      >
+
+        Détails vente
+        {selectedVente?.code_vente}
+
+      </Text>
+
+    </Group>
+  }
+
+  size="lg"
+
+  centered
+
+  radius="md"
+
+  styles={{
+
+    header: {
+
+      backgroundColor:
+        '#1b365d',
+
+      padding:
+        '14px 20px'
+    },
+
+    title: {
+      color: 'white'
+    },
+
+    body: {
+      padding: '20px'
+    }
+  }}
+>
+
+  {selectedVente && (
+
+    <Stack gap="md">
+
+      {/* INFOS */}
+      <Paper
+        p="md"
+        radius="md"
+        withBorder
+        bg="gray.0"
+      >
+
+        <SimpleGrid
+          cols={{
+            base: 2,
+            sm: 4
+          }}
+          spacing="md"
+        >
+
+          <Box>
+
+            <Text
+              size="xs"
+              c="dimmed"
+            >
+              Type
+            </Text>
+
+            <Badge
+
+              variant="light"
+
+              color={
+                selectedVente.type_vente
+                  === 'commande'
+
+                  ? 'violet'
+
+                  : selectedVente.type_vente
+                    === 'pret_a_porter'
+
+                    ? 'cyan'
+
+                    : 'teal'
+              }
+            >
+
+              {selectedVente.type_vente
+                === 'commande'
+
+                ? 'Sur mesure'
+
+                : selectedVente.type_vente
+                  === 'pret_a_porter'
+
+                  ? 'Prêt-à-porter'
+
+                  : 'Matière'}
+
+            </Badge>
+
+          </Box>
+
+          <Box>
+
+            <Text
+              size="xs"
+              c="dimmed"
+            >
+              Client
+            </Text>
+
+            <Text
+              size="sm"
+              fw={500}
+            >
+
+              {selectedVente.client_nom || '-'}
+
+            </Text>
+
+          </Box>
+
+          <Box>
+
+            <Text
+              size="xs"
+              c="dimmed"
+            >
+              Date
+            </Text>
+
+            <Text size="sm">
+
+              {new Date(
+                selectedVente.date_vente
+              ).toLocaleDateString(
+                'fr-FR'
+              )}
+
+            </Text>
+
+          </Box>
+
+          <Box>
+
+            <Text
+              size="xs"
+              c="dimmed"
+            >
+              Paiement
+            </Text>
+
+            <Text size="sm">
+
+              {selectedVente.mode_paiement || '-'}
+
+            </Text>
+
+          </Box>
+
+        </SimpleGrid>
+
+      </Paper>
+
+      {/* DETAILS */}
+      <Paper
+        p="md"
+        radius="md"
+        withBorder
+      >
+
+        <Text
+          fw={600}
+          size="sm"
+          mb="sm"
+        >
+
+          📋 Articles
+
+        </Text>
+
+        <Table
+          striped
+          highlightOnHover
+        >
+
+          <Table.Thead>
+
+            <Table.Tr>
+
+              <Table.Th>
+                Désignation
+              </Table.Th>
+
+              <Table.Th ta="center">
+                Qté
+              </Table.Th>
+
+              <Table.Th ta="right">
+                Prix unit.
+              </Table.Th>
+
+              <Table.Th ta="right">
+                Total
+              </Table.Th>
+
+            </Table.Tr>
+
+          </Table.Thead>
+
+          <Table.Tbody>
+
+            {selectedDetails.length > 0 ? (
+
+              selectedDetails.map((detail: any, index: number) => (
+
+                <Table.Tr
+                  key={detail.id || index}
+                >
+
+                  <Table.Td>
+
+                    <Text
+                      size="sm"
+                      fw={500}
+                    >
+
+                      {detail.designation || '-'}
+
+                    </Text>
+
+                    {detail.taille_libelle
+
+                      &&
+
+                      detail.taille_libelle !== 'null'
+
+                      && (
+
+                        <Text
+                          size="xs"
+                          c="dimmed"
+                        >
+
+                          {detail.taille_libelle}
+
+                        </Text>
+                      )}
+
+                  </Table.Td>
+
+                  <Table.Td ta="center">
+
+                    {detail.quantite || 0}
+
+                  </Table.Td>
+
+                  <Table.Td ta="right">
+
+                    {formatPrice(
+                      detail.prix_unitaire || 0
+                    )}
+
+                  </Table.Td>
+
+                  <Table.Td ta="right">
+
+                    <Text fw={600}>
+
+                      {formatPrice(
+                        detail.total || 0
+                      )}
+
+                    </Text>
+
+                  </Table.Td>
+
+                </Table.Tr>
+              ))
+
+            ) : (
+
+              <Table.Tr>
+
+                <Table.Td
+                  colSpan={4}
+                  ta="center"
+                  py="md"
+                >
+
+                  <Text c="dimmed">
+
+                    Aucun détail disponible
+
+                  </Text>
+
+                </Table.Td>
+
+              </Table.Tr>
+            )}
+
+          </Table.Tbody>
+
+        </Table>
+
+        <Divider my="sm" />
+
+        <Group justify="space-between">
+
+          <Text fw={700}>
+            Total général
+          </Text>
+
+          <Text
+            fw={700}
+            size="lg"
+            c="blue"
+          >
+
+            {formatPrice(
+              selectedVente.montant_total || 0
+            )}
+
+          </Text>
+
+        </Group>
+
+        <Group
+          justify="space-between"
+          mt={4}
+        >
+
+          <Text
+            size="sm"
+            c="dimmed"
+          >
+
+            Réglé
+
+          </Text>
+
+          <Text
+            size="sm"
+            c="green"
+          >
+
+            {formatPrice(
+              selectedVente.montant_regle || 0
+            )}
+
+          </Text>
+
+        </Group>
+
+        <Group justify="space-between">
+
+          <Text
+            size="sm"
+            c="dimmed"
+          >
+
+            Reste
+
+          </Text>
+
+          <Text
+            size="sm"
+            c="red"
+          >
+
+            {formatPrice(
+
+              Number(
+                selectedVente.montant_total || 0
+              )
+
+              -
+
+              Number(
+                selectedVente.montant_regle || 0
+              )
+            )}
+
+          </Text>
+
+        </Group>
+
+      </Paper>
+
+      {/* OBSERVATION */}
+      {selectedVente.observation && (
+
+        <Paper
+          p="md"
+          radius="md"
+          withBorder
+          bg="gray.0"
+        >
+
+          <Text
+            size="xs"
+            c="dimmed"
+            mb={4}
+          >
+
+            📝 Observation
+
+          </Text>
+
+          <Text size="sm">
+
+            {selectedVente.observation}
+
+          </Text>
+
+        </Paper>
+      )}
+
+      {/* ACTIONS */}
+      <Group
+        justify="flex-end"
+        gap="sm"
+      >
+
+        <Button
+          variant="light"
+          onClick={() =>
+            setDetailsModalOpen(false)
+          }
+        >
+
+          Fermer
+
+        </Button>
+
+        <Button
+
+          leftSection={
+            <IconReceipt size={16} />
+          }
+
+          variant="light"
+
+          color="grape"
+
+          onClick={() => {
+
+            setDetailsModalOpen(false);
+
+            handleShowRecu(
+              selectedVente
+            );
+          }}
+        >
+
+          Reçu
+
+        </Button>
+
+        {selectedVente.type_vente
+          === 'commande'
+
+          && (
+
+            <Button
+
+              leftSection={
+                <IconFileInvoice
+                  size={16}
+                />
+              }
+
+              variant="light"
+
+              color="teal"
+
+              onClick={() => {
+
+                setDetailsModalOpen(false);
+
+                handleShowFacture(
+                  selectedVente
+                );
+              }}
+            >
+
+              Facture
+
+            </Button>
+          )}
+
+      </Group>
+
+    </Stack>
+  )}
+
+</Modal>
 
         <Modal opened={editModalOpen} onClose={() => { setEditModalOpen(false); setEditVenteData(null); }} title={<Group gap="sm"><IconEdit size={20} color="white" /><Text fw={700} c="white">Modifier vente {editVenteData?.code_vente || ''}</Text></Group>} size="xl" centered radius="md" styles={{ header: { backgroundColor: '#1b365d', padding: '14px 20px' }, title: { color: 'white' }, body: { padding: '20px' } }}>
           {editVenteData && <Stack gap="md">
@@ -1533,7 +2044,7 @@ const VentesManager: React.FC = () => {
         <TextInput
           label="Téléphone"
           value={
-            editVenteData?.client_telephone || ''
+            clientTelephone
           }
           size="sm"
           radius="md"
@@ -1618,4 +2129,3 @@ const VentesManager: React.FC = () => {
 };
 
 export default VentesManager;
-

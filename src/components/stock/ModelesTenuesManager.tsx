@@ -26,7 +26,7 @@ interface FormData {
   designation: string;
   description: string;
   code_modele: string;
-  image_url: string; // stocke le base64
+  image_url: string;
   categorie: 'femme' | 'homme' | 'enfant' | 'accessoire';
   est_actif: number;
 }
@@ -39,8 +39,6 @@ const initialFormData: FormData = {
   categorie: 'femme',
   est_actif: 1
 };
-
-
 
 const ModelesTenuesManager: React.FC = () => {
   const [modeles, setModeles] = useState<ModeleTenue[]>([]);
@@ -65,8 +63,7 @@ const ModelesTenuesManager: React.FC = () => {
   const loadModeles = async () => {
     try {
       setLoading(true); setError(null);
-      const data = await apiGet("/modeles");
-
+      const data = await apiGet("/modeles-tenues");
       setModeles(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -76,11 +73,130 @@ const ModelesTenuesManager: React.FC = () => {
   useEffect(() => { loadModeles(); }, [filterCategorie]);
 
   const filteredModeles = useMemo(() => {
-    return modeles.filter(m => m.designation.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [modeles, searchTerm]);
+    return modeles.filter((m) => {
+      const matchSearch = m.designation?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCategorie = !filterCategorie || m.categorie === filterCategorie;
+      return matchSearch && matchCategorie;
+    });
+  }, [modeles, searchTerm, filterCategorie]);
 
   const totalPages = Math.ceil(filteredModeles.length / itemsPerPage);
   const paginatedData = filteredModeles.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Fonction d'impression
+  const handlePrint = () => {
+    const printContent = document.getElementById('print-content');
+    if (printContent) {
+      // Sauvegarder le contenu original
+      const originalTitle = document.title;
+      document.title = 'Liste des modèles de tenues';
+      
+      // Créer un iframe invisible pour l'impression
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'absolute';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '100%';
+      iframe.style.height = '100%';
+      document.body.appendChild(iframe);
+      
+      // Écrire le contenu à imprimer
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Liste des modèles de tenues</title>
+            <style>
+              /* Styles d'impression */
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { 
+                font-family: Arial, Helvetica, sans-serif; 
+                padding: 20px; 
+                background: white; 
+                color: black;
+              }
+              .print-header {
+                text-align: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 2px solid #333;
+              }
+              .print-header h1 { margin-bottom: 10px; font-size: 24px; }
+              .print-header p { color: #666; font-size: 14px; }
+              .print-date { text-align: right; margin-bottom: 20px; font-size: 12px; color: #666; }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin-top: 20px;
+              }
+              th, td { 
+                border: 1px solid #333; 
+                padding: 8px; 
+                text-align: left; 
+                vertical-align: top;
+              }
+              th { 
+                background: #f1f1f1; 
+                font-weight: bold;
+                font-size: 14px;
+              }
+              td { font-size: 12px; }
+              .badge {
+                display: inline-block;
+                padding: 2px 8px;
+                background: #f1f1f1;
+                border-radius: 12px;
+                font-size: 11px;
+              }
+              .badge-femme { background: #ffe0e0; color: #d63384; }
+              .badge-homme { background: #e0e8ff; color: #0d6efd; }
+              .badge-enfant { background: #e0ffe0; color: #198754; }
+              .badge-accessoire { background: #f0e0ff; color: #6f42c1; }
+              .badge-actif { background: #d4edda; color: #155724; }
+              .badge-inactif { background: #f8d7da; color: #721c24; }
+              .footer {
+                margin-top: 30px;
+                padding-top: 20px;
+                text-align: center;
+                font-size: 10px;
+                color: #666;
+                border-top: 1px solid #ddd;
+              }
+              @page {
+                size: A4;
+                margin: 15mm;
+              }
+              @media print {
+                body { margin: 0; padding: 0; }
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent.innerHTML}
+          </body>
+          </html>
+        `);
+        doc.close();
+        
+        // Imprimer
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        
+        // Supprimer l'iframe après l'impression
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          document.title = originalTitle;
+        }, 100);
+      }
+    } else {
+      // Fallback: imprimer toute la page
+      window.print();
+    }
+  };
 
   const resetForm = () => {
     setFormData(initialFormData);
@@ -110,24 +226,14 @@ const ModelesTenuesManager: React.FC = () => {
 
   const closeDeleteModalHandler = () => { setDeleteId(null); setDeleteDesignation(''); closeDeleteModal(); };
 
-  const handleCategorieChange = (
-    value: string | null
-  ) => {
-
+  const handleCategorieChange = (value: string | null) => {
     if (!value) return;
-
     setFormData({
       ...formData,
-      categorie:
-        value as
-        | 'femme'
-        | 'homme'
-        | 'enfant'
-        | 'accessoire'
+      categorie: value as 'femme' | 'homme' | 'enfant' | 'accessoire'
     });
   };
 
-  // Gestion de l'upload d'image en base64
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -151,98 +257,125 @@ const ModelesTenuesManager: React.FC = () => {
   };
 
   const handleSave = async () => {
-
     try {
-
       setSaving(true);
-
       setError(null);
-
       if (!formData.designation.trim()) {
-        throw new Error(
-          'La désignation est requise'
-        );
+        throw new Error('La désignation est requise');
       }
-
       if (!formData.categorie) {
-        throw new Error(
-          'La catégorie est requise'
-        );
+        throw new Error('La catégorie est requise');
       }
-
       if (editingModele) {
-
-        await apiPut(
-          `/modeles/${editingModele.id}`,
-          {
-            designation: formData.designation,
-            description: formData.description,
-            image_url: formData.image_url,
-            categorie: formData.categorie,
-            est_actif: formData.est_actif
-          }
-        );
-
+        await apiPut(`/modeles-tenues/${editingModele.id}`, {
+          designation: formData.designation,
+          description: formData.description,
+          image_url: formData.image_url,
+          categorie: formData.categorie,
+          est_actif: formData.est_actif
+        });
       } else {
-        await apiPost(
-          "/modeles",
-          {
-            designation: formData.designation,
-            description: formData.description,
-            image_url: formData.image_url,
-            categorie: formData.categorie,
-            est_actif: formData.est_actif
-          }
-        );
+        await apiPost("/modeles-tenues", {
+          designation: formData.designation,
+          description: formData.description,
+          image_url: formData.image_url,
+          categorie: formData.categorie,
+          est_actif: formData.est_actif
+        });
       }
-
       closeModal();
-
       resetForm();
-
       await loadModeles();
-
     } catch (err: any) {
-
-      setError(
-        err.message ||
-        "Erreur lors de l'enregistrement"
-      );
-
+      setError(err.message || "Erreur lors de l'enregistrement");
     } finally {
-
       setSaving(false);
     }
   };
+
   const handleDelete = async () => {
-
     if (!deleteId) return;
-
     try {
-
       setSaving(true);
-
       setError(null);
-
-      await apiDelete(
-        `/modeles/${deleteId}`
-      );
-
+      await apiDelete(`/modeles-tenues/${deleteId}`);
       closeDeleteModalHandler();
-
       await loadModeles();
-
     } catch (err: any) {
-
-      setError(
-        err.message || 'Erreur lors de la suppression'
-      );
-
+      setError(err.message || 'Erreur lors de la suppression');
     } finally {
-
       setSaving(false);
     }
   };
+
+  // Composant du contenu à imprimer (caché à l'écran)
+  const PrintContent = () => (
+    <div id="print-content" style={{ display: 'none' }}>
+      <div className="print-header">
+        <h1>📋 Liste des modèles de tenues</h1>
+        <p>Gestion des modèles de base pour vos créations</p>
+      </div>
+      <div className="print-date">
+        Date d'impression : {new Date().toLocaleDateString('fr-FR')} à {new Date().toLocaleTimeString('fr-FR')}
+      </div>
+      {filterCategorie && (
+        <div style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '5px' }}>
+          <strong>Filtre appliqué :</strong> Catégorie {filterCategorie === 'femme' ? 'Femme' : 
+            filterCategorie === 'homme' ? 'Homme' : 
+            filterCategorie === 'enfant' ? 'Enfant' : 'Accessoire'}
+        </div>
+      )}
+      {searchTerm && (
+        <div style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '5px' }}>
+          <strong>Recherche :</strong> {searchTerm}
+        </div>
+      )}
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Désignation</th>
+            <th>Code</th>
+            <th>Catégorie</th>
+            <th>Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredModeles.map((modele, index) => (
+            <tr key={modele.id}>
+              <td>{index + 1}</td>
+              <td>
+                <strong>{modele.designation}</strong>
+                {modele.description && (
+                  <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                    {modele.description}
+                  </div>
+                )}
+              </td>
+              <td>{modele.code_modele || '-'}</td>
+              <td>
+                <span className={`badge badge-${modele.categorie}`}>
+                  {modele.categorie === 'femme' ? 'Femme' : 
+                   modele.categorie === 'homme' ? 'Homme' : 
+                   modele.categorie === 'enfant' ? 'Enfant' : 'Accessoire'}
+                </span>
+              </td>
+              <td>
+                <span className={`badge ${modele.est_actif === 1 ? 'badge-actif' : 'badge-inactif'}`}>
+                  {modele.est_actif === 1 ? 'Actif' : 'Inactif'}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="footer">
+        <p>Total : {filteredModeles.length} modèle{filteredModeles.length > 1 ? 's' : ''}</p>
+        <p>Logiciel de gestion de couture - Version 1.0</p>
+      </div>
+    </div>
+  );
+
   if (loading && modeles.length === 0) {
     return (
       <Center style={{ height: '50vh' }}>
@@ -260,6 +393,9 @@ const ModelesTenuesManager: React.FC = () => {
   return (
     <Box p="md">
       <Container size="full">
+        {/* Contenu à imprimer (caché) */}
+        <PrintContent />
+
         <Stack gap="lg">
           {/* Header */}
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
@@ -273,7 +409,20 @@ const ModelesTenuesManager: React.FC = () => {
                   <Text c="gray.3" size="sm">Gérez les modèles de base pour vos créations</Text>
                 </Box>
               </Group>
-              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">Instructions</Button>
+              <Group>
+                <Button 
+                  variant="light" 
+                  color="white" 
+                  leftSection={<IconPrinter size={18} />} 
+                  onClick={handlePrint} 
+                  radius="md"
+                >
+                  Imprimer
+                </Button>
+                <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">
+                  Instructions
+                </Button>
+              </Group>
             </Group>
           </Card>
 
@@ -286,14 +435,27 @@ const ModelesTenuesManager: React.FC = () => {
                   <Text size="xs" c="dimmed">{filteredModeles.length} modèle{filteredModeles.length > 1 ? 's' : ''} trouvé{filteredModeles.length > 1 ? 's' : ''}</Text>
                 </Box>
                 <Group>
-                  <Button leftSection={<IconPrinter size={16} />} onClick={() => window.print()} variant="outline" color="teal">Imprimer</Button>
-                  <Button leftSection={<IconPlus size={16} />} onClick={openAddModal} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }}>Nouveau modèle</Button>
+                  <Button leftSection={<IconPlus size={16} />} onClick={openAddModal} variant="gradient" gradient={{ from: '#1b365d', to: '#2a4a7a' }}>
+                    Nouveau modèle
+                  </Button>
                 </Group>
               </Group>
               <Divider />
               <Group>
-                <TextInput placeholder="Rechercher un modèle..." leftSection={<IconSearch size={16} />} value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ flex: 1 }} radius="md" size="md" />
-                <Tooltip label="Actualiser"><ActionIcon variant="light" onClick={loadModeles} size="xl" radius="md"><IconRefresh size={20} /></ActionIcon></Tooltip>
+                <TextInput 
+                  placeholder="Rechercher un modèle..." 
+                  leftSection={<IconSearch size={16} />} 
+                  value={searchTerm} 
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} 
+                  style={{ flex: 1 }} 
+                  radius="md" 
+                  size="md" 
+                />
+                <Tooltip label="Actualiser">
+                  <ActionIcon variant="light" onClick={loadModeles} size="xl" radius="md">
+                    <IconRefresh size={20} />
+                  </ActionIcon>
+                </Tooltip>
               </Group>
               <Group gap="md">
                 <Text size="sm" fw={600}>Catégories :</Text>
@@ -343,17 +505,35 @@ const ModelesTenuesManager: React.FC = () => {
                               <Text size="sm" fw={500}>{modele.designation}</Text>
                               {modele.description && <Text size="xs" c="dimmed" lineClamp={1}>{modele.description}</Text>}
                             </Table.Td>
-                            <Table.Td style={{ fontSize: '13px', padding: '6px', whiteSpace: 'nowrap' }}><Badge variant="light" color="gray" size="sm">{modele.code_modele}</Badge></Table.Td>
                             <Table.Td style={{ fontSize: '13px', padding: '6px', whiteSpace: 'nowrap' }}>
-                              <Badge color={modele.categorie === 'femme' ? 'pink' : modele.categorie === 'homme' ? 'blue' : modele.categorie === 'enfant' ? 'green' : 'grape'} variant="light" size="sm">{modele.categorie}</Badge>
+                              <Badge variant="light" color="gray" size="sm">{modele.code_modele}</Badge>
                             </Table.Td>
                             <Table.Td style={{ fontSize: '13px', padding: '6px', whiteSpace: 'nowrap' }}>
-                              <Badge color={modele.est_actif === 1 ? 'green' : 'red'} variant="filled" size="sm">{modele.est_actif === 1 ? 'Actif' : 'Inactif'}</Badge>
+                              <Badge 
+                                color={modele.categorie === 'femme' ? 'pink' : modele.categorie === 'homme' ? 'blue' : modele.categorie === 'enfant' ? 'green' : 'grape'} 
+                                variant="light" 
+                                size="sm"
+                              >
+                                {modele.categorie}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td style={{ fontSize: '13px', padding: '6px', whiteSpace: 'nowrap' }}>
+                              <Badge color={modele.est_actif === 1 ? 'green' : 'red'} variant="filled" size="sm">
+                                {modele.est_actif === 1 ? 'Actif' : 'Inactif'}
+                              </Badge>
                             </Table.Td>
                             <Table.Td style={{ padding: '6px' }}>
                               <Group gap={4} justify="center" wrap="nowrap">
-                                <Tooltip label="Modifier"><ActionIcon variant="subtle" color="blue" size="sm" onClick={() => openEditModal(modele)}><IconEdit size={14} /></ActionIcon></Tooltip>
-                                <Tooltip label="Supprimer"><ActionIcon variant="subtle" color="red" size="sm" onClick={() => openDeleteConfirm(modele.id, modele.designation)}><IconTrash size={14} /></ActionIcon></Tooltip>
+                                <Tooltip label="Modifier">
+                                  <ActionIcon variant="subtle" color="blue" size="sm" onClick={() => openEditModal(modele)}>
+                                    <IconEdit size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Supprimer">
+                                  <ActionIcon variant="subtle" color="red" size="sm" onClick={() => openDeleteConfirm(modele.id, modele.designation)}>
+                                    <IconTrash size={14} />
+                                  </ActionIcon>
+                                </Tooltip>
                               </Group>
                             </Table.Td>
                           </Table.Tr>
@@ -361,7 +541,11 @@ const ModelesTenuesManager: React.FC = () => {
                       </Table.Tbody>
                     </Table>
                   </ScrollArea>
-                  {totalPages > 1 && <Group justify="center" mt="md"><Pagination value={currentPage} onChange={setCurrentPage} total={totalPages} color="#1b365d" /></Group>}
+                  {totalPages > 1 && (
+                    <Group justify="center" mt="md">
+                      <Pagination value={currentPage} onChange={setCurrentPage} total={totalPages} color="#1b365d" />
+                    </Group>
+                  )}
                 </>
               )}
             </Stack>
@@ -371,17 +555,51 @@ const ModelesTenuesManager: React.FC = () => {
           <Modal opened={modalOpened} onClose={closeModal} title={editingModele ? 'Modifier le modèle' : 'Nouveau modèle de tenue'} size="lg" radius="md" padding="xl" centered>
             <form onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
               <Stack gap="md">
-                <TextInput label="Désignation" placeholder="Ex: Robe chemisier..." value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} required withAsterisk size="md" radius="md" />
+                <TextInput 
+                  label="Désignation" 
+                  placeholder="Ex: Robe chemisier..." 
+                  value={formData.designation} 
+                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })} 
+                  required withAsterisk 
+                  size="md" 
+                  radius="md" 
+                />
 
-                <Select label="Catégorie" placeholder="Sélectionnez une catégorie"
-                  data={[{ value: 'femme', label: 'Femme' }, { value: 'homme', label: 'Homme' }, { value: 'enfant', label: 'Enfant' }, { value: 'accessoire', label: 'Accessoire' }]}
-                  value={formData.categorie} onChange={handleCategorieChange} size="md" radius="md" required withAsterisk />
+                <Select 
+                  label="Catégorie" 
+                  placeholder="Sélectionnez une catégorie"
+                  data={[
+                    { value: 'femme', label: 'Femme' }, 
+                    { value: 'homme', label: 'Homme' }, 
+                    { value: 'enfant', label: 'Enfant' }, 
+                    { value: 'accessoire', label: 'Accessoire' }
+                  ]}
+                  value={formData.categorie} 
+                  onChange={handleCategorieChange} 
+                  size="md" 
+                  radius="md" 
+                  required withAsterisk 
+                />
 
-                <TextInput label="Code modèle (généré automatiquement)" value={formData.code_modele} size="md" radius="md" disabled description="Le code est généré automatiquement selon la catégorie" />
+                <TextInput 
+                  label="Code modèle (généré automatiquement)" 
+                  value={formData.code_modele} 
+                  size="md" 
+                  radius="md" 
+                  disabled 
+                  description="Le code est généré automatiquement selon la catégorie" 
+                />
 
-                <Textarea label="Description" placeholder="Description détaillée..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} size="md" radius="md" />
+                <Textarea 
+                  label="Description" 
+                  placeholder="Description détaillée..." 
+                  value={formData.description} 
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                  rows={3} 
+                  size="md" 
+                  radius="md" 
+                />
 
-                {/* Upload image en base64 */}
                 <Stack gap={4}>
                   <Text size="sm" fw={500}>Image du modèle</Text>
                   {imagePreview ? (
@@ -403,14 +621,22 @@ const ModelesTenuesManager: React.FC = () => {
                   <Text size="xs" c="dimmed">PNG, JPG, JPEG • Max 2 Mo</Text>
                 </Stack>
 
-                <Switch label="Modèle actif" description="Les modèles inactifs ne seront pas visibles" checked={formData.est_actif === 1} onChange={(e) => setFormData({ ...formData, est_actif: e.currentTarget.checked ? 1 : 0 })} size="md" />
+                <Switch 
+                  label="Modèle actif" 
+                  description="Les modèles inactifs ne seront pas visibles" 
+                  checked={formData.est_actif === 1} 
+                  onChange={(e) => setFormData({ ...formData, est_actif: e.currentTarget.checked ? 1 : 0 })} 
+                  size="md" 
+                />
 
                 {error && <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">{error}</Alert>}
 
                 <Divider my="sm" />
                 <Group justify="flex-end" gap="md">
                   <Button variant="subtle" onClick={closeModal} size="md" radius="md" disabled={saving}>Annuler</Button>
-                  <Button type="submit" color="blue" size="md" radius="md" loading={saving}>{editingModele ? 'Enregistrer les modifications' : 'Créer le modèle'}</Button>
+                  <Button type="submit" color="blue" size="md" radius="md" loading={saving}>
+                    {editingModele ? 'Enregistrer les modifications' : 'Créer le modèle'}
+                  </Button>
                 </Group>
               </Stack>
             </form>
@@ -426,7 +652,9 @@ const ModelesTenuesManager: React.FC = () => {
               {error && <Alert color="red" onClose={() => setError(null)} withCloseButton radius="md">{error}</Alert>}
               <Group justify="flex-end" gap="md">
                 <Button variant="subtle" onClick={closeDeleteModalHandler} size="md" radius="md" disabled={saving}>Annuler</Button>
-                <Button color="red" onClick={handleDelete} size="md" radius="md" leftSection={<IconTrash size={18} />} loading={saving}>Supprimer définitivement</Button>
+                <Button color="red" onClick={handleDelete} size="md" radius="md" leftSection={<IconTrash size={18} />} loading={saving}>
+                  Supprimer définitivement
+                </Button>
               </Group>
             </Stack>
           </Modal>

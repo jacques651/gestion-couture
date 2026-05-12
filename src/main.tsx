@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
-import {
-  startBackend
-} from './services/backend';
 
 import {
   MantineProvider,
@@ -29,14 +26,6 @@ import "@mantine/notifications/styles.css";
 import "./index.css";
 
 import { AuthProvider } from "./contexts/AuthContext";
-
-
-/**
- * ======================================
- * START BACKEND
- * ======================================
- */
-await startBackend();
 
 /**
  * Écran de chargement

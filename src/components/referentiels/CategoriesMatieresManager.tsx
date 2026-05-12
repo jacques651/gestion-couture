@@ -57,7 +57,7 @@ const CategoriesMatieresManager: React.FC = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteName, setDeleteName] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [saving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const itemsPerPage = 10;
@@ -65,23 +65,18 @@ const CategoriesMatieresManager: React.FC = () => {
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
 
-  const [formData, setFormData] =
-    useState({
-      nom_categorie: "",
-      description: "",
-      couleur_affichage: "#1b365d",
-      est_active: 1
-    });
+  const [formData, setFormData] = useState({
+    nom_categorie: "",
+    description: "",
+    couleur_affichage: "#1b365d",
+    est_active: 1
+  });
+
   const loadCategories = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data =
-        await apiGet(
-          "/categories-matieres"
-        );
-
-      setCategories(data);
+      const data = await apiGet("/categories-matieres");
       setCategories(data);
     } catch (err: any) {
       setError(err.message || 'Erreur lors du chargement');
@@ -108,17 +103,210 @@ const CategoriesMatieresManager: React.FC = () => {
     currentPage * itemsPerPage
   );
 
-  const resetForm = () => {
+  // Fonction d'impression
+  const handlePrint = () => {
+    // Créer un iframe invisible pour l'impression
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.top = '-9999px';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    document.body.appendChild(iframe);
+    
+    // Générer le contenu HTML à imprimer
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Liste des catégories de matières</title>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, Helvetica, sans-serif; 
+            padding: 20px; 
+            background: white; 
+            color: black;
+          }
+          .print-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #333;
+          }
+          .print-header h1 { 
+            margin-bottom: 10px; 
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+          }
+          .print-header p { color: #666; font-size: 14px; }
+          .print-date { 
+            text-align: right; 
+            margin-bottom: 20px; 
+            font-size: 12px; 
+            color: #666;
+          }
+          .print-summary {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-size: 13px;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+          }
+          th, td { 
+            border: 1px solid #333; 
+            padding: 10px 8px; 
+            text-align: left; 
+            vertical-align: top;
+          }
+          th { 
+            background: #f1f1f1; 
+            font-weight: bold;
+            font-size: 13px;
+          }
+          td { font-size: 12px; }
+          .color-box {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.2);
+            margin-right: 6px;
+            vertical-align: middle;
+          }
+          .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: normal;
+          }
+          .badge-actif { background: #d4edda; color: #155724; }
+          .badge-inactif { background: #f8d7da; color: #721c24; }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+          }
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+          @media print {
+            body { margin: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <h1>
+            📋 Catégories de Matières
+          </h1>
+          <p>Gestion des catégories pour l'organisation des matières premières</p>
+        </div>
+        <div class="print-date">
+          Date d'impression : ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
+        </div>
+        ${searchTerm ? `
+          <div class="print-summary">
+            <strong>🔍 Recherche :</strong> "${searchTerm}"
+          </div>
+        ` : ''}
+        <div class="print-summary">
+          <strong>📊 Résumé :</strong> ${filteredCategories.length} catégorie${filteredCategories.length > 1 ? 's' : ''} trouvée${filteredCategories.length > 1 ? 's' : ''}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 80px">Couleur</th>
+              <th>Nom</th>
+              <th style="width: 120px">Code</th>
+              <th>Description</th>
+              <th style="width: 80px">Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredCategories.map(categorie => `
+              <tr>
+                <td style="text-align: center;">
+                  <div class="color-box" style="background-color: ${categorie.couleur_affichage || '#6B7280'}"></div>
+                  <span style="font-size: 10px;">${categorie.couleur_affichage || '#6B7280'}</span>
+                </td>
+                <td>
+                  <strong>${categorie.nom_categorie}</strong>
+                </td>
+                <td>${categorie.code_categorie || '-'}</td>
+                <td>${categorie.description || '-'}</td>
+                <td>
+                  <span class="badge ${categorie.est_active === 1 ? 'badge-actif' : 'badge-inactif'}">
+                    ${categorie.est_active === 1 ? 'Actif' : 'Inactif'}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>Logiciel de gestion de couture - Version 1.0</p>
+          <p>Document généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Écrire le contenu dans l'iframe
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
+      
+      // Attendre que le contenu soit chargé puis imprimer
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        
+        // Supprimer l'iframe après l'impression
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 100);
+      };
+      
+      // Si l'événement onload ne se déclenche pas, imprimer quand même
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 100);
+        }
+      }, 500);
+    }
+  };
 
+  const resetForm = () => {
     setFormData({
       nom_categorie: "",
       description: "",
       couleur_affichage: "#1b365d",
       est_active: 1
     });
-
     setEditingCategorie(null);
-
     setError(null);
   };
 
@@ -130,17 +318,10 @@ const CategoriesMatieresManager: React.FC = () => {
   const openEditModal = (categorie: CategorieMatiere) => {
     setEditingCategorie(categorie);
     setFormData({
-      nom_categorie:
-        categorie.nom_categorie || "",
-
-      description:
-        categorie.description || "",
-
-      couleur_affichage:
-        categorie.couleur_affichage || "#1b365d",
-
-      est_active:
-        categorie.est_active ?? 1
+      nom_categorie: categorie.nom_categorie || "",
+      description: categorie.description || "",
+      couleur_affichage: categorie.couleur_affichage || "#1b365d",
+      est_active: categorie.est_active ?? 1
     });
     openModal();
   };
@@ -158,103 +339,56 @@ const CategoriesMatieresManager: React.FC = () => {
   };
 
   const handleSave = async () => {
-
-    if (
-      !formData.nom_categorie.trim()
-    ) {
-
-      setError(
-        "Le nom est requis"
-      );
-
+    if (!formData.nom_categorie.trim()) {
+      setError("Le nom est requis");
       return;
     }
 
     try {
-
+      setSaving(true);
       setError(null);
 
       if (editingCategorie) {
-
-        await apiPut(
-          `/categories-matieres/${editingCategorie.id}`,
-          {
-            nom_categorie:
-              formData.nom_categorie,
-
-            description:
-              formData.description,
-
-            couleur_affichage:
-              formData.couleur_affichage,
-
-            est_active:
-              formData.est_active
-          }
-        );
-
+        await apiPut(`/categories-matieres/${editingCategorie.id}`, {
+          nom_categorie: formData.nom_categorie,
+          description: formData.description,
+          couleur_affichage: formData.couleur_affichage,
+          est_active: formData.est_active
+        });
       } else {
-
-        await apiPost(
-          "/categories-matieres",
-          {
-            nom_categorie:
-              formData.nom_categorie,
-
-            description:
-              formData.description,
-
-            couleur_affichage:
-              formData.couleur_affichage,
-
-            est_active:
-              formData.est_active
-          }
-        );
+        await apiPost("/categories-matieres", {
+          nom_categorie: formData.nom_categorie,
+          description: formData.description,
+          couleur_affichage: formData.couleur_affichage,
+          est_active: formData.est_active
+        });
       }
 
       closeModal();
-
       await loadCategories();
-
       resetForm();
-
     } catch (err: any) {
-
       console.error(err);
-
-      setError(
-        err.message ||
-        "Erreur lors de l'enregistrement"
-      );
+      setError(err.message || "Erreur lors de l'enregistrement");
+    } finally {
+      setSaving(false);
     }
   };
+
   const handleDelete = async () => {
-
     if (!deleteId) return;
-
     try {
-
+      setSaving(true);
       setError(null);
-
-      await apiDelete(
-        `/categories-matieres/${deleteId}`
-      );
-
+      await apiDelete(`/categories-matieres/${deleteId}`);
       closeDeleteModal();
-
       setDeleteId(null);
-
       await loadCategories();
-
     } catch (err: any) {
-
       console.error(err);
-
-      setError(
-        err.message ||
-        "Erreur lors de la suppression"
-      );
+      setError(err.message || "Erreur lors de la suppression");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -280,17 +414,34 @@ const CategoriesMatieresManager: React.FC = () => {
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
-                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(19, 65, 134, 0.2)' }}>
-                  <IconCategory size={30} color="black" />
+                <Avatar size={60} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <IconCategory size={30} color="white" />
                 </Avatar>
                 <Box>
                   <Title order={1} c="white" size="h2">Catégories de Matières</Title>
                   <Text c="gray.3" size="sm">Gérez les catégories (Tissus, Doublures, Fournitures, Fils...)</Text>
                 </Box>
               </Group>
-              <Button variant="light" color="white" leftSection={<IconInfoCircle size={18} />} onClick={() => setInfoModalOpen(true)} radius="md">
-                Instructions
-              </Button>
+              <Group>
+                <Button 
+                  variant="light" 
+                  color="white" 
+                  leftSection={<IconPrinter size={18} />} 
+                  onClick={handlePrint} 
+                  radius="md"
+                >
+                  Imprimer
+                </Button>
+                <Button 
+                  variant="light" 
+                  color="white" 
+                  leftSection={<IconInfoCircle size={18} />} 
+                  onClick={() => setInfoModalOpen(true)} 
+                  radius="md"
+                >
+                  Instructions
+                </Button>
+              </Group>
             </Group>
           </Card>
 
@@ -300,36 +451,21 @@ const CategoriesMatieresManager: React.FC = () => {
               {/* Barre d'actions */}
               <Group justify="space-between" align="flex-end">
                 <Box>
-                  <Text
-                    fw={700}
-                    size="lg"
-                    c="#1b365d"
-                  >
+                  <Text fw={700} size="lg" c="#1b365d">
                     Liste des catégories
                   </Text>
-
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
-                    {filteredCategories.length}
-                    catégorie
-                    {filteredCategories.length > 1 ? 's' : ''}
-                    trouvée
-                    {filteredCategories.length > 1 ? 's' : ''}
+                  <Text size="xs" c="dimmed">
+                    {filteredCategories.length} catégorie{filteredCategories.length > 1 ? 's' : ''} trouvée{filteredCategories.length > 1 ? 's' : ''}
                   </Text>
                 </Box>
-                <Group>
-                  <Button leftSection={<IconPrinter size={16} />} onClick={() => window.print()} variant="outline" color="teal">Imprimer</Button>
-                  <Button
-                    leftSection={<IconPlus size={16} />}
-                    onClick={openAddModal}
-                    variant="gradient"
-                    gradient={{ from: '#1b365d', to: '#2a4a7a' }}
-                  >
-                    Nouvelle catégorie
-                  </Button>
-                </Group>
+                <Button
+                  leftSection={<IconPlus size={16} />}
+                  onClick={openAddModal}
+                  variant="gradient"
+                  gradient={{ from: '#1b365d', to: '#2a4a7a' }}
+                >
+                  Nouvelle catégorie
+                </Button>
               </Group>
 
               <Divider />
@@ -367,12 +503,7 @@ const CategoriesMatieresManager: React.FC = () => {
               ) : (
                 <>
                   <ScrollArea style={{ maxHeight: 600 }} offsetScrollbars>
-                    <Table
-                      striped
-                      highlightOnHover
-                      withColumnBorders
-                      style={{ fontSize: '15px' }}
-                    >
+                    <Table striped highlightOnHover withColumnBorders style={{ fontSize: '15px' }}>
                       <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                         <Table.Tr>
                           <Table.Th style={{ width: 40, color: 'white', fontSize: '11px', padding: '8px 4px' }}></Table.Th>
