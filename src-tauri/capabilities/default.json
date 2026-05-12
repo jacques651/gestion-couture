@@ -1,14 +1,22 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
+
   "identifier": "default",
+
   "description": "Capability for the main window",
+
   "windows": ["main"],
+
   "permissions": [
+
     "core:default",
+
     "opener:default",
+
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
+
     "fs:default",
     "fs:allow-appdata-read",
     "fs:allow-appdata-write",
@@ -21,10 +29,10 @@
     "fs:allow-rename",
     "fs:allow-remove",
     "fs:allow-stat",
-    "sql:default",
-    "sql:allow-load",
-    "sql:allow-execute",
-    "sql:allow-select",
+
+    "shell:default",
+    "shell:allow-spawn",
+
     "log:default"
   ]
 }

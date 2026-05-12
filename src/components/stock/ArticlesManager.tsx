@@ -15,12 +15,24 @@ import {
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import {
-  ModeleTenue,
-  Taille,
-  Couleur,
-  Texture,
-  ArticleComplet,
-} from '../../database/db';
+  ModeleTenue
+} from '../../types/modeles-tenues';
+
+import {
+  Taille
+} from '../../types/tailles';
+
+import {
+  Couleur
+} from '../../types/couleurs';
+
+import {
+  Texture
+} from '../../types/textures';
+
+import {
+  ArticleComplet
+} from '../../types/articles';
 
 import {
   apiGet,

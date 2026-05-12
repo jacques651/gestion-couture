@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
+import {apiGet} from './services/api';
 
 
 // ==================== AUTH ====================
@@ -84,19 +85,77 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
   const [hasAccess, setHasAccess] = useState(true);
   const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    const check = async () => {
-      if (fonctionnalite && user?.role !== 'admin') {
-        const { getPermissions } = await import('./database/db');
-        const perms = await getPermissions(user?.id || 0);
-        const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
-        setHasAccess(p?.lecture === 1);
+ useEffect(() => {
+
+  const check =
+    async () => {
+
+      try {
+
+        if (
+
+          fonctionnalite
+
+          &&
+
+          user?.role !== 'admin'
+
+        ) {
+
+          const perms =
+            await apiGet(
+
+              `/permissions/${user?.id || 0}`
+            );
+
+          const p =
+            perms.find(
+
+              (x: any) =>
+
+                x.fonctionnalite
+                === fonctionnalite
+            );
+
+          setHasAccess(
+
+            p?.lecture === 1
+            ||
+            p?.lecture === true
+          );
+        }
+
+      } catch (error) {
+
+        console.error(
+          error
+        );
+
+        setHasAccess(false);
+
+      } finally {
+
+        setChecking(false);
       }
-      setChecking(false);
     };
-    if (isAuthenticated) check();
-    else setChecking(false);
-  }, [fonctionnalite, user, isAuthenticated]);
+
+  if (isAuthenticated) {
+
+    check();
+
+  } else {
+
+    setChecking(false);
+  }
+
+}, [
+
+  fonctionnalite,
+
+  user,
+
+  isAuthenticated
+]);
 
   if (!isAuthenticated) return <Login />;
   if (checking) return <LoadingFallback />;

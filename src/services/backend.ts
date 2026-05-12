@@ -14,10 +14,13 @@ export async function startBackend() {
 
     const command = Command.create(
 
-      'node',
+      'cmd',
 
       [
-        'backend/dist/server.js'
+
+        '/C',
+
+        'node backend/dist/server.js'
       ]
     );
 

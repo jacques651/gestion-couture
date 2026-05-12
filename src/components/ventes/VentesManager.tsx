@@ -17,6 +17,7 @@ import FormulaireClient from '../clients/FormulaireClient';
 import ModalFacture from '../factures/ModalFacture';
 import ModalRecu from '../paiements/ModalRecu';
 
+
 import {
   getVentes,
   getVente,
@@ -30,9 +31,12 @@ import {
   annulerRendezVous,
   payerVente
 } from "../../services/ventes";
-import { Vente } from '../../services/vente';
-import { apiGet } from '../../services/api';
-import { getNextVenteCode } from '../../database/db';
+import {
+  apiGet,
+  apiPost
+} from '../../services/api';
+import { Vente } from '../../types/ventes';
+
 
 // ========== TYPES ==========
 interface Client {
@@ -427,7 +431,27 @@ const VentesManager: React.FC = () => {
       });
     }
   };
-  const generateCode = async () => { try { setCodeVente(await getNextVenteCode()); } catch { setCodeVente(`VTE-${Date.now()}`); } };
+  const generateCode = async () => {
+
+    try {
+
+      const data =
+        await apiPost(
+          "/ventes/generate-code",
+          {}
+        );
+
+      setCodeVente(
+        data.code
+      );
+
+    } catch {
+
+      setCodeVente(
+        `VTE-${Date.now()}`
+      );
+    }
+  };
   const handleViewDetails =
     async (vente: Vente) => {
 

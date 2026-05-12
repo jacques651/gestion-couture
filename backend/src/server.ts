@@ -26,6 +26,7 @@ import salairesRoutes from "./routes/salaires";
 import historiqueSalairesRoutes from "./routes/historique-salaires";
 import empruntsRoutes from "./routes/emprunts";
 import adminRoutes from './routes/admin';
+import financesRoutes from "./routes/finances";
 
 
 dotenv.config();
@@ -57,6 +58,7 @@ app.use("/salaires", salairesRoutes);
 app.use("/historique-salaires", historiqueSalairesRoutes);
 app.use("/emprunts", empruntsRoutes);
 app.use('/admin',adminRoutes);
+app.use("/finances",financesRoutes);
 
 async function initDatabase() {
   try {

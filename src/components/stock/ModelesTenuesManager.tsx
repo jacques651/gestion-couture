@@ -1,7 +1,8 @@
 // components/referentiels/ModelesTenuesManager.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ModeleTenue }
-  from '../../database/db';
+import {
+  ModeleTenue
+} from '../../types/modeles-tenues';
 
 import {
   apiGet,

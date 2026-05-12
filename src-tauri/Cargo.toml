@@ -10,18 +10,17 @@ name = "gestion_couture_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.6", features = [] }
+tauri-build = { version = "2.5", features = [] }
 
 [dependencies]
-tauri = { version = "2.10.0", features = [] }
+tauri = { version = "2.11", features = [] }
 
 tauri-plugin-opener = "2.5.3"
 tauri-plugin-dialog = "2.7.0"
 tauri-plugin-fs = "2.5.0"
-tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
 tauri-plugin-log = "2.8.0"
+tauri-plugin-shell = "2.3.5"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
-tauri-plugin-shell = "2.3.5"

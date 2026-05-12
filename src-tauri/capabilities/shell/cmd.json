@@ -1,0 +1,23 @@
+{
+  "$schema": "../../gen/schemas/capability-schema.json",
+
+  "identifier": "shell-cmd",
+
+  "permissions": [
+
+    {
+      "identifier": "shell:allow-execute",
+
+      "allow": [
+
+        {
+          "name": "cmd",
+
+          "cmd": "cmd",
+
+          "args": true
+        }
+      ]
+    }
+  ]
+}

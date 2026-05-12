@@ -44,9 +44,12 @@ import {
   IconCube,
 } from '@tabler/icons-react';
 import {
-  CategorieMatiere,
-  Matiere,
-} from '../../database/db';
+  CategorieMatiere
+} from '../../types/categories';
+
+import {
+  Matiere
+} from '../../types/matieres';
 
 import {
   apiGet,
@@ -570,7 +573,7 @@ const MatieresManager: React.FC = () => {
                             return;
                           }
                           try {
-                            
+
                             // Recharger les catégories
                             const cats =
                               await apiGet(
