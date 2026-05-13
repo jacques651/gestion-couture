@@ -26,7 +26,11 @@
   },
   "bundle": {
     "active": true,
-    "icon": ["icons/icon.ico"],
-    "externalBin": ["bin/backend"]
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "bin/backend"
+    ]
   }
 }
