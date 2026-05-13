@@ -1,5 +1,5 @@
 // components/stock/ArticlesManager.tsx
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Container, Stack, Card, Title, Text, Button, Group, Modal,
   TextInput, NumberInput, Textarea, Select, Switch, LoadingOverlay,
