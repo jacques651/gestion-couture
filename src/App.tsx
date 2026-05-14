@@ -1,7 +1,7 @@
 // src/App.tsx
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, BrowserRouter, useNavigate } from 'react-router-dom';
-import { AppShell, Loader, Center, MantineProvider, Button } from '@mantine/core';
+import { AppShell, Loader, Center, MantineProvider, Button, Text, Alert } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from './theme';
@@ -12,6 +12,7 @@ import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
 import { apiGet } from './services/api';
 import HistoriquePaiements from './components/ventes/HistoriquePaiements';
+
 
 
 
@@ -185,30 +186,71 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
   }
   return <>{children}</>;
 }
-
 // ==================== APP AUTHENTIFIÉE ====================
 function AuthenticatedApp() {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
+  // États pour l'erreur API
+  const [erreurAPI, setErreurAPI] = useState(false);
+  const [verificationFaite, setVerificationFaite] = useState(false);
+
+  // Vérifier la connexion au démarrage
   useEffect(() => {
+    const verifierConnexion = async () => {
+      try {
+        const url = localStorage.getItem('api_url') || 'http://localhost:3001';
+        const response = await fetch(`${url}/health`);
+        if (response.ok) {
+          setErreurAPI(false);
+        } else {
+          setErreurAPI(true);
+        }
+      } catch (error) {
+        setErreurAPI(true);
+      } finally {
+        setVerificationFaite(true);
+      }
+    };
 
-    console.log(
-      '✅ API PostgreSQL prête'
-    );
-
+    verifierConnexion();
   }, []);
+
+  // Afficher l'alerte si erreur API
+  if (verificationFaite && erreurAPI) {
+    return (
+      <Center style={{ height: '100vh' }}>
+        <Alert
+          color="red"
+          title="⚠️ Connexion impossible"
+          variant="filled"
+          style={{ maxWidth: 500 }}
+        >
+          <Text>L'application ne parvient pas à contacter le serveur.</Text>
+          <Text mt="sm" fw={500}>Assurez-vous que :</Text>
+          <Text>• Le serveur (ordinateur principal) est allumé</Text>
+          <Text>• Le backend Express est démarré sur le serveur</Text>
+          <Text>• Les deux ordinateurs sont sur le même réseau</Text>
+          <Button
+            mt="md"
+            onClick={() => navigate('/config-serveur')}
+            variant="white"
+          >
+            🔧 Configurer le serveur
+          </Button>
+        </Alert>
+      </Center>
+    );
+  }
+
+  useEffect(() => {
+    console.log('✅ API PostgreSQL prête');
+  }, []);
+
   const handleLogout = () => {
-
-    const confirmed =
-      globalThis.confirm(
-        "Voulez-vous vous déconnecter ?"
-      );
-
+    const confirmed = globalThis.confirm("Voulez-vous vous déconnecter ?");
     if (!confirmed) return;
-
     logout();
-
     navigate('/login');
   };
 
@@ -237,7 +279,7 @@ function AuthenticatedApp() {
       salaires: '/salaires',
       emprunts: '/emprunts',
       utilisateurs: '/utilisateurs',
-      ConfigurationServeur: '/ConfigurationServeur',
+      ConfigurationServeur: '/config-serveur',
       import_export: '/import-export',
       export_config: '/export-config',
       journal_modifications: '/journal-modifications',
@@ -471,7 +513,6 @@ function AuthenticatedApp() {
     </AppShell>
   );
 }
-
 // ==================== QUERY CLIENT ====================
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -484,7 +525,37 @@ const queryClient = new QueryClient({
 });
 
 // ==================== APP PRINCIPALE ====================
+
 function App() {
+  // Vérifier si l'URL est configurée
+  const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const url = localStorage.getItem('api_url');
+    setIsConfigured(!!url);
+  }, []);
+
+  if (isConfigured === null) {
+    return <LoadingFallback />;
+  }
+
+  // Si pas d'URL configurée, afficher directement la configuration
+  if (!isConfigured) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <MantineProvider theme={theme} defaultColorScheme="light">
+          <Notifications position="top-right" zIndex={1000} />
+          <BrowserRouter>
+            <Routes>
+              <Route path="*" element={<ConfigurationServeur />} />
+            </Routes>
+          </BrowserRouter>
+        </MantineProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  // Sinon, application normale
   return (
     <QueryClientProvider client={queryClient}>
       <MantineProvider theme={theme} defaultColorScheme="light">

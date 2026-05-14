@@ -26,6 +26,7 @@ import {
   IconSeeding,
   IconBuildingStore,
   IconArrowRight,
+  IconNetwork,
 } from "@tabler/icons-react";
 import {
   apiGet
@@ -48,11 +49,11 @@ interface ConfigurationAtelier {
   ville: string;
   pays: string;
   ifu: string;          
-  rccm: string;          // ajouté
-  message_facture_defaut: string;  // au lieu de message_facture
+  rccm: string;
+  message_facture_defaut: string;
   logo_base64: string;
-  devise: string;        // valeur par défaut 'XOF'
-  updated_at: string;    // DATETIME
+  devise: string;
+  updated_at: string;
 }
 
 const Login: React.FC = () => {
@@ -63,239 +64,199 @@ const Login: React.FC = () => {
   const [error, setError] = useState("");
   const [config, setConfig] = useState<ConfigurationAtelier | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
+  
+  // États pour la vérification API
+  const [apiError, setApiError] = useState(false);
+  const [checkingApi, setCheckingApi] = useState(true);
 
   const [nom, setNom] = useState("");
   const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
 
+  // Vérifier la connexion au serveur au démarrage
   useEffect(() => {
+    const verifierConnexionServeur = async () => {
+      try {
+        const url = localStorage.getItem('api_url') || 'http://localhost:3001';
+        const response = await fetch(`${url}/health`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setApiError(false);
+          } else {
+            setApiError(true);
+          }
+        } else {
+          setApiError(true);
+        }
+      } catch (error) {
+        console.error("Erreur connexion serveur:", error);
+        setApiError(true);
+      } finally {
+        setCheckingApi(false);
+      }
+    };
+    
+    verifierConnexionServeur();
+  }, []);
 
-  const checkUserTable =
-  async () => {
+  useEffect(() => {
+    const checkUserTable = async () => {
+      try {
+        const users = await apiGet("/utilisateurs");
+        setIsFirstUser(users.length === 0);
+      } catch (err) {
+        console.error("Erreur vérification utilisateurs:", err);
+        setIsFirstUser(false);
+      }
+    };
+    checkUserTable();
+  }, []);
 
-    try {
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const conf = await apiGet("/atelier");
+        setConfig(conf[0] || null);
+      } catch (err) {
+        console.error("Erreur chargement configuration:", err);
+      } finally {
+        setLoadingConfig(false);
+      }
+    };
+    loadConfig();
+  }, []);
 
-      const users =
-        await apiGet(
-          "/utilisateurs"
-        );
+  // Afficher l'erreur si le serveur n'est pas accessible
+  if (!checkingApi && apiError) {
+    return (
+      <Center style={{ height: '100vh', background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
+        <Card withBorder radius="lg" p="xl" style={{ backgroundColor: 'white', maxWidth: 500 }}>
+          <Stack align="center" gap="md">
+            <Avatar size={70} radius="xl" color="red" variant="light">
+              <IconNetwork size={35} stroke={1.5} />
+            </Avatar>
+            
+            <Title order={3} ta="center" c="red">🔌 Problème de connexion</Title>
+            
+            <Alert color="red" variant="light" radius="md">
+              <Text fw={600} size="sm">L'application ne parvient pas à contacter le serveur principal.</Text>
+            </Alert>
+            
+            <Divider />
+            
+            <Text fw={600} size="sm">Causes possibles :</Text>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li>Le serveur (ordinateur principal) est éteint</li>
+              <li>Le backend n'est pas démarré sur le serveur</li>
+              <li>Les ordinateurs ne sont pas sur le même réseau</li>
+              <li>L'adresse IP du serveur a changé</li>
+            </ul>
+            
+            <Text fw={600} size="sm" mt="md">Solutions :</Text>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li>Vérifiez que le serveur est allumé</li>
+              <li>Vérifiez que le backend tourne (fenêtre noire ouverte)</li>
+              <li>Cliquez sur "Configurer" pour modifier l'adresse</li>
+            </ul>
+            
+            <Button 
+              mt="md" 
+              onClick={() => window.location.href = '/config-serveur'}
+              variant="gradient"
+              gradient={{ from: '#1b365d', to: '#2a4a7a' }}
+              fullWidth
+            >
+              ⚙️ Configurer l'adresse du serveur
+            </Button>
+            
+            <Text size="xs" c="dimmed" ta="center" mt="md">
+              Une fois le serveur accessible, reconnectez-vous.
+            </Text>
+          </Stack>
+        </Card>
+      </Center>
+    );
+  }
 
-      setIsFirstUser(
-        users.length === 0
-      );
-
-    } catch (err) {
-
-      console.error(
-        "Erreur vérification utilisateurs:",
-        err
-      );
-
-      setIsFirstUser(false);
-    }
-  };
-
-  checkUserTable();
-
-}, []);
-
- useEffect(() => {
-
-  const loadConfig =
-  async () => {
-
-    try {
-
-      const conf =
-        await apiGet(
-          "/atelier"
-        );
-
-      setConfig(
-        conf[0] || null
-      );
-
-    } catch (err) {
-
-      console.error(
-        "Erreur chargement configuration:",
-        err
-      );
-
-    } finally {
-
-      setLoadingConfig(false);
-    }
-  };
-
-  loadConfig();
-
-}, []);
-
-  const handleSubmit =
-  async (
-    e: React.FormEvent
-  ) => {
-
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setLoading(true);
-
     setError("");
 
     try {
-
       /**
-       * =========================
        * PREMIER UTILISATEUR
-       * =========================
        */
       if (isFirstUser) {
-
-        const user =
-          await apiPost(
-
-            "/utilisateurs",
-
-            {
-
-              nom,
-
-              login:
-                loginValue,
-
-              mot_de_passe:
-                password,
-
-              role:
-                "admin"
-            }
-          );
-
-        /**
-         * Journal
-         */
-        await journaliserAction({
-
-          utilisateur:
-            nom,
-
-          action:
-            'CREATE',
-
-          table:
-            'utilisateurs',
-
-          idEnregistrement:
-            user.id,
-
-          details:
-            `Création administrateur : ${nom}`
+        const user = await apiPost("/utilisateurs", {
+          nom,
+          login: loginValue,
+          mot_de_passe: password,
+          role: "admin"
         });
 
-        alert(
-          "✅ Administrateur créé avec succès !"
-        );
+        await journaliserAction({
+          utilisateur: nom,
+          action: 'CREATE',
+          table: 'utilisateurs',
+          idEnregistrement: user.id,
+          details: `Création administrateur : ${nom}`
+        });
 
+        alert("✅ Administrateur créé avec succès !");
         setIsFirstUser(false);
-
         setPassword("");
-
         setNom("");
-
         setLoginValue("");
-
         return;
       }
 
       /**
-       * =========================
        * LOGIN
-       * =========================
        */
-      const utilisateur =
-        await apiPost(
+      const utilisateur = await apiPost("/utilisateurs/login", {
+        login: loginValue,
+        mot_de_passe: password
+      });
 
-          "/utilisateurs/login",
-
-          {
-
-            login:
-              loginValue,
-
-            mot_de_passe:
-              password
-          }
-        );
-
-      /**
-       * SESSION
-       */
       sauvegarderSession({
-
-        id:
-          utilisateur.id,
-
-        nom:
-          utilisateur.nom,
-
-        role:
-          utilisateur.role
+        id: utilisateur.id,
+        nom: utilisateur.nom,
+        role: utilisateur.role
       });
 
-      /**
-       * Journal
-       */
       await journaliserAction({
-
-        utilisateur:
-          loginValue,
-
-        action:
-          'LOGIN',
-
-        table:
-          'auth',
-
-        idEnregistrement:
-          utilisateur.id,
-
-        details:
-          `Connexion utilisateur : ${loginValue}`
+        utilisateur: loginValue,
+        action: 'LOGIN',
+        table: 'auth',
+        idEnregistrement: utilisateur.id,
+        details: `Connexion utilisateur : ${loginValue}`
       });
 
-      /**
-       * Reload app
-       */
       window.location.reload();
 
     } catch (err: any) {
-
       console.error(err);
-
-      setError(
-
-        err.message
-        ||
-        "Erreur de connexion"
-      );
-
+      setError(err.message || "Erreur de connexion");
     } finally {
-
       setLoading(false);
     }
-};
+  };
+
   const atelierNom = config?.nom_atelier || "GESTION COUTURE";
   const atelierSlogan = config?.adresse ? `Atelier situé à ${config.adresse.split(',')[0]}` : "Gestion professionnelle d'atelier de couture";
 
-  if (isFirstUser === null || loadingConfig) {
+  if (isFirstUser === null || loadingConfig || checkingApi) {
     return (
       <Center style={{ height: '100vh', background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
         <Card withBorder radius="lg" p="xl" style={{ backgroundColor: 'white', minWidth: 320 }}>
           <LoadingOverlay visible={true} />
           <Stack align="center" gap="md">
             <IconSeeding size={40} style={{ animation: 'spin 2s linear infinite', color: '#1b365d' }} />
-            <Text ta="center" fw={500} size="lg">Chargement...</Text>
+            <Text ta="center" fw={500} size="lg">
+              {checkingApi ? "Vérification du serveur..." : "Chargement..."}
+            </Text>
             <Text ta="center" size="xs" c="dimmed">{atelierNom}</Text>
           </Stack>
         </Card>

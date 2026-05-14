@@ -1,9 +1,19 @@
 // src/services/api.ts
-const API_BASE_URL = 'http://127.0.0.1:3001';
+
+// Fonction pour récupérer l'URL du serveur configurée
+const getApiUrl = () => {
+  const savedUrl = localStorage.getItem('api_url');
+  if (savedUrl) {
+    return savedUrl;
+  }
+  // Valeur par défaut pour le développement
+  return 'http://localhost:3001';
+};
 
 export const apiGet = async (url: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`);
+    const baseUrl = getApiUrl();
+    const response = await fetch(`${baseUrl}${url}`);
     if (!response.ok) {
       throw new Error(`Erreur API: ${response.status}`);
     }
@@ -16,7 +26,8 @@ export const apiGet = async (url: string) => {
 
 export const apiPost = async (url: string, data?: any) => {
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const baseUrl = getApiUrl();
+    const response = await fetch(`${baseUrl}${url}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,7 +46,8 @@ export const apiPost = async (url: string, data?: any) => {
 
 export const apiPut = async (url: string, data?: any) => {
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const baseUrl = getApiUrl();
+    const response = await fetch(`${baseUrl}${url}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -54,7 +66,8 @@ export const apiPut = async (url: string, data?: any) => {
 
 export const apiDelete = async (url: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const baseUrl = getApiUrl();
+    const response = await fetch(`${baseUrl}${url}`, {
       method: 'DELETE',
     });
     if (!response.ok) {
