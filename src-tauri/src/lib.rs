@@ -1,5 +1,4 @@
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
-use tauri::Manager;
 
 #[tauri::command]
 fn greet(name: &str) -> String {

@@ -30,7 +30,12 @@ import financesRoutes from "./routes/finances";
 import stockRoutes from "./routes/stock";
 import paiementsRoutes from './routes/paiements';
 
-dotenv.config();
+dotenv.config({
+  path: path.join(
+    path.dirname(process.execPath),
+    ".env"
+  )
+});
 
 const app = express();
 
@@ -75,21 +80,24 @@ async function initDatabase() {
         WHERE table_name = 'clients'
       );
     `);
-    
+
     if (checkResult.rows[0].exists) {
       console.log("✅ Base de données déjà initialisée");
       return;
     }
-    
+
     // Si les tables n'existent pas, les créer
-    const sqlPath = path.join(__dirname, "init.sql");
-    
+    const sqlPath = path.join(
+      path.dirname(process.execPath),
+      "init.sql"
+    );
+
     // Vérifier si le fichier existe
     if (!fs.existsSync(sqlPath)) {
       console.warn("⚠️ Fichier init.sql non trouvé, création des tables ignorée");
       return;
     }
-    
+
     const sql = fs.readFileSync(sqlPath, "utf-8");
     await pool.query(sql);
     console.log("✅ Tables PostgreSQL initialisées");
@@ -147,11 +155,7 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, async () => {
   console.log(`🚀 Backend lancé sur le port ${PORT}`);
-  
+
   // Ne pas exécuter initDatabase en production si elle échoue
-  if (process.env.NODE_ENV !== 'production') {
-    await initDatabase();
-  } else {
-    console.log("🔧 Mode production - Initialisation DB ignorée");
-  }
+  await initDatabase();
 });
