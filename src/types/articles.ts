@@ -1,4 +1,7 @@
 export interface ArticleComplet {
+  type_tenue: string;
+  type_tenue_id(type_tenue_id: any): unknown;
+  image_url: string;
 
   id: number;
 

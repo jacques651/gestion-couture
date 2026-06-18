@@ -4,10 +4,13 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { pool } from "./db";
+
+// Routes
 import clientsRoutes from "./routes/clients";
-import modelesRoutes from "./routes/modeles-tenues";
 import taillesRoutes from "./routes/tailles";
 import typesMesuresRoutes from "./routes/types-mesures";
+import modelesTenuesRoutes from "./routes/modelesTenues";
+import typesTenuesRoutes from "./routes/types-tenues";
 import couleursRoutes from "./routes/couleurs";
 import texturesRoutes from "./routes/textures";
 import articlesRoutes from "./routes/articles";
@@ -28,24 +31,32 @@ import empruntsRoutes from "./routes/emprunts";
 import adminRoutes from './routes/admin';
 import financesRoutes from "./routes/finances";
 import stockRoutes from "./routes/stock";
-import paiementsRoutes from './routes/paiements';
 
 dotenv.config({
-  path: path.join(
-    path.dirname(process.execPath),
-    ".env"
-  )
+  path: path.join(path.dirname(process.execPath), ".env")
 });
 
 const app = express();
 
-app.use(cors());
+// Middleware
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
-// Routes
+// Logger middleware pour déboguer
+app.use((req, res, next) => {
+  console.log(`📝 ${req.method} ${req.url}`);
+  next();
+});
+
+// Routes API - UNIQUEMENT ICI, PAS DE ROUTES DIRECTES
 app.use("/clients", clientsRoutes);
-app.use("/modeles-tenues", modelesRoutes);
+app.use("/modeles-tenues", modelesTenuesRoutes);
+app.use("/types-tenues", typesTenuesRoutes);
 app.use("/tailles", taillesRoutes);
 app.use("/types-mesures", typesMesuresRoutes);
 app.use("/couleurs", couleursRoutes);
@@ -60,6 +71,7 @@ app.use("/depenses", depensesRoutes);
 app.use("/rendezvous", rendezVousRoutes);
 app.use("/utilisateurs", utilisateursRoutes);
 app.use("/journal", journalRoutes);
+app.use("/journal-modifications", journalRoutes);
 app.use("/employes", employesRoutes);
 app.use("/prestations-realisees", prestationsRoutes);
 app.use("/salaires", salairesRoutes);
@@ -67,45 +79,10 @@ app.use("/historique-salaires", historiqueSalairesRoutes);
 app.use("/emprunts", empruntsRoutes);
 app.use('/admin', adminRoutes);
 app.use("/finances", financesRoutes);
+app.use("/mouvements-stock", stockRoutes);
 app.use("/stock", stockRoutes);
-app.use('/api/paiements-ventes', paiementsRoutes);
-app.use("/paiements-ventes", paiementsRoutes); // Ajout pour compatibilité
 
-async function initDatabase() {
-  try {
-    // Vérifier si les tables existent déjà
-    const checkResult = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'clients'
-      );
-    `);
-
-    if (checkResult.rows[0].exists) {
-      console.log("✅ Base de données déjà initialisée");
-      return;
-    }
-
-    // Si les tables n'existent pas, les créer
-    const sqlPath = path.join(
-      path.dirname(process.execPath),
-      "init.sql"
-    );
-
-    // Vérifier si le fichier existe
-    if (!fs.existsSync(sqlPath)) {
-      console.warn("⚠️ Fichier init.sql non trouvé, création des tables ignorée");
-      return;
-    }
-
-    const sql = fs.readFileSync(sqlPath, "utf-8");
-    await pool.query(sql);
-    console.log("✅ Tables PostgreSQL initialisées");
-  } catch (error) {
-    console.error("❌ Erreur initialisation DB :", error);
-  }
-}
-
+// Routes de test
 app.get("/test", async (_, res) => {
   try {
     const result = await pool.query("SELECT NOW()");
@@ -125,37 +102,81 @@ app.get("/test", async (_, res) => {
 app.get("/health", (_, res) => {
   res.json({
     success: true,
-    message: "Serveur actif"
+    message: "Serveur actif",
+    timestamp: new Date().toISOString()
   });
 });
 
-// Route pour supprimer un client
-app.delete("/clients/:telephone_id", async (req, res) => {
+// ============================================
+// INITIALISATION DE LA BASE DE DONNÉES
+// ============================================
+
+async function initDatabase() {
   try {
-    const { telephone_id } = req.params;
-    await pool.query(
-      `
-      UPDATE clients
-      SET est_supprime = 1
-      WHERE telephone_id = $1
-      `,
-      [telephone_id]
-    );
-    res.json({ success: true });
+    // Vérifier si les tables existent déjà
+    const checkResult = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'clients'
+      );
+    `);
+
+    if (checkResult.rows[0].exists) {
+      console.log("✅ Base de données déjà initialisée");
+      return;
+    }
+
+    // Si les tables n'existent pas, les créer
+    const sqlPath = path.join(__dirname, "..", "init.sql");
+    
+    // Alternative pour l'exécutable compilé
+    let finalPath = sqlPath;
+    if (!fs.existsSync(sqlPath)) {
+      finalPath = path.join(path.dirname(process.execPath), "init.sql");
+    }
+
+    // Vérifier si le fichier existe
+    if (!fs.existsSync(finalPath)) {
+      console.warn("⚠️ Fichier init.sql non trouvé, création des tables ignorée");
+      console.warn(`   Recherché à: ${finalPath}`);
+      return;
+    }
+
+    const sql = fs.readFileSync(finalPath, "utf-8");
+    await pool.query(sql);
+    console.log("✅ Tables PostgreSQL initialisées avec succès");
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Erreur suppression client"
-    });
+    console.error("❌ Erreur initialisation DB :", error);
   }
+}
+
+// Gestion des erreurs 404
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `Route non trouvée: ${req.method} ${req.url}`
+  });
 });
 
-const PORT = process.env.PORT || 3001;
+// Gestion des erreurs globales
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("❌ Erreur globale:", err);
+  res.status(500).json({
+    success: false,
+    error: "Erreur interne du serveur",
+    message: err.message
+  });
+});
 
-app.listen(PORT, async () => {
+// Convertir le port en nombre
+const PORT = parseInt(process.env.PORT || "3001", 10);
+
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Backend lancé sur le port ${PORT}`);
-
-  // Ne pas exécuter initDatabase en production si elle échoue
+  console.log(`📡 Accessible sur http://0.0.0.0:${PORT}`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  
   await initDatabase();
 });
+
+export default app;

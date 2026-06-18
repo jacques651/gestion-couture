@@ -4,203 +4,134 @@ import { pool } from "../db";
 const router = Router();
 
 /**
- * GET ALL
+ * GET ALL - Version corrigée sans ordre_affichage
  */
 router.get("/", async (_, res) => {
-
   try {
+    // Vérifier si la table existe
+    const tableExists = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'types_mesures'
+      );
+    `);
+    
+    if (!tableExists.rows[0].exists) {
+      return res.status(500).json({ 
+        error: "La table types_mesures n'existe pas",
+        solution: "Exécutez le script SQL d'initialisation"
+      });
+    }
 
+    // ✅ CORRECTION: Supprimer ordre_affichage et ORDER BY ordre_affichage
     const result = await pool.query(`
       SELECT
         id,
         nom,
         unite,
-        ordre_affichage,
         est_active
       FROM types_mesures
       WHERE est_active = 1
-      ORDER BY ordre_affichage ASC
+      ORDER BY id ASC
     `);
 
+    console.log(`✅ ${result.rows.length} types de mesures chargés`);
     res.json(result.rows);
-
-  } catch (error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      error:
-        "Erreur récupération types mesures"
+  } catch (error: any) {
+    console.error("ERREUR GET /types-mesures:", error);
+    res.status(500).json({ 
+      error: "Erreur récupération types mesures",
+      message: error.message,
+      code: error.code
     });
   }
 });
 
 /**
- * CREATE
+ * CREATE - Version corrigée sans ordre_affichage
  */
 router.post("/", async (req, res) => {
-
   try {
-
     const {
       nom,
       unite,
-      ordre_affichage,
       est_active
     } = req.body;
 
-    const result = await pool.query(
-      `
-      INSERT INTO types_mesures (
-        nom,
-        unite,
-        ordre_affichage,
-        est_active
-      )
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-      `,
-      [
-        nom,
-        unite,
-        ordre_affichage,
-        est_active ?? 1
-      ]
+    // Validation
+    if (!nom) {
+      return res.status(400).json({ error: "Le nom est requis" });
+    }
+
+    // Vérifier si le nom existe déjà
+    const existing = await pool.query(
+      `SELECT id FROM types_mesures WHERE nom = $1`,
+      [nom]
     );
 
-    res.json(result.rows[0]);
-
-  } catch (error: any) {
-
-    console.error(error);
-
-    if (error.code === "23505") {
-
-      return res.status(400).json({
-        error:
-          "Ce type de mesure existe déjà"
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ 
+        error: `Le type de mesure "${nom}" existe déjà` 
       });
     }
 
-    res.status(500).json({
-      error:
-        "Erreur création type mesure"
-    });
+    // ✅ CORRECTION: Supprimer ordre_affichage de l'INSERT
+    const result = await pool.query(
+      `
+      INSERT INTO types_mesures (nom, unite, est_active)
+      VALUES ($1, $2, $3)
+      RETURNING id, nom, unite, est_active, created_at, updated_at
+      `,
+      [
+        nom,
+        unite || 'cm',
+        est_active !== undefined ? est_active : 1
+      ]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    console.error("ERREUR POST /types-mesures:", error);
+    if (error.code === "23505") {
+      return res.status(400).json({
+        error: `Le type de mesure "${req.body.nom}" existe déjà`
+      });
+    }
+    res.status(500).json({ error: "Erreur création type mesure" });
   }
 });
 
 /**
- * UPDATE
+ * UPDATE - Version corrigée sans ordre_affichage
  */
 router.put("/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
+    const { nom, unite, est_active } = req.body;
 
-    const {
-      nom,
-      unite,
-      ordre_affichage,
-      est_active
-    } = req.body;
-
+    // ✅ CORRECTION: Supprimer ordre_affichage de l'UPDATE
     const result = await pool.query(
       `
       UPDATE types_mesures
       SET
-        nom = $1,
-        unite = $2,
-        ordre_affichage = $3,
-        est_active = $4,
+        nom = COALESCE($1, nom),
+        unite = COALESCE($2, unite),
+        est_active = COALESCE($3, est_active),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
-      RETURNING *
+      WHERE id = $4
+      RETURNING id, nom, unite, est_active, created_at, updated_at
       `,
-      [
-        nom,
-        unite,
-        ordre_affichage,
-        est_active,
-        id
-      ]
+      [nom, unite, est_active, id]
     );
 
-    res.json(result.rows[0]);
-
-  } catch (error: any) {
-
-    console.error(error);
-
-    if (error.code === "23505") {
-
-      return res.status(400).json({
-        error:
-          "Ce type de mesure existe déjà"
-      });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Type de mesure non trouvé" });
     }
 
-    res.status(500).json({
-      error:
-        "Erreur modification type mesure"
-    });
-  }
-});
-
-/**
- * UPDATE ORDRE
- */
-router.put("/:id/ordre", async (req, res) => {
-
-  try {
-
-    const { id } = req.params;
-
-    const {
-      ordre_affichage,
-      ancien_ordre
-    } = req.body;
-
-    // =========================
-    // Échanger les ordres
-    // =========================
-    await pool.query(
-      `
-      UPDATE types_mesures
-      SET ordre_affichage = $1
-      WHERE ordre_affichage = $2
-      `,
-      [
-        ancien_ordre,
-        ordre_affichage
-      ]
-    );
-
-    const result = await pool.query(
-      `
-      UPDATE types_mesures
-      SET
-        ordre_affichage = $1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING *
-      `,
-      [
-        ordre_affichage,
-        id
-      ]
-    );
-
     res.json(result.rows[0]);
-
-  } catch (error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      error:
-        "Erreur modification ordre"
-    });
+  } catch (error: any) {
+    console.error("ERREUR PUT /types-mesures:", error);
+    res.status(500).json({ error: "Erreur modification type mesure" });
   }
 });
 
@@ -208,32 +139,27 @@ router.put("/:id/ordre", async (req, res) => {
  * DELETE LOGIQUE
  */
 router.delete("/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
 
-    await pool.query(
+    const result = await pool.query(
       `
       UPDATE types_mesures
       SET est_active = 0
-      WHERE id = $1
+      WHERE id = $1 AND est_active = 1
+      RETURNING id
       `,
       [id]
     );
 
-    res.json({
-      success: true
-    });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Type de mesure non trouvé" });
+    }
 
+    res.json({ success: true });
   } catch (error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      error:
-        "Erreur suppression type mesure"
-    });
+    console.error("ERREUR DELETE /types-mesures:", error);
+    res.status(500).json({ error: "Erreur suppression type mesure" });
   }
 });
 

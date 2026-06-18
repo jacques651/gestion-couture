@@ -7,22 +7,16 @@ const router = Router();
  * GET ALL
  */
 router.get("/", async (_, res) => {
-
   try {
-
     const result = await pool.query(`
       SELECT *
       FROM tailles
       WHERE est_actif = 1
       ORDER BY ordre, libelle
     `);
-
     res.json(result.rows);
-
   } catch (error) {
-
     console.error(error);
-
     res.status(500).json({
       error: "Erreur récupération tailles"
     });
@@ -32,10 +26,11 @@ router.get("/", async (_, res) => {
 /**
  * CREATE
  */
+/**
+ * CREATE
+ */
 router.post("/", async (req, res) => {
-
   try {
-
     const {
       code_taille,
       libelle,
@@ -44,6 +39,18 @@ router.post("/", async (req, res) => {
       description,
       est_actif
     } = req.body;
+
+    // Vérifier si le code existe déjà
+    const existing = await pool.query(
+      `SELECT id FROM tailles WHERE code_taille = $1`,
+      [code_taille]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        error: `Le code taille "${code_taille}" existe déjà. Utilisez un code unique.`
+      });
+    }
 
     const result = await pool.query(
       `
@@ -61,30 +68,21 @@ router.post("/", async (req, res) => {
       [
         code_taille,
         libelle,
-        ordre,
-        categorie,
-        description,
-        est_actif
+        ordre || 0,
+        categorie || null,
+        description || null,
+        est_actif !== undefined ? est_actif : 1
       ]
     );
 
     res.json(result.rows[0]);
-
   } catch (error: any) {
-
     console.error(error);
-
-    // =========================
-    // Doublon PostgreSQL
-    // =========================
     if (error.code === "23505") {
-
       return res.status(400).json({
-        error:
-          "Ce code taille existe déjà"
+        error: `Ce code taille "${req.body.code_taille}" existe déjà`
       });
     }
-
     res.status(500).json({
       error: "Erreur création taille"
     });
@@ -95,11 +93,8 @@ router.post("/", async (req, res) => {
  * UPDATE
  */
 router.put("/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
-
     const {
       code_taille,
       libelle,
@@ -134,23 +129,18 @@ router.put("/:id", async (req, res) => {
       ]
     );
 
-    res.json(result.rows[0]);
-
-  } catch (error: any) {
-
-    console.error(error);
-
-    // =========================
-    // Doublon PostgreSQL
-    // =========================
-    if (error.code === "23505") {
-
-      return res.status(400).json({
-        error:
-          "Ce code taille existe déjà"
-      });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Taille non trouvée" });
     }
 
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    console.error(error);
+    if (error.code === "23505") {
+      return res.status(400).json({
+        error: "Ce code taille existe déjà"
+      });
+    }
     res.status(500).json({
       error: "Erreur modification taille"
     });
@@ -161,28 +151,26 @@ router.put("/:id", async (req, res) => {
  * DELETE LOGIQUE
  */
 router.delete("/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
 
-    await pool.query(
+    const result = await pool.query(
       `
       UPDATE tailles
       SET est_actif = 0
-      WHERE id = $1
+      WHERE id = $1 AND est_actif = 1
+      RETURNING id
       `,
       [id]
     );
 
-    res.json({
-      success: true
-    });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Taille non trouvée" });
+    }
 
+    res.json({ success: true });
   } catch (error) {
-
     console.error(error);
-
     res.status(500).json({
       error: "Erreur suppression taille"
     });

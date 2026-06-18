@@ -13,9 +13,6 @@ import AssistantIA from './components/AssistantIA';
 import { apiGet } from './services/api';
 import HistoriquePaiements from './components/ventes/HistoriquePaiements';
 
-
-
-
 // ==================== AUTH ====================
 const Login = lazy(() => import('./components/auth/Login'));
 
@@ -28,18 +25,16 @@ const ListeClientsAvecMesures = lazy(() => import('./components/clients/ListeCli
 // ==================== STOCK & INVENTAIRE ====================
 const MatieresManager = lazy(() => import('./components/stock/MatieresManager'));
 const ArticlesManager = lazy(() => import('./components/stock/ArticlesManager'));
-const ModelesTenuesManager = lazy(() => import('./components/stock/ModelesTenuesManager'));
-const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
+const TypesTenuesManager = lazy(() => import('./components/stock/TypesTenuesManager')); const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
 
 // ==================== VENTES ====================
 const VentesManager = lazy(() => import('./components/ventes/VentesManager'));
 
 // ==================== FACTURES & REÇUS ====================
 const FacturesRecus = lazy(() => import('./components/factures/FacturesReçus'));
+
 // ==================== RENDEZ-VOUS ====================
 const SuiviRendezVous = lazy(() => import('./components/rendezvous/SuiviRendezVous'));
-
-
 
 // ==================== FINANCES ====================
 const BilanFinancier = lazy(() => import('./components/finances/BilanFinancier'));
@@ -65,6 +60,7 @@ const ConfigurationMesures = lazy(() => import('./components/parametres/Configur
 const ParametresAtelier = lazy(() => import('./components/parametres/ParametresAtelier'));
 const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtilisateurs'));
 const JournalModifications = lazy(() => import('./components/parametres/JournalModifications'));
+
 // ==================== OUTILS ====================
 const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
 const ExportImportConfiguration = lazy(() => import('./components/ExportImportConfiguration'));
@@ -89,124 +85,117 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    const check = async () => {
+      try {
+        console.log("🔍 USER:", JSON.stringify(user));
+        console.log("🔍 FONCTIONNALITE:", fonctionnalite);
 
-    const check =
-      async () => {
-
-        try {
-
-          if (
-
-            fonctionnalite
-
-            &&
-
-            user?.role !== 'admin'
-
-          ) {
-
-            const perms =
-              await apiGet(
-
-                `/permissions/${user?.id || 0}`
-              );
-
-            const p =
-              perms.find(
-
-                (x: any) =>
-
-                  x.fonctionnalite
-                  === fonctionnalite
-              );
-
-            setHasAccess(
-
-              p?.lecture === 1
-              ||
-              p?.lecture === true
-            );
-          }
-
-        } catch (error) {
-
-          console.error(
-            error
-          );
-
-          setHasAccess(false);
-
-        } finally {
-
+        if (user?.role === 'admin') {
+          console.log("🔍 Admin détecté - accès total");
+          setHasAccess(true);
           setChecking(false);
+          return;
         }
-      };
+
+        if (fonctionnalite) {
+          console.log("🔍 Vérification permissions pour:", fonctionnalite);
+          const perms = await apiGet(`/utilisateurs/${user?.id || 0}/permissions`);
+          console.log("🔍 PERMS reçues:", perms.length, "lignes");
+          console.log("🔍 PERMS:", JSON.stringify(perms));
+          const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
+          console.log("🔍 Permission trouvée:", p);
+          console.log("🔍 p?.lecture:", p?.lecture, "| p?.lecture === 1:", p?.lecture === 1);
+          setHasAccess(p?.lecture === 1 || p?.lecture === true);
+        } else {
+          console.log("🔍 Pas de fonctionnalite - accès accordé");
+        }
+      } catch (error) {
+        console.error("❌ Erreur:", error);
+        setHasAccess(false);
+      } finally {
+        setChecking(false);
+      }
+    };
 
     if (isAuthenticated) {
-
       check();
-
     } else {
-
       setChecking(false);
     }
-
-  }, [
-
-    fonctionnalite,
-
-    user,
-
-    isAuthenticated
-  ]);
+  }, [fonctionnalite, user, isAuthenticated]);
 
   if (!isAuthenticated) return <Login />;
   if (checking) return <LoadingFallback />;
+
   if (!hasAccess) {
     return (
       <Center style={{ height: '50vh' }}>
         <div style={{ textAlign: 'center' }}>
           <h2>⛔ Accès non autorisé</h2>
-          <p>Vous n'avez pas les permissions nécessaires.</p>
+          <p>Permissions insuffisantes.</p>
           <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
         </div>
       </Center>
     );
   }
+
+  // ✅ Si fonctionnalite est définie, on se fie aux permissions (pas aux rôles)
+  if (fonctionnalite) {
+    return <>{children}</>;
+  }
+
+  // ✅ Sinon, on vérifie les rôles (compatibilité)
   if (roles && user && !roles.includes(user.role)) {
     return (
       <Center style={{ height: '50vh' }}>
         <div style={{ textAlign: 'center' }}>
           <h2>⛔ Accès non autorisé</h2>
-          <p>Vous n'avez pas les permissions nécessaires.</p>
+          <p>Rôle non autorisé.</p>
           <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
         </div>
       </Center>
     );
   }
+
   return <>{children}</>;
 }
+
 // ==================== APP AUTHENTIFIÉE ====================
 function AuthenticatedApp() {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
-  // États pour l'erreur API
+  // ✅ TOUS LES HOOKS D'ABORD (avant tout return conditionnel)
   const [erreurAPI, setErreurAPI] = useState(false);
   const [verificationFaite, setVerificationFaite] = useState(false);
+  const [] = useState(false);
 
   // Vérifier la connexion au démarrage
   useEffect(() => {
     const verifierConnexion = async () => {
       try {
-        const url = localStorage.getItem('api_url') || 'http://localhost:3001';
-        const response = await fetch(`${url}/health`);
+        const url = localStorage.getItem('api_url') || 'http://192.168.100.151:3001';
+        console.log('🔍 Vérification connexion à:', url);
+
+        // Ajouter un timeout de 5 secondes
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch(`${url}/health`, {
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
         if (response.ok) {
+          console.log('✅ Serveur accessible');
           setErreurAPI(false);
         } else {
+          console.log('❌ Serveur non accessible');
           setErreurAPI(true);
         }
       } catch (error) {
+        console.error('❌ Erreur de connexion:', error);
         setErreurAPI(true);
       } finally {
         setVerificationFaite(true);
@@ -216,7 +205,17 @@ function AuthenticatedApp() {
     verifierConnexion();
   }, []);
 
-  // Afficher l'alerte si erreur API
+  useEffect(() => {
+    if (!erreurAPI && verificationFaite) {
+      console.log('✅ API PostgreSQL prête');
+    }
+  }, [erreurAPI, verificationFaite]);
+
+  // ⚠️ LES RETOURS CONDITIONNELS VIENNENT APRÈS TOUS LES HOOKS
+  if (loading) return <LoadingFallback />;
+  if (!isAuthenticated) return <Login />;
+
+  // Affichage de l'alerte API si erreur
   if (verificationFaite && erreurAPI) {
     return (
       <Center style={{ height: '100vh' }}>
@@ -231,21 +230,35 @@ function AuthenticatedApp() {
           <Text>• Le serveur (ordinateur principal) est allumé</Text>
           <Text>• Le backend Express est démarré sur le serveur</Text>
           <Text>• Les deux ordinateurs sont sur le même réseau</Text>
+          <Text>• Le firewall autorise le port 3001</Text>
+
           <Button
             mt="md"
-            onClick={() => navigate('/config-serveur')}
+            onClick={() => {
+              console.log('🔧 Navigation vers configuration serveur');
+              // Utiliser window.location pour forcer la navigation
+              window.location.href = '/config-serveur';
+            }}
             variant="white"
           >
             🔧 Configurer le serveur
+          </Button>
+
+          <Button
+            mt="md"
+            onClick={() => {
+              window.location.reload();
+            }}
+            variant="subtle"
+            style={{ marginLeft: '10px' }}
+          >
+            🔄 Réessayer
           </Button>
         </Alert>
       </Center>
     );
   }
 
-  useEffect(() => {
-    console.log('✅ API PostgreSQL prête');
-  }, []);
 
   const handleLogout = () => {
     const confirmed = globalThis.confirm("Voulez-vous vous déconnecter ?");
@@ -265,7 +278,7 @@ function AuthenticatedApp() {
       tailles: '/tailles',
       couleurs: '/couleurs',
       textures: '/textures',
-      modeles_tenues: '/modeles-tenues',
+      types_tenues: '/types-tenues',
       categories_matieres: '/categories-matieres',
       ListeTypesPrestations: '/ListeTypesPrestations',
       atelier: '/atelier',
@@ -292,9 +305,6 @@ function AuthenticatedApp() {
     navigate(routeMap[page] || '/');
   };
 
-  if (loading) return <LoadingFallback />;
-  if (!isAuthenticated) return <Login />;
-
   return (
     <AppShell
       padding="md"
@@ -309,189 +319,194 @@ function AuthenticatedApp() {
           <Routes>
             {/* DASHBOARD */}
             <Route path="/" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="dashboard">
                 <Dashboard setPage={handleSetPage} />
               </RouteGuard>
             } />
 
             {/* CLIENTS */}
             <Route path="/clients" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="clients">
                 <ListeClientsAvecMesures />
               </RouteGuard>
             } />
             <Route path="/types-mesures" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="types_mesures">
                 <ConfigurationMesures />
               </RouteGuard>
             } />
 
             {/* STOCK & INVENTAIRE */}
             <Route path="/articles" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="articles">
                 <ArticlesManager />
               </RouteGuard>
             } />
             <Route path="/matieres" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="matieres">
                 <MatieresManager />
               </RouteGuard>
             } />
             <Route path="/mouvements-stock" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="mouvements_stock">
                 <MouvementsStock />
               </RouteGuard>
             } />
 
             {/* RÉFÉRENTIELS */}
             <Route path="/tailles" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="tailles">
                 <TaillesManager />
               </RouteGuard>
             } />
             <Route path="/couleurs" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="couleurs">
                 <CouleursManager />
               </RouteGuard>
             } />
             <Route path="/textures" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="textures">
                 <TexturesManager />
               </RouteGuard>
             } />
+            <Route path="/types-tenues" element={
+              <RouteGuard fonctionnalite="types_tenues">
+                <TypesTenuesManager />
+              </RouteGuard>
+            } />
             <Route path="/modeles-tenues" element={
-              <RouteGuard roles={['admin']}>
-                <ModelesTenuesManager />
+              <RouteGuard fonctionnalite="types_tenues">
+                <TypesTenuesManager />
               </RouteGuard>
             } />
             <Route path="/categories-matieres" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="categories_matieres">
                 <CategoriesMatieresManager />
               </RouteGuard>
             } />
             <Route path="/ListeTypesPrestations" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="types_prestations">
                 <ListeTypesPrestations />
               </RouteGuard>
             } />
             <Route path="/atelier" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="atelier">
                 <ParametresAtelier />
               </RouteGuard>
             } />
 
             {/* VENTES */}
             <Route path="/ventes" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="ventes">
                 <VentesManager />
               </RouteGuard>
             } />
 
             {/* FACTURES & REÇUS */}
             <Route path="/factures-recus" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="factures_recus">
                 <FacturesRecus />
               </RouteGuard>
             } />
 
             {/* RENDEZ-VOUS */}
             <Route path="/rendezvous" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="rendezvous">
                 <SuiviRendezVous />
               </RouteGuard>
             } />
 
             <Route path="/historique-paiements" element={
-              <RouteGuard roles={['admin', 'caissier']}>
+              <RouteGuard fonctionnalite="historique_paiements">
                 <HistoriquePaiements />
               </RouteGuard>
             } />
 
             {/* FINANCES */}
             <Route path="/depenses" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="depenses">
                 <ListeDepenses />
               </RouteGuard>
             } />
             <Route path="/bilan" element={
-              <RouteGuard roles={['admin', 'caissier']}>
+              <RouteGuard fonctionnalite="bilan">
                 <BilanFinancier />
               </RouteGuard>
             } />
             <Route path="/journal" element={
-              <RouteGuard roles={['admin', 'caissier']}>
+              <RouteGuard fonctionnalite="journal">
                 <JournalCaisse />
               </RouteGuard>
             } />
 
             {/* RESSOURCES HUMAINES */}
             <Route path="/employes" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="employes">
                 <ListeEmployes />
               </RouteGuard>
             } />
             <Route path="/prestations-realisees" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="prestations_realisees">
                 <ListePrestationsRealisees />
               </RouteGuard>
             } />
             <Route path="/salaires" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="salaires">
                 <GestionSalaires />
               </RouteGuard>
             } />
             <Route path="/historiques-salaires" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="historique_salaires">
                 <HistoriqueSalaires />
               </RouteGuard>
             } />
             <Route path="/emprunts" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="emprunts">
                 <ListeEmprunts />
               </RouteGuard>
             } />
 
             {/* PARAMÈTRES */}
             <Route path="/utilisateurs" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="utilisateurs">
                 <ListeUtilisateurs />
               </RouteGuard>
             } />
             <Route path="/config-serveur" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="config_serveur">
                 <ConfigurationServeur />
               </RouteGuard>
             } />
             <Route path="/import-export" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="import_export">
                 <ImportClientsExcel />
               </RouteGuard>
             } />
             <Route path="/export-config" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="import_export">
                 <ExportImportConfiguration />
               </RouteGuard>
             } />
 
             <Route path="/journal-modifications" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="journal_modifications">
                 <JournalModifications />
               </RouteGuard>
             } />
 
             {/* SUPPORT */}
             <Route path="/aide" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="aide">
                 <GuideUtilisation />
               </RouteGuard>
             } />
             <Route path="/support" element={
-              <RouteGuard roles={['admin', 'caissier', 'couturier']}>
+              <RouteGuard fonctionnalite="support">
                 <SupportTechnique />
               </RouteGuard>
             } />
             <Route path="/export-support" element={
-              <RouteGuard roles={['admin']}>
+              <RouteGuard fonctionnalite="export_support">
                 <ExportSupport />
               </RouteGuard>
             } />
@@ -525,9 +540,7 @@ const queryClient = new QueryClient({
 });
 
 // ==================== APP PRINCIPALE ====================
-
 function App() {
-  // Vérifier si l'URL est configurée
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -539,7 +552,6 @@ function App() {
     return <LoadingFallback />;
   }
 
-  // Si pas d'URL configurée, afficher directement la configuration
   if (!isConfigured) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -555,7 +567,6 @@ function App() {
     );
   }
 
-  // Sinon, application normale
   return (
     <QueryClientProvider client={queryClient}>
       <MantineProvider theme={theme} defaultColorScheme="light">

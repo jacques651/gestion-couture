@@ -48,7 +48,12 @@ interface Client {
   email?: string;
 }
 
-interface Article { id: number; code_article: string; modele: string; modele_id: number; taille: string; taille_id: number; couleur: string; couleur_id: number; texture: string | null; prix_vente: number; quantite_stock: number; emplacement: string | null; est_disponible: number; }
+interface Article {
+  designation: string;
+  couleur_code_hex: any;
+  type_tenue: string;
+  categorie: import("react/jsx-runtime").JSX.Element; id: number; code_article: string; modele: string; modele_id: number; taille: string; taille_id: number; couleur: string; couleur_id: number; texture: string | null; prix_vente: number; quantite_stock: number; emplacement: string | null; est_disponible: number; 
+}
 interface Matiere { id: number; code_matiere: string; designation: string; unite: string; prix_vente: number; stock_actuel: number; }
 interface PanierItem { id: string; produitId: number; designation: string; taille?: string; couleur?: string; quantite: number; prixUnitaire: number; total: number; type_produit: 'article' | 'matiere'; }
 interface LigneEdit { id?: number; designation: string; quantite: number; prix_unitaire: number; total: number; article_id?: number; matiere_id?: number; taille_libelle?: string; }
@@ -220,13 +225,17 @@ const VentesManager: React.FC = () => {
   };
 
   const generateCode = async () => {
-    try {
-      const data = await apiPost("/ventes/generate-code", {});
-      setCodeVente(data.code);
-    } catch {
-      setCodeVente(`VTE-${Date.now()}`);
-    }
-  };
+  try {
+    const data = await apiPost("/ventes/generate-code", {});
+    setCodeVente(data.code);
+  } catch (error) {
+    console.error("Erreur génération code:", error);
+    // Fallback: générer un code localement
+    const year = new Date().getFullYear();
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    setCodeVente(`VENTE-${year}-${random}`);
+  }
+};
 
   const handleViewDetails = async (vente: Vente) => {
     try {
@@ -337,6 +346,7 @@ const VentesManager: React.FC = () => {
     }
   };
 
+  
   const handleAddEditLigne = () => setEditVenteData({ ...editVenteData, lignes: [...(editVenteData?.lignes || []), { designation: '', quantite: 1, prix_unitaire: 0, total: 0 }] });
   const handleEditLigneChange = (i: number, f: string, v: any) => { const nl = [...(editVenteData?.lignes || [])]; nl[i][f] = v; nl[i].total = (nl[i].quantite || 0) * (nl[i].prix_unitaire || 0); setEditVenteData({ ...editVenteData, lignes: nl }); };
   const handleRemoveEditLigne = (i: number) => { const nl = [...(editVenteData?.lignes || [])]; nl.splice(i, 1); setEditVenteData({ ...editVenteData, lignes: nl }); };
@@ -407,7 +417,6 @@ const VentesManager: React.FC = () => {
     }
   };
   const [venteId] = useState<number | null>(null);
-  const handleSupprimerPanier = (id: string) => setPanier(panier.filter(item => item.id !== id));
 
   // Dans VentesManager.tsx, fonction handleGenererFacture
   const handleGenererFacture = () => {
@@ -438,137 +447,241 @@ const VentesManager: React.FC = () => {
     });
     setShowFacture(true);
   };
-  const handleSubmitVente = async () => {
-    if (panier.length === 0) {
-      notifications.show({ title: 'Erreur', message: 'Ajoutez des articles au panier', color: 'red' });
-      return;
-    }
-    setLoading(true);
-    try {
-      let finalClientId = null;
-      let finalClientNom = 'Client comptoir';
 
-      if (venteType === 'commande') {
-        if (clientId) {
-          finalClientId = parseInt(clientId);
-          const client = clients.find(c => String(c.id) === clientId || c.telephone_id === clientId);
-          finalClientNom = client?.nom_prenom || clientNom || 'Client';
-        } else {
-          finalClientNom = clientNom || 'Client';
-        }
+
+const handleSubmitVente = async () => {
+  if (panier.length === 0) {
+    notifications.show({ title: 'Erreur', message: 'Ajoutez des articles au panier', color: 'red' });
+    return;
+  }
+  
+  setLoading(true);
+  
+  // Déclarer les variables en dehors du try pour qu'elles soient accessibles partout
+  let finalClientId = null;
+  let finalClientNom = 'Client comptoir';
+  let finalStatut = '';
+  let finalMontantRegle = 0;
+  
+  try {
+    // Générer un nouveau code unique
+    const codeResponse = await apiPost("/ventes/generate-code", {});
+    const nouveauCode = codeResponse.code;
+    console.log("Nouveau code généré:", nouveauCode);
+    
+    if (venteType === 'commande') {
+      if (clientId) {
+        finalClientId = parseInt(clientId);
+        const client = clients.find(c => String(c.id) === clientId || c.telephone_id === clientId);
+        finalClientNom = client?.nom_prenom || clientNom || 'Client';
       } else {
-        finalClientNom = clientNomSimple || 'Client comptoir';
+        finalClientNom = clientNom || 'Client';
       }
+    } else {
+      finalClientNom = clientNomSimple || 'Client comptoir';
+    }
 
-      const statut = venteType === 'commande' ? 'EN_ATTENTE' : 'PAYEE';
-      const montantRegle = venteType === 'commande' ? 0 : totalPanier;
+    finalStatut = venteType === 'commande' ? 'EN_ATTENTE' : 'PAYEE';
+    finalMontantRegle = venteType === 'commande' ? 0 : totalPanier;
 
-      const vente = await createVente({
-        code_vente: codeVente,
-        type_vente: venteType,
-        date_vente: dateCommande,
+    const vente = await createVente({
+      code_vente: nouveauCode,
+      type_vente: venteType,
+      date_vente: dateCommande,
+      client_id: finalClientId,
+      client_nom: finalClientNom,
+      mode_paiement: 'Espèces',
+      montant_total: totalPanier,
+      montant_regle: finalMontantRegle,
+      statut: finalStatut,
+      observation,
+      details: panier.map(item => ({
+        type_produit: item.type_produit,
+        article_id: item.type_produit === 'article' && item.produitId > 0 ? item.produitId : null,
+        matiere_id: item.type_produit === 'matiere' ? item.produitId : null,
+        designation: item.designation,
+        quantite: item.quantite,
+        prix_unitaire: item.prixUnitaire,
+        total: item.total,
+        taille_libelle: item.taille || null
+      })),
+      rendezvous: venteType === 'commande' && finalClientId && dateRendezVous ? {
         client_id: finalClientId,
-        client_nom: finalClientNom,
-        mode_paiement: 'Espèces',
-        montant_total: totalPanier,
-        montant_regle: montantRegle,
-        statut,
-        observation,
-        details: panier.map(item => ({
-          type_produit: item.type_produit,
-          article_id: item.type_produit === 'article' && item.produitId > 0 ? item.produitId : null,
-          matiere_id: item.type_produit === 'matiere' ? item.produitId : null,
-          designation: item.designation,
-          quantite: item.quantite,
-          prix_unitaire: item.prixUnitaire,
-          total: item.total,
-          taille_libelle: item.taille || null
-        })),
-        rendezvous: venteType === 'commande' && finalClientId && dateRendezVous ? {
+        type_rendezvous: typeRendezVous,
+        date_rendezvous: dateRendezVous,
+        heure_rendezvous: heureRendezVous || null,
+        statut: 'planifie'
+      } : null
+    });
+
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'CREATE',
+      table: 'ventes',
+      idEnregistrement: vente.id,
+      details: `Création vente : ${nouveauCode} - ${finalClientNom} - ${totalPanier.toLocaleString()} FCFA`
+    });
+
+    notifications.show({
+      title: 'Succès',
+      message: `Vente ${nouveauCode} enregistrée`,
+      color: 'green'
+    });
+
+    setVenteIdForRecu(vente.id);
+    setShowRecu(true);
+    await loadVentes();
+    await loadRendezVous();
+    resetForm();
+  } catch (err: any) {
+    console.error('Erreur création vente:', err);
+    
+    // Si l'erreur est due à un code dupliqué, réessayer avec un nouveau code
+    if (err.message && (err.message.includes('duplicate key') || err.message.includes('unique constraint'))) {
+      console.log("⚠️ Code dupliqué, tentative avec un nouveau code...");
+      try {
+        // Générer un code avec timestamp pour être sûr
+        const timestamp = Date.now();
+        const nouveauCode2 = `VENTE-${new Date().getFullYear()}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-${timestamp}`;
+        
+        const vente = await createVente({
+          code_vente: nouveauCode2,
+          type_vente: venteType,
+          date_vente: dateCommande,
           client_id: finalClientId,
-          type_rendezvous: typeRendezVous,
-          date_rendezvous: dateRendezVous,
-          heure_rendezvous: heureRendezVous || null,
-          statut: 'planifie'
-        } : null
+          client_nom: finalClientNom,
+          mode_paiement: 'Espèces',
+          montant_total: totalPanier,
+          montant_regle: finalMontantRegle,
+          statut: finalStatut,
+          observation,
+          details: panier.map(item => ({
+            type_produit: item.type_produit,
+            article_id: item.type_produit === 'article' && item.produitId > 0 ? item.produitId : null,
+            matiere_id: item.type_produit === 'matiere' ? item.produitId : null,
+            designation: item.designation,
+            quantite: item.quantite,
+            prix_unitaire: item.prixUnitaire,
+            total: item.total,
+            taille_libelle: item.taille || null
+          })),
+          rendezvous: venteType === 'commande' && finalClientId && dateRendezVous ? {
+            client_id: finalClientId,
+            type_rendezvous: typeRendezVous,
+            date_rendezvous: dateRendezVous,
+            heure_rendezvous: heureRendezVous || null,
+            statut: 'planifie'
+          } : null
+        });
+        
+        await journaliserAction({
+          utilisateur: 'Utilisateur',
+          action: 'CREATE',
+          table: 'ventes',
+          idEnregistrement: vente.id,
+          details: `Création vente : ${nouveauCode2} - ${finalClientNom} - ${totalPanier.toLocaleString()} FCFA`
+        });
+        
+        notifications.show({
+          title: 'Succès',
+          message: `Vente ${nouveauCode2} enregistrée`,
+          color: 'green'
+        });
+        
+        setVenteIdForRecu(vente.id);
+        setShowRecu(true);
+        await loadVentes();
+        await loadRendezVous();
+        resetForm();
+      } catch (retryErr: any) {
+        console.error('Erreur lors de la seconde tentative:', retryErr);
+        notifications.show({ 
+          title: 'Erreur', 
+          message: retryErr.message || 'Impossible de créer la vente', 
+          color: 'red' 
+        });
+      }
+    } else {
+      notifications.show({ 
+        title: 'Erreur', 
+        message: err.message || String(err), 
+        color: 'red' 
       });
-
-      await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'CREATE',
-        table: 'ventes',
-        idEnregistrement: vente.id,
-        details: `Création vente : ${codeVente} - ${finalClientNom} - ${totalPanier.toLocaleString()} FCFA`
-      });
-
-      notifications.show({
-        title: 'Succès',
-        message: `Vente ${codeVente} enregistrée`,
-        color: 'green'
-      });
-
-      setVenteIdForRecu(vente.id);
-      setShowRecu(true);
-      await loadVentes();
-      await loadRendezVous();
-      resetForm();
-    } catch (err: any) {
-      console.error(err);
-      notifications.show({
-        title: 'Erreur',
-        message: err.message || String(err),
-        color: 'red'
-      });
-    } finally {
-      setLoading(false);
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const submitVenteAvecPaiement = async (montantRegle: number, mode: string) => {
-    if (!factureData?.id) {
-      notifications.show({ title: 'Erreur', message: 'Vente introuvable', color: 'red' });
-      return;
-    }
-    try {
-      setLoading(true);
-      await payerVente(factureData.id, montantRegle, mode);
-      await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'UPDATE',
-        table: 'ventes',
-        idEnregistrement: factureData.id,
-        details: `Paiement vente : ${factureData.code_vente} - ${montantRegle.toLocaleString()} FCFA`
-      });
-      notifications.show({ title: 'Succès', message: 'Paiement enregistré', color: 'green' });
-      setShowFacture(false);
-      await loadVentes();
-    } catch (err: any) {
-      console.error(err);
-      notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
-    } finally {
-      setLoading(false);
-    }
-  };
+const submitVenteAvecPaiement = async (montantRegle: number, mode: string) => {
+  console.log("=== submitVenteAvecPaiement START ===");
+  console.log("montantRegle:", montantRegle);
+  console.log("mode:", mode);
+  console.log("factureData:", factureData);
+  console.log("factureData?.id:", factureData?.id);
+  
+  if (!factureData?.id) {
+    console.log("❌ Pas de factureData.id");
+    notifications.show({ title: 'Erreur', message: 'Vente introuvable', color: 'red' });
+    return;
+  }
+  
+  try {
+    setLoading(true);
+    console.log("✅ Appel de payerVente...");
+    
+    const response = await payerVente(factureData.id, montantRegle, mode);
+    console.log("Réponse de payerVente:", response);
+    
+    await journaliserAction({
+      utilisateur: 'Utilisateur',
+      action: 'UPDATE',
+      table: 'ventes',
+      idEnregistrement: factureData.id,
+      details: `Paiement vente : ${factureData.code_vente} - ${montantRegle.toLocaleString()} FCFA`
+    });
+    
+    notifications.show({ 
+      title: 'Succès', 
+      message: `Paiement de ${montantRegle.toLocaleString()} FCFA enregistré`, 
+      color: 'green' 
+    });
+    
+    setShowFacture(false);
+    await loadVentes();
+    await loadRendezVous();
+  } catch (err: any) {
+    console.error('❌ Erreur paiement:', err);
+    notifications.show({ 
+      title: 'Erreur', 
+      message: err.message || 'Impossible d\'enregistrer le paiement', 
+      color: 'red' 
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const resetForm = () => {
-    setVenteType('commande');
-    setClientId(null);
-    setClientNom('');
-    setClientTelephone('');
-    setClientNomSimple('');
-    setClientTelephoneSimple('');
-    setPanier([]);
-    setSelectedArticle(null);
-    setMontantCommande(0);
-    setQuantiteCommande(1);
-    setObservation('');
-    setProduitCommande('');
-    setSearchProduitTerm('');
-    setDateRendezVous('');
-    setHeureRendezVous('');
-    setTypeRendezVous('essayage');
-    generateCode();
-  };
+  setVenteType('commande');
+  setClientId(null);
+  setClientNom('');
+  setClientTelephone('');
+  setClientNomSimple('');
+  setClientTelephoneSimple('');
+  setPanier([]);
+  setSelectedArticle(null);
+  setMontantCommande(0);
+  setQuantiteCommande(1);
+  setObservation('');
+  setProduitCommande('');
+  setSearchProduitTerm('');
+  setDateRendezVous('');
+  setHeureRendezVous('');
+  setTypeRendezVous('essayage');
+  setDateCommande(new Date().toISOString().split('T')[0]);
+  generateCode(); // Générer un nouveau code pour le prochain formulaire
+};
 
   const backToList = () => { setViewMode('list'); loadVentes(); loadRendezVous(); };
   const formatPrice = (price: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XOF' }).format(price);
@@ -1049,33 +1162,176 @@ const VentesManager: React.FC = () => {
                     <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50 }}></Table.Th>
                   </Table.Tr>
                 </Table.Thead>
-                <Table.Tbody>
-                  {venteType === 'pret_a_porter' ?
-                    articles.filter(a => a.modele.toLowerCase().includes(searchProduitTerm.toLowerCase()) || a.couleur.toLowerCase().includes(searchProduitTerm.toLowerCase()) || a.taille.toLowerCase().includes(searchProduitTerm.toLowerCase())).map(article => {
-                      const mm = modeles?.find(m => m.designation === article.modele);
-                      const cc = couleurs?.find(c => c.nom_couleur === article.couleur);
-                      const tt = tailles?.find(t => t.libelle === article.taille);
-                      return (
-                        <Table.Tr key={article.id}>
-                          <Table.Td style={{ padding: '4px 8px' }}><Text size="xs" fw={600}>{article.modele}</Text>{mm && <Text size="10px" c="dimmed">{mm.categorie}</Text>}</Table.Td>
-                          <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" variant="light" color="blue">{tt?.code_taille || article.taille}</Badge></Table.Td>
-                          <Table.Td style={{ padding: '4px 8px' }}><Group gap={6} wrap="nowrap"><Box w={12} h={12} style={{ backgroundColor: cc?.code_hex || '#ccc', borderRadius: '50%', border: '1px solid rgba(0,0,0,0.2)' }} /><Text size="xs">{article.couleur}</Text></Group></Table.Td>
-                          <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" fw={600} c="green">{article.prix_vente.toLocaleString()} FCFA</Text></Table.Td>
-                          <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" color={article.quantite_stock < 5 ? 'orange' : 'green'}>{article.quantite_stock}</Badge></Table.Td>
-                          <Table.Td style={{ padding: '4px 8px' }}><ActionIcon variant="light" color="blue" size="sm" onClick={() => { setSelectedArticle(article); setQuantiteCmd(1); setShowQuantiteModal(true); }}><IconPlus size={14} /></ActionIcon></Table.Td>
-                        </Table.Tr>
-                      );
-                    }) :
-                    matieres.filter(m => m.designation.toLowerCase().includes(searchProduitTerm.toLowerCase())).map(matiere => (
-                      <Table.Tr key={matiere.id}>
-                        <Table.Td colSpan={3} style={{ padding: '4px 8px' }}><Text size="xs" fw={600}>{matiere.designation}</Text><Text size="10px" c="dimmed">{matiere.code_matiere} - {matiere.unite}</Text></Table.Td>
-                        <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" c="dimmed">-</Text></Table.Td>
-                        <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Badge size="xs" color={matiere.stock_actuel < 5 ? 'orange' : 'green'}>{matiere.stock_actuel}</Badge></Table.Td>
-                        <Table.Td style={{ padding: '4px 8px' }}><ActionIcon variant="light" color="blue" size="sm" onClick={() => handleAjouterMatiereAuPanier(matiere)}><IconPlus size={14} /></ActionIcon></Table.Td>
-                      </Table.Tr>
-                    ))
-                  }
-                </Table.Tbody>
+               <Table.Tbody>
+  {venteType === 'pret_a_porter' ?
+    (articles && Array.isArray(articles) ? articles.filter(a => {
+      // Vérifications sécurisées pour le filtrage
+      const modele = a?.modele?.toLowerCase() || '';
+      const couleur = a?.couleur?.toLowerCase() || '';
+      const taille = a?.taille?.toLowerCase() || '';
+      const searchTerm = searchProduitTerm?.toLowerCase() || '';
+      
+      return modele.includes(searchTerm) || 
+             couleur.includes(searchTerm) || 
+             taille.includes(searchTerm);
+    }).map(article => {
+      // Vérifications sécurisées pour l'affichage
+      const cc = couleurs?.find(c => c?.nom_couleur === article?.couleur);
+      const tt = tailles?.find(t => t?.libelle === article?.taille);
+      const prixVente = article?.prix_vente || 0;
+      const quantiteStock = article?.quantite_stock || 0;
+      
+      return (
+        <Table.Tr key={article?.id}>
+          <Table.Td style={{ padding: '4px 8px' }}>
+  <Text size="xs" fw={600}>
+    {article?.modele || article?.type_tenue || 'Type non défini'}
+  </Text>
+  {article?.categorie && <Text size="10px" c="dimmed">{article.categorie}</Text>}
+</Table.Td>
+          <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}>
+            <Badge size="xs" variant="light" color="blue">
+              {tt?.code_taille || article?.taille || 'N/A'}
+            </Badge>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px' }}>
+            <Group gap={6} wrap="nowrap">
+              <Box 
+                w={12} 
+                h={12} 
+                style={{ 
+                  backgroundColor: cc?.code_hex || '#ccc', 
+                  borderRadius: '50%', 
+                  border: '1px solid rgba(0,0,0,0.2)' 
+                }} 
+              />
+              <Text size="xs">{article?.couleur || 'N/A'}</Text>
+            </Group>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}>
+            <Text size="xs" fw={600} c="green">
+              {prixVente.toLocaleString()} FCFA
+            </Text>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}>
+            <Badge size="xs" color={quantiteStock < 5 ? 'orange' : 'green'}>
+              {quantiteStock}
+            </Badge>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px' }}>
+            <ActionIcon 
+              variant="light" 
+              color="blue" 
+              size="sm" 
+              onClick={() => { 
+                setSelectedArticle(article); 
+                setQuantiteCmd(1); 
+                setShowQuantiteModal(true); 
+              }}
+              disabled={quantiteStock === 0}
+            >
+              <IconPlus size={14} />
+            </ActionIcon>
+          </Table.Td>
+        </Table.Tr>
+      );
+    }) : (
+      <Table.Tr>
+        <Table.Td colSpan={6}>
+          <Text ta="center" size="sm" c="dimmed" py={20}>
+            Chargement des articles...
+          </Text>
+        </Table.Td>
+      </Table.Tr>
+    ))
+  :
+    (matieres && Array.isArray(matieres) ? matieres.filter(m => {
+      // Vérifications sécurisées pour les matières
+      const designation = m?.designation?.toLowerCase() || '';
+      const searchTerm = searchProduitTerm?.toLowerCase() || '';
+      return designation.includes(searchTerm);
+    }).map(matiere => {
+      const stockActuel = matiere?.stock_actuel || 0;
+      
+      return (
+        <Table.Tr key={matiere?.id}>
+          <Table.Td colSpan={3} style={{ padding: '4px 8px' }}>
+            <Text size="xs" fw={600}>{matiere?.designation || 'N/A'}</Text>
+            <Text size="10px" c="dimmed">
+              {matiere?.code_matiere || ''} {matiere?.unite ? `- ${matiere.unite}` : ''}
+            </Text>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}>
+            <Text size="xs" c="dimmed">-</Text>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}>
+            <Badge size="xs" color={stockActuel < 5 ? 'orange' : 'green'}>
+              {stockActuel}
+            </Badge>
+          </Table.Td>
+          <Table.Td style={{ padding: '4px 8px' }}>
+            <ActionIcon 
+              variant="light" 
+              color="blue" 
+              size="sm" 
+              onClick={() => handleAjouterMatiereAuPanier(matiere)}
+              disabled={stockActuel === 0}
+            >
+              <IconPlus size={14} />
+            </ActionIcon>
+          </Table.Td>
+        </Table.Tr>
+      );
+    }) : (
+      <Table.Tr>
+        <Table.Td colSpan={6}>
+          <Text ta="center" size="sm" c="dimmed" py={20}>
+            Chargement des matières...
+          </Text>
+        </Table.Td>
+      </Table.Tr>
+    ))
+  }
+  
+  {/* Message si aucun résultat */}
+  {venteType === 'pret_a_porter' && articles && articles.length === 0 && (
+    <Table.Tr>
+      <Table.Td colSpan={6}>
+        <Text ta="center" size="sm" c="dimmed" py={20}>
+          Aucun article disponible
+        </Text>
+      </Table.Td>
+    </Table.Tr>
+  )}
+  
+  {venteType !== 'pret_a_porter' && matieres && matieres.length === 0 && (
+    <Table.Tr>
+      <Table.Td colSpan={6}>
+        <Text ta="center" size="sm" c="dimmed" py={20}>
+          Aucune matière disponible
+        </Text>
+      </Table.Td>
+    </Table.Tr>
+  )}
+  
+  {/* Message si recherche sans résultat */}
+  {venteType === 'pret_a_porter' && articles && articles.length > 0 && 
+   articles.filter(a => {
+     const modele = a?.modele?.toLowerCase() || '';
+     const couleur = a?.couleur?.toLowerCase() || '';
+     const taille = a?.taille?.toLowerCase() || '';
+     const searchTerm = searchProduitTerm?.toLowerCase() || '';
+     return modele.includes(searchTerm) || couleur.includes(searchTerm) || taille.includes(searchTerm);
+   }).length === 0 && (
+    <Table.Tr>
+      <Table.Td colSpan={6}>
+        <Text ta="center" size="sm" c="dimmed" py={20}>
+          Aucun résultat pour "{searchProduitTerm}"
+        </Text>
+      </Table.Td>
+    </Table.Tr>
+  )}
+</Table.Tbody>
               </Table>
             </ScrollArea>
           </Card>
@@ -1110,35 +1366,58 @@ const VentesManager: React.FC = () => {
           </Card>
         )}
 
-        {panier.length > 0 && (
-          <Card withBorder radius="lg" shadow="sm" p="md">
-            <Title order={5} mb="sm">🛒 Produits sélectionnés ({panier.length})</Title>
-            <ScrollArea h={250} offsetScrollbars>
-              <Table striped highlightOnHover style={{ fontSize: 12 }}>
-                <Table.Thead style={{ backgroundColor: '#1b365d', position: 'sticky', top: 0, zIndex: 1 }}>
-                  <Table.Tr>
-                    <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px' }}>Désignation</Table.Th>
-                    <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 90, textAlign: 'right' }}>Prix unitaire</Table.Th>
-                    <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 50, textAlign: 'center' }}>Qté</Table.Th>
-                    <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 100, textAlign: 'right' }}>Total</Table.Th>
-                    <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 40 }}></Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {panier.map((item, idx) => (
-                    <Table.Tr key={`${item.id}-${idx}`}>
-                      <Table.Td style={{ padding: '4px 8px' }}><Text size="xs" fw={500}>{item.designation}</Text></Table.Td>
-                      <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs">{item.prixUnitaire.toLocaleString()} FCFA</Text></Table.Td>
-                      <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}><Text size="xs" fw={600}>{item.quantite}</Text></Table.Td>
-                      <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}><Text size="xs" fw={600} c="green">{item.total.toLocaleString()} FCFA</Text></Table.Td>
-                      <Table.Td style={{ padding: '4px 8px' }}><ActionIcon color="red" size="xs" variant="subtle" onClick={() => handleSupprimerPanier(item.id)}><IconTrash size={12} /></ActionIcon></Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
-          </Card>
-        )}
+       {panier.length > 0 && (
+  <Card withBorder radius="lg" shadow="sm" p="md">
+    <Title order={5} mb="sm">🛒 Produits sélectionnés ({panier.length})</Title>
+    <ScrollArea h={250} offsetScrollbars>
+      <Table striped highlightOnHover style={{ fontSize: 12 }}>
+        <Table.Thead style={{ backgroundColor: '#1b365d', position: 'sticky', top: 0, zIndex: 1 }}>
+          <Table.Tr>
+            <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px' }}>Désignation</Table.Th>
+            <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 100, textAlign: 'right' }}>Prix unitaire</Table.Th>
+            <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 60, textAlign: 'center' }}>Qté</Table.Th>
+            <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 100, textAlign: 'right' }}>Total</Table.Th>
+            <Table.Th style={{ color: 'white', fontSize: 11, padding: '6px 8px', width: 40 }}></Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {panier.map((item, idx) => (
+            <Table.Tr key={item.id || idx}>
+              <Table.Td style={{ padding: '4px 8px' }}>
+                <Text size="xs" fw={500}>{item.designation}</Text>
+                {item.taille && <Text size="10px" c="dimmed">Taille: {item.taille}</Text>}
+                {item.couleur && <Text size="10px" c="dimmed">Couleur: {item.couleur}</Text>}
+              </Table.Td>
+              <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                <Text size="xs">{item.prixUnitaire.toLocaleString()} FCFA</Text>
+              </Table.Td>
+              <Table.Td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                <Badge size="xs" variant="light" color="blue">{item.quantite}</Badge>
+              </Table.Td>
+              <Table.Td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                <Text size="xs" fw={600} c="green">{item.total.toLocaleString()} FCFA</Text>
+              </Table.Td>
+              <Table.Td style={{ padding: '4px 8px' }}>
+                <ActionIcon 
+                  variant="subtle" 
+                  color="red" 
+                  size="sm" 
+                  onClick={() => {
+                    const newPanier = [...panier];
+                    newPanier.splice(idx, 1);
+                    setPanier(newPanier);
+                  }}
+                >
+                  <IconTrash size={14} />
+                </ActionIcon>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </ScrollArea>
+  </Card>
+)}
 
         <Card withBorder radius="lg" shadow="sm" p="md">
           <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md" mb="md">

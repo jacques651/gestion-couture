@@ -9,9 +9,7 @@ import {
   TextInput,
   Textarea,
   Divider,
-  Alert,
   Box,
-  Modal,
   Select,
   NumberInput,
   Avatar,
@@ -22,14 +20,12 @@ import {
   Tooltip,
   ActionIcon,
   Container,
+  LoadingOverlay,
 } from '@mantine/core';
 import {
   IconReceipt,
   IconDeviceFloppy,
   IconArrowLeft,
-  IconAlertCircle,
-  IconCheck,
-  IconInfoCircle,
   IconCategory,
   IconTag,
   IconMoneybag,
@@ -46,20 +42,20 @@ import {
   IconCalendar,
 } from '@tabler/icons-react';
 import {
-
   apiPost,
   apiPut
-
 } from '../../services/api';
+import { notifications } from '@mantine/notifications';
 
 const categories = [
-  { value: 'transport', label: 'Transport', icon: IconGasStation, color: 'blue' },
-  { value: 'fourniture', label: 'Fournitures', icon: IconPackage, color: 'green' },
-  { value: 'tissu', label: 'Tissu', icon: IconScissors, color: 'pink' },
-  { value: 'entretien', label: 'Entretien', icon: IconTools, color: 'yellow' },
-  { value: 'eau-electricite', label: 'Eau/Électricité', icon: IconBuildingStore, color: 'cyan' },
-  { value: 'loyer', label: 'Loyer', icon: IconHome, color: 'orange' },
-  { value: 'autre', label: 'Autre', icon: IconCategory, color: 'gray' },
+  { value: 'FOURNITURES', label: '📦 Fournitures', icon: IconPackage, color: 'green' },
+  { value: 'TISSU', label: '🧵 Tissu', icon: IconScissors, color: 'pink' },
+  { value: 'ENTRETIEN', label: '🔧 Entretien', icon: IconTools, color: 'yellow' },
+  { value: 'EAU_ELECTRICITE', label: '💡 Eau/Électricité', icon: IconBuildingStore, color: 'cyan' },
+  { value: 'LOYER', label: '🏠 Loyer', icon: IconHome, color: 'orange' },
+  { value: 'TRANSPORT', label: '🚗 Transport', icon: IconGasStation, color: 'blue' },
+  { value: 'SALAIRE', label: '👥 Salaire', icon: IconUser, color: 'violet' },
+  { value: 'AUTRE', label: '📌 Autre', icon: IconCategory, color: 'gray' },
 ];
 
 const getCategoryIcon = (categorieValue: string) => {
@@ -81,13 +77,11 @@ const FormulaireDepense: React.FC<{
   const [responsable, setResponsable] = useState(depense?.responsable || '');
   const [observation, setObservation] = useState(depense?.observation || '');
   const [dateDepense, setDateDepense] = useState<string>(
-    depense?.date_depense || new Date().toISOString().split('T')[0]
+    depense?.date_depense ? new Date(depense.date_depense).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
   );
+  const [modePaiement, setModePaiement] = useState(depense?.mode_paiement || 'ESPECES');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [infoModalOpen, setInfoModalOpen] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [loading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Validation
@@ -118,80 +112,53 @@ const FormulaireDepense: React.FC<{
     e.preventDefault();
 
     if (!validateForm()) {
+      notifications.show({
+        title: 'Erreur',
+        message: 'Veuillez remplir tous les champs obligatoires',
+        color: 'red'
+      });
       return;
     }
 
     setIsSubmitting(true);
-    setError('');
 
     try {
+      const data = {
+        designation: designation.trim(),
+        categorie: categorie,
+        montant: montant,
+        mode_paiement: modePaiement,
+        responsable: responsable.trim(),
+        observation: observation.trim() || null,
+        date_depense: dateDepense
+      };
 
       if (depense) {
-
-        await apiPut(
-
-          `/depenses/${depense.id}`,
-
-          {
-
-            categorie,
-            designation,
-            montant,
-            responsable,
-            observation,
-            date_depense:
-              dateDepense
-          }
-        );
-
-        setSuccess(
-          'Dépense modifiée avec succès'
-        );
-
+        await apiPut(`/depenses/${depense.id}`, data);
+        notifications.show({
+          title: '✅ Succès',
+          message: 'Dépense modifiée avec succès',
+          color: 'green'
+        });
       } else {
-
-        await apiPost(
-
-          "/depenses",
-
-          {
-
-            categorie,
-            designation,
-            montant,
-            responsable,
-            observation,
-            date_depense:
-              dateDepense
-          }
-        );
-
-        setSuccess(
-          'Dépense ajoutée avec succès'
-        );
+        await apiPost("/depenses", data);
+        notifications.show({
+          title: '✅ Succès',
+          message: 'Dépense ajoutée avec succès',
+          color: 'green'
+        });
       }
 
-      setShowSuccess(true);
-
-      setTimeout(() => {
-
-        setShowSuccess(false);
-
-        onSuccess();
-
-      }, 2000);
+      onSuccess();
 
     } catch (err: any) {
-
-      setError(
-
-        err.message
-        ||
-        'Erreur lors de l’enregistrement'
-      );
-
+      console.error('Erreur:', err);
+      notifications.show({
+        title: '❌ Erreur',
+        message: err.message || 'Erreur lors de l’enregistrement',
+        color: 'red'
+      });
     } finally {
-
       setIsSubmitting(false);
     }
   };
@@ -202,12 +169,14 @@ const FormulaireDepense: React.FC<{
     setMontant(undefined);
     setResponsable('');
     setObservation('');
+    setModePaiement('ESPECES');
     setDateDepense(new Date().toISOString().split('T')[0]);
     setFieldErrors({});
   };
 
   return (
     <Container size="lg" p={0}>
+      <LoadingOverlay visible={loading} />
       <Box style={{ maxWidth: 800, margin: '0 auto' }} p="md">
         <Stack gap="lg">
           {/* HEADER MODERNE */}
@@ -241,16 +210,6 @@ const FormulaireDepense: React.FC<{
                 </Box>
               </Group>
               <Group>
-                <Tooltip label="Aide">
-                  <ActionIcon
-                    variant="light"
-                    color="white"
-                    size="lg"
-                    onClick={() => setInfoModalOpen(true)}
-                  >
-                    <IconInfoCircle size={20} />
-                  </ActionIcon>
-                </Tooltip>
                 <Tooltip label="Retour">
                   <ActionIcon
                     variant="light"
@@ -269,27 +228,6 @@ const FormulaireDepense: React.FC<{
           <Card withBorder radius="lg" shadow="sm" p="lg">
             <form onSubmit={handleSubmit}>
               <Stack gap="lg">
-                {/* SUCCÈS */}
-                {showSuccess && (
-                  <Alert
-                    icon={<IconCheck size={16} />}
-                    color="green"
-                    variant="filled"
-                  >
-                    <Text size="sm" c="white">{success}</Text>
-                    <Text size="xs" c="green.1" mt={4}>
-                      Redirection en cours...
-                    </Text>
-                  </Alert>
-                )}
-
-                {/* ERREUR */}
-                {error && (
-                  <Alert icon={<IconAlertCircle size={16} />} color="red" variant="filled">
-                    <Text size="sm" c="white">{error}</Text>
-                  </Alert>
-                )}
-
                 {/* SECTION CATÉGORIE */}
                 <div>
                   <Group gap="xs" mb="md">
@@ -315,7 +253,6 @@ const FormulaireDepense: React.FC<{
                       leftSection={getCategoryIcon(categorie)}
                       size="md"
                       required
-                      searchable
                       error={fieldErrors.categorie}
                     />
 
@@ -374,20 +311,36 @@ const FormulaireDepense: React.FC<{
                         error={fieldErrors.montant}
                       />
 
-                      <TextInput
-                        label="Responsable"
-                        placeholder="Nom du responsable"
-                        value={responsable}
-                        onChange={(e) => {
-                          setResponsable(e.target.value);
-                          setFieldErrors(prev => ({ ...prev, responsable: '' }));
-                        }}
-                        leftSection={<IconUser size={16} />}
+                      <Select
+                        label="Mode de paiement"
+                        placeholder="Choisir le mode de paiement"
+                        data={[
+                          { value: 'ESPECES', label: '💵 Espèces' },
+                          { value: 'CHEQUE', label: '📝 Chèque' },
+                          { value: 'VIREMENT', label: '🏦 Virement bancaire' },
+                          { value: 'CARTE', label: '💳 Carte bancaire' },
+                          { value: 'MOBILE_MONEY', label: '📱 Mobile Money' },
+                        ]}
+                        value={modePaiement}
+                        onChange={(val) => setModePaiement(val || 'ESPECES')}
+                        leftSection={<IconMoneybag size={16} />}
                         size="md"
-                        required
-                        error={fieldErrors.responsable}
                       />
                     </SimpleGrid>
+
+                    <TextInput
+                      label="Responsable"
+                      placeholder="Nom de la personne responsable"
+                      value={responsable}
+                      onChange={(e) => {
+                        setResponsable(e.target.value);
+                        setFieldErrors(prev => ({ ...prev, responsable: '' }));
+                      }}
+                      leftSection={<IconUser size={16} />}
+                      size="md"
+                      required
+                      error={fieldErrors.responsable}
+                    />
 
                     <Textarea
                       label="Observation"
@@ -413,6 +366,16 @@ const FormulaireDepense: React.FC<{
                     {categorie && (
                       <Text size="xs" c="dimmed" mt={4}>
                         Catégorie: {categories.find(c => c.value === categorie)?.label || categorie}
+                      </Text>
+                    )}
+                    {modePaiement && (
+                      <Text size="xs" c="dimmed">
+                        Paiement: {modePaiement}
+                      </Text>
+                    )}
+                    {responsable && (
+                      <Text size="xs" c="dimmed">
+                        Responsable: {responsable}
                       </Text>
                     )}
                   </Paper>
@@ -457,49 +420,6 @@ const FormulaireDepense: React.FC<{
               </Stack>
             </form>
           </Card>
-
-          {/* MODAL INSTRUCTIONS */}
-          <Modal
-            opened={infoModalOpen}
-            onClose={() => setInfoModalOpen(false)}
-            title={
-              <Group gap="xs">
-                <IconInfoCircle size={18} />
-                <Text fw={600}>Guide d'utilisation</Text>
-              </Group>
-            }
-            size="md"
-            centered
-            radius="lg"
-          >
-            <Stack gap="md">
-              <Paper p="sm" bg="blue.0" radius="md">
-                <Text size="sm" fw={500} mb="xs">📝 Informations générales</Text>
-                <Text size="xs" c="dimmed">• Sélectionnez une catégorie de dépense</Text>
-                <Text size="xs" c="dimmed">• La date par défaut est aujourd'hui</Text>
-                <Text size="xs" c="dimmed">• Tous les champs marqués * sont obligatoires</Text>
-              </Paper>
-
-              <Paper p="sm" bg="green.0" radius="md">
-                <Text size="sm" fw={500} mb="xs">💰 Montant</Text>
-                <Text size="xs" c="dimmed">• Saisissez le montant en FCFA</Text>
-                <Text size="xs" c="dimmed">• Utilisez les flèches pour incrémenter par 500 FCFA</Text>
-                <Text size="xs" c="dimmed">• Le montant doit être supérieur à 0</Text>
-              </Paper>
-
-              <Paper p="sm" bg="orange.0" radius="md">
-                <Text size="sm" fw={500} mb="xs">💡 Conseils</Text>
-                <Text size="xs" c="dimmed">• Renseignez toujours le responsable de la dépense</Text>
-                <Text size="xs" c="dimmed">• Ajoutez des observations pour un meilleur suivi</Text>
-                <Text size="xs" c="dimmed">• Utilisez le bouton "Réinitialiser" pour vider le formulaire</Text>
-              </Paper>
-
-              <Divider />
-              <Text size="xs" c="dimmed" ta="center">
-                Version 2.0.0 - Gestion Couture Pro
-              </Text>
-            </Stack>
-          </Modal>
         </Stack>
       </Box>
     </Container>

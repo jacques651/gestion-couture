@@ -384,17 +384,17 @@ const CouleursManager: React.FC = () => {
       </Container>
 
       {/* Modal Formulaire */}
-      <Modal
-        opened={modalOpened}
-        onClose={closeModal}
-        title={
-          <Title order={3} size="h4">
-            {editingCouleur ? 'Modifier la couleur' : 'Nouvelle couleur'}
-          </Title>
-        }
-        size="md"
-        radius="md"
-      >
+     <Modal
+  opened={modalOpened}
+  onClose={closeModal}
+  title={
+    <Text fw={600} size="lg">
+      {editingCouleur ? 'Modifier la couleur' : 'Nouvelle couleur'}
+    </Text>
+  }
+  size="md"
+  radius="md"
+>
         <Stack>
           <TextInput
             label="Nom de la couleur"

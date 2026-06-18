@@ -241,11 +241,23 @@ const ModalFacture: React.FC<ModalFactureProps> = ({ vente, onClose, onConfirmPa
   };
 
   const handleConfirmPaiement = () => {
-    if (onConfirmPaiement && montantPaiement > 0) {
-      onConfirmPaiement(montantPaiement, modePaiement);
-      setShowPaiement(false);
-    }
-  };
+  console.log("=== handleConfirmPaiement appelé ===");
+  console.log("montantPaiement:", montantPaiement);
+  console.log("modePaiement:", modePaiement);
+  console.log("onConfirmPaiement existe?", !!onConfirmPaiement);
+  
+  if (onConfirmPaiement && montantPaiement > 0) {
+    console.log("✅ Appel de onConfirmPaiement avec:", montantPaiement, modePaiement);
+    onConfirmPaiement(montantPaiement, modePaiement);
+    setShowPaiement(false);
+  } else {
+    console.log("❌ Conditions non remplies:", {
+      onConfirmPaiement: !!onConfirmPaiement,
+      montantPaiement: montantPaiement,
+      montantPaiementValide: montantPaiement > 0
+    });
+  }
+};
 
   if (loading) {
     return (

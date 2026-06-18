@@ -6,7 +6,6 @@ const getApiUrl = () => {
   if (savedUrl) {
     return savedUrl;
   }
-  // Valeur par défaut pour le développement
   return 'http://localhost:3001';
 };
 
@@ -15,7 +14,8 @@ export const apiGet = async (url: string) => {
     const baseUrl = getApiUrl();
     const response = await fetch(`${baseUrl}${url}`);
     if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Erreur API: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
@@ -35,7 +35,9 @@ export const apiPost = async (url: string, data?: any) => {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API POST error details:', errorData); // ✅ Log détaillé
+      throw new Error(errorData.error || errorData.detail || `Erreur API: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
@@ -55,7 +57,9 @@ export const apiPut = async (url: string, data?: any) => {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API PUT error details:', errorData);
+      throw new Error(errorData.error || `Erreur API: ${response.status}`);
     }
     return await response.json();
   } catch (error) {
@@ -71,7 +75,8 @@ export const apiDelete = async (url: string) => {
       method: 'DELETE',
     });
     if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Erreur API: ${response.status}`);
     }
     return await response.json();
   } catch (error) {

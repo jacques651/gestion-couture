@@ -3,55 +3,76 @@ import { pool } from "../db";
 
 const router = Router();
 
-/**
- * GET ARTICLES
- */
 router.get("/", async (_, res) => {
-
   try {
-
     const result = await pool.query(`
       SELECT
         a.*,
-
-        m.designation AS modele,
-        m.categorie,
-
+        tt.nom AS type_tenue,
+        tt.categorie,
         t.libelle AS taille,
-
         c.nom_couleur AS couleur,
         c.code_hex,
-
         tx.nom_texture AS texture
-
       FROM articles a
-
-      LEFT JOIN modeles_tenues m
-        ON a.modele_id = m.id
-
-      LEFT JOIN tailles t
-        ON a.taille_id = t.id
-
-      LEFT JOIN couleurs c
-        ON a.couleur_id = c.id
-
-      LEFT JOIN textures tx
-        ON a.texture_id = tx.id
-
+      LEFT JOIN types_tenues tt ON a.type_tenue_id = tt.id
+      LEFT JOIN tailles t ON a.taille_id = t.id
+      LEFT JOIN couleurs c ON a.couleur_id = c.id
+      LEFT JOIN textures tx ON a.texture_id = tx.id
       WHERE a.est_actif = 1
-
       ORDER BY a.id DESC
     `);
 
-    res.json(result.rows);
-
+    res.json(result.rows.map(r => ({
+      ...r,
+      prix_achat: Number(r.prix_achat || 0),
+      prix_vente: Number(r.prix_vente || 0),
+      quantite_stock: Number(r.quantite_stock || 0),
+      seuil_alerte: Number(r.seuil_alerte || 0)
+    })));
   } catch (error) {
+    console.error("❌ Erreur GET /articles:", error);
+    res.status(500).json({ error: "Erreur récupération articles" });
+  }
+});
 
-    console.error(error);
+/**
+ * GET ARTICLE BY ID
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`
+      SELECT
+        a.*,
+        tt.designation AS type_tenue,
+        tt.categorie,
+        t.libelle AS taille,
+        c.nom_couleur AS couleur,
+        c.code_hex,
+        tx.nom_texture AS texture
+      FROM articles a
+      LEFT JOIN types_tenues tt ON a.type_tenue_id = tt.id
+      LEFT JOIN tailles t ON a.taille_id = t.id
+      LEFT JOIN couleurs c ON a.couleur_id = c.id
+      LEFT JOIN textures tx ON a.texture_id = tx.id
+      WHERE a.id = $1 AND a.est_actif = 1
+    `, [id]);
 
-    res.status(500).json({
-      error: "Erreur récupération articles"
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Article non trouvé" });
+    }
+
+    res.json({
+      ...result.rows[0],
+      prix_achat: Number(result.rows[0].prix_achat || 0),
+      prix_vente: Number(result.rows[0].prix_vente || 0),
+      quantite_stock: Number(result.rows[0].quantite_stock || 0),
+      seuil_alerte: Number(result.rows[0].seuil_alerte || 0)
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Erreur récupération article" });
   }
 });
 
@@ -59,11 +80,9 @@ router.get("/", async (_, res) => {
  * CREATE
  */
 router.post("/", async (req, res) => {
-
   try {
-
     const {
-      modele_id,
+      type_tenue_id,
       taille_id,
       couleur_id,
       texture_id,
@@ -74,18 +93,18 @@ router.post("/", async (req, res) => {
       emplacement,
       code_barre,
       notes,
+      image_url,
       est_disponible,
       est_actif
     } = req.body;
 
-    const code_article =
-      `ART-${Date.now()}`;
+    const code_article = `ART-${Date.now()}`;
 
     const result = await pool.query(
       `
       INSERT INTO articles (
         code_article,
-        modele_id,
+        type_tenue_id,
         taille_id,
         couleur_id,
         texture_id,
@@ -96,39 +115,46 @@ router.post("/", async (req, res) => {
         emplacement,
         code_barre,
         notes,
+        image_url,
         est_disponible,
         est_actif
       )
-      VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,
-        $9,$10,$11,$12,$13,$14
-      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
       `,
       [
         code_article,
-        modele_id,
-        taille_id,
-        couleur_id,
-        texture_id,
-        prix_achat,
-        prix_vente,
-        quantite_stock,
-        seuil_alerte,
-        emplacement,
-        code_barre,
-        notes,
-        est_disponible,
-        est_actif
+        type_tenue_id || null,
+        taille_id || null,
+        couleur_id || null,
+        texture_id || null,
+        prix_achat || 0,
+        prix_vente || 0,
+        quantite_stock || 0,
+        seuil_alerte || 0,
+        emplacement || null,
+        code_barre || null,
+        notes || null,
+        image_url || null,
+        est_disponible !== undefined ? est_disponible : 1,
+        est_actif !== undefined ? est_actif : 1
       ]
     );
 
-    res.json(result.rows[0]);
-
-  } catch (error) {
-
+    res.status(201).json({
+      ...result.rows[0],
+      prix_achat: Number(result.rows[0].prix_achat || 0),
+      prix_vente: Number(result.rows[0].prix_vente || 0),
+      quantite_stock: Number(result.rows[0].quantite_stock || 0),
+      seuil_alerte: Number(result.rows[0].seuil_alerte || 0)
+    });
+  } catch (error: any) {
     console.error(error);
-
+    if (error.code === "23505") {
+      return res.status(400).json({
+        error: "Cet article existe déjà (code_barre dupliqué)"
+      });
+    }
     res.status(500).json({
       error: "Erreur création article"
     });
@@ -139,13 +165,10 @@ router.post("/", async (req, res) => {
  * UPDATE
  */
 router.put("/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
-
     const {
-      modele_id,
+      type_tenue_id,
       taille_id,
       couleur_id,
       texture_id,
@@ -156,6 +179,7 @@ router.put("/:id", async (req, res) => {
       emplacement,
       code_barre,
       notes,
+      image_url,
       est_disponible,
       est_actif
     } = req.body;
@@ -164,25 +188,26 @@ router.put("/:id", async (req, res) => {
       `
       UPDATE articles
       SET
-        modele_id = $1,
-        taille_id = $2,
-        couleur_id = $3,
-        texture_id = $4,
-        prix_achat = $5,
-        prix_vente = $6,
-        quantite_stock = $7,
-        seuil_alerte = $8,
-        emplacement = $9,
-        code_barre = $10,
-        notes = $11,
-        est_disponible = $12,
-        est_actif = $13,
+        type_tenue_id = COALESCE($1, type_tenue_id),
+        taille_id = COALESCE($2, taille_id),
+        couleur_id = COALESCE($3, couleur_id),
+        texture_id = COALESCE($4, texture_id),
+        prix_achat = COALESCE($5, prix_achat),
+        prix_vente = COALESCE($6, prix_vente),
+        quantite_stock = COALESCE($7, quantite_stock),
+        seuil_alerte = COALESCE($8, seuil_alerte),
+        emplacement = COALESCE($9, emplacement),
+        code_barre = COALESCE($10, code_barre),
+        notes = COALESCE($11, notes),
+        image_url = COALESCE($12, image_url),
+        est_disponible = COALESCE($13, est_disponible),
+        est_actif = COALESCE($14, est_actif),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $14
+      WHERE id = $15 AND est_actif = 1
       RETURNING *
       `,
       [
-        modele_id,
+        type_tenue_id,
         taille_id,
         couleur_id,
         texture_id,
@@ -193,20 +218,78 @@ router.put("/:id", async (req, res) => {
         emplacement,
         code_barre,
         notes,
+        image_url,
         est_disponible,
         est_actif,
         id
       ]
     );
 
-    res.json(result.rows[0]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Article non trouvé" });
+    }
 
-  } catch (error) {
-
+    res.json({
+      ...result.rows[0],
+      prix_achat: Number(result.rows[0].prix_achat || 0),
+      prix_vente: Number(result.rows[0].prix_vente || 0),
+      quantite_stock: Number(result.rows[0].quantite_stock || 0),
+      seuil_alerte: Number(result.rows[0].seuil_alerte || 0)
+    });
+  } catch (error: any) {
     console.error(error);
-
+    if (error.code === "23505") {
+      return res.status(400).json({
+        error: "Cet article existe déjà (code_barre dupliqué)"
+      });
+    }
     res.status(500).json({
       error: "Erreur modification article"
+    });
+  }
+});
+
+/**
+ * UPDATE STOCK
+ */
+router.put("/:id/stock", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantite, action } = req.body;
+
+    const checkResult = await pool.query(
+      `SELECT id, quantite_stock FROM articles WHERE id = $1 AND est_actif = 1`,
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: "Article non trouvé" });
+    }
+
+    const operator = action === "add" ? "+" : "-";
+    const result = await pool.query(
+      `
+      UPDATE articles
+      SET
+        quantite_stock = quantite_stock ${operator} $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND est_actif = 1
+      RETURNING *
+      `,
+      [quantite, id]
+    );
+
+    res.json({
+      ...result.rows[0],
+      quantite_stock: Number(result.rows[0].quantite_stock),
+      prix_achat: Number(result.rows[0].prix_achat || 0),
+      prix_vente: Number(result.rows[0].prix_vente || 0),
+      seuil_alerte: Number(result.rows[0].seuil_alerte || 0)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Erreur mise à jour du stock"
     });
   }
 });
@@ -215,30 +298,104 @@ router.put("/:id", async (req, res) => {
  * DELETE LOGIQUE
  */
 router.delete("/:id", async (req, res) => {
-
   try {
-
     const { id } = req.params;
 
-    await pool.query(
+    const result = await pool.query(
       `
       UPDATE articles
       SET est_actif = 0
-      WHERE id = $1
+      WHERE id = $1 AND est_actif = 1
+      RETURNING id
       `,
       [id]
     );
 
-    res.json({
-      success: true
-    });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Article non trouvé" });
+    }
 
+    res.json({ success: true });
   } catch (error) {
-
     console.error(error);
-
     res.status(500).json({
       error: "Erreur suppression article"
+    });
+  }
+});
+
+/**
+ * GET ARTICLE BY CODE BARRE
+ */
+router.get("/code-barre/:code", async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        a.*,
+        tt.designation AS type_tenue,
+        t.libelle AS taille,
+        c.nom_couleur AS couleur,
+        tx.nom_texture AS texture
+      FROM articles a
+      LEFT JOIN types_tenues tt ON a.type_tenue_id = tt.id
+      LEFT JOIN tailles t ON a.taille_id = t.id
+      LEFT JOIN couleurs c ON a.couleur_id = c.id
+      LEFT JOIN textures tx ON a.texture_id = tx.id
+      WHERE a.code_barre = $1 AND a.est_actif = 1
+      `,
+      [code]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Article non trouvé" });
+    }
+
+    res.json({
+      ...result.rows[0],
+      prix_achat: Number(result.rows[0].prix_achat || 0),
+      prix_vente: Number(result.rows[0].prix_vente || 0),
+      quantite_stock: Number(result.rows[0].quantite_stock || 0)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Erreur recherche article"
+    });
+  }
+});
+
+/**
+ * GET ARTICLES EN RUPTURE DE STOCK
+ */
+router.get("/rupture-stock", async (_, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.*,
+        tt.designation AS type_tenue,
+        t.libelle AS taille
+      FROM articles a
+      LEFT JOIN types_tenues tt ON a.type_tenue_id = tt.id
+      LEFT JOIN tailles t ON a.taille_id = t.id
+      WHERE a.est_actif = 1 
+        AND a.quantite_stock <= a.seuil_alerte
+      ORDER BY a.quantite_stock ASC
+    `);
+
+    res.json(
+      result.rows.map(r => ({
+        ...r,
+        quantite_stock: Number(r.quantite_stock || 0),
+        seuil_alerte: Number(r.seuil_alerte || 0)
+      }))
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Erreur récupération articles en rupture"
     });
   }
 });

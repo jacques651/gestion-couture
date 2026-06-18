@@ -33,16 +33,12 @@ import {
   IconSearch,
   IconRefresh,
   IconInfoCircle,
-  IconArrowUp,
-  IconArrowDown,
   IconCheck,
   IconDimensions,
 } from '@tabler/icons-react';
 import {
   apiGet,
-  apiPut,
-  apiDelete
-} from '../../services/api';
+  apiDelete} from '../../services/api';
 import FormulaireTypeMesure from './FormulaireTypeMesure';
 import { journaliserAction } from '../../services/journal';
 
@@ -50,7 +46,6 @@ interface TypeMesure {
   id: number;
   nom: string;
   unite: string;
-  ordre_affichage: number;
   est_active: number;
 }
 
@@ -67,121 +62,51 @@ const ConfigurationMesures: React.FC = () => {
   const itemsPerPage = 10;
 
   const chargerTypes = async () => {
-
     try {
-
       setLoading(true);
-
-      const result =
-        await apiGet(
-          "/types-mesures"
-        );
-
-      setTypes(result || []);
-
+      const result = await apiGet("/types-mesures");
+      setTypes(Array.isArray(result) ? result : []);
     } catch (error) {
-
-      console.error(error);
-
+      console.error("❌ Erreur chargement types:", error);
+      setTypes([]);
     } finally {
-
       setLoading(false);
     }
+  };
+
+  const supprimerType = async (id: number, nom: string) => {
+    if (!globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
+    
+    try {
+      await apiDelete(`/types-mesures/${id}`);
+      await journaliserAction({
+        utilisateur: 'Utilisateur',
+        action: 'DELETE',
+        table: 'types_mesures',
+        idEnregistrement: id,
+        details: `Suppression type mesure : ${nom}`
+      });
+      await chargerTypes();
+      setSuccessMessage(`Type "${nom}" supprimé avec succès`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error) {
+      console.error("❌ Erreur suppression:", error);
+      setSuccessMessage(`Erreur lors de la suppression`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    }
+  };
+
+  const handleReset = async () => {
+    setRecherche('');
+    await chargerTypes();
+    setCurrentPage(1);
   };
 
   useEffect(() => {
     chargerTypes();
   }, []);
-
-  const supprimerType = async (id: number, nom: string) => {
-    if (!globalThis.confirm(`Supprimer le type de mesure "${nom}" ?`)) return;
-    await apiDelete(
-      `/types-mesures/${id}`
-    );
-
-    await journaliserAction({
-      utilisateur: 'Utilisateur',
-      action: 'DELETE',
-      table: 'types_mesures',
-      idEnregistrement: id,
-      details: `Suppression type mesure : ${nom}`
-    });
-
-    await chargerTypes();
-    setSuccessMessage(`Type "${nom}" supprimé avec succès`);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
-  };
-
-  const changerOrdre = async (
-    id: number,
-    actuel: number,
-    direction: 'haut' | 'bas'
-  ) => {
-
-    try {
-
-      const nouvelOrdre =
-        direction === 'haut'
-          ? actuel - 1
-          : actuel + 1;
-
-      if (
-        nouvelOrdre < 1 ||
-        nouvelOrdre > types.length
-      ) return;
-
-      await apiPut(
-        `/types-mesures/${id}/ordre`,
-        {
-          ordre_affichage:
-            nouvelOrdre,
-
-          ancien_ordre:
-            actuel
-        }
-      );
-
-      await journaliserAction({
-        utilisateur: 'Utilisateur',
-        action: 'UPDATE',
-        table: 'types_mesures',
-        idEnregistrement: id,
-        details:
-          `Modification ordre affichage : ${direction}`
-      });
-
-      await chargerTypes();
-
-      setSuccessMessage(
-        `Ordre mis à jour avec succès`
-      );
-
-      setShowSuccess(true);
-
-      setTimeout(
-        () => setShowSuccess(false),
-        3000
-      );
-
-    } catch (error) {
-
-      console.error(error);
-    }
-  };
-  const handleReset = async () => {
-    setRecherche('');
-    await chargerTypes();
-    setCurrentPage(1);
-
-    await journaliserAction({
-      utilisateur: 'Utilisateur',
-      action: 'UPDATE',
-      table: 'types_mesures',
-      idEnregistrement: 'REFRESH',
-      details: 'Actualisation liste types mesures'
-    });
-  };
 
   const typesFiltres = types.filter(t =>
     t.nom.toLowerCase().includes(recherche.toLowerCase())
@@ -231,7 +156,6 @@ const ConfigurationMesures: React.FC = () => {
     <Box p="md">
       <Container size="full">
         <Stack gap="lg">
-          {/* Notification de succès */}
           {showSuccess && (
             <Notification
               icon={<IconCheck size={18} />}
@@ -244,7 +168,6 @@ const ConfigurationMesures: React.FC = () => {
             </Notification>
           )}
 
-          {/* Header amélioré */}
           <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
             <Group justify="space-between" align="center">
               <Group gap="md">
@@ -275,7 +198,6 @@ const ConfigurationMesures: React.FC = () => {
             </Group>
           </Card>
 
-          {/* Barre d'outils */}
           <Card withBorder radius="lg" shadow="sm" p="sm">
             <Group justify="space-between" wrap="wrap" gap="sm">
               <Group gap="sm">
@@ -315,7 +237,6 @@ const ConfigurationMesures: React.FC = () => {
             </Group>
           </Card>
 
-          {/* Tableau des types de mesures - COMPACT */}
           <Card withBorder radius="lg" shadow="sm" p={0} style={{ overflow: 'hidden' }}>
             {typesFiltres.length === 0 ? (
               <Stack align="center" py={60} gap="sm">
@@ -329,18 +250,12 @@ const ConfigurationMesures: React.FC = () => {
               </Stack>
             ) : (
               <>
-                <Table
-                  striped
-                  highlightOnHover
-                  verticalSpacing="xs"
-                  horizontalSpacing="sm"
-                >
+                <Table striped highlightOnHover verticalSpacing="xs" horizontalSpacing="sm">
                   <Table.Thead style={{ backgroundColor: '#1b365d' }}>
                     <Table.Tr>
                       <Table.Th style={{ color: 'white', padding: '8px 12px' }}>Nom</Table.Th>
                       <Table.Th style={{ color: 'white', padding: '8px 12px' }}>Unité</Table.Th>
-                      <Table.Th style={{ color: 'white', padding: '8px 12px', width: 80 }}>Ordre</Table.Th>
-                      <Table.Th style={{ textAlign: 'center', color: 'white', padding: '8px 12px', width: 140 }}>Actions</Table.Th>
+                      <Table.Th style={{ textAlign: 'center', color: 'white', padding: '8px 12px', width: 100 }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -360,32 +275,7 @@ const ConfigurationMesures: React.FC = () => {
                           </Badge>
                         </Table.Td>
                         <Table.Td style={{ padding: '6px 12px' }}>
-                          <Badge color="blue" variant="filled" size="sm">
-                            {t.ordre_affichage}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td style={{ padding: '6px 12px' }}>
                           <Group gap={4} justify="center" wrap="nowrap">
-                            <Tooltip label="Monter">
-                              <ActionIcon
-                                size="sm"
-                                variant="subtle"
-                                color="blue"
-                                onClick={() => changerOrdre(t.id, t.ordre_affichage, 'haut')}
-                              >
-                                <IconArrowUp size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                            <Tooltip label="Descendre">
-                              <ActionIcon
-                                size="sm"
-                                variant="subtle"
-                                color="blue"
-                                onClick={() => changerOrdre(t.id, t.ordre_affichage, 'bas')}
-                              >
-                                <IconArrowDown size={16} />
-                              </ActionIcon>
-                            </Tooltip>
                             <Tooltip label="Modifier">
                               <ActionIcon
                                 size="sm"
@@ -432,7 +322,6 @@ const ConfigurationMesures: React.FC = () => {
             )}
           </Card>
 
-          {/* Modal Instructions améliorée */}
           <Modal
             opened={infoModalOpen}
             onClose={() => setInfoModalOpen(false)}
@@ -440,41 +329,27 @@ const ConfigurationMesures: React.FC = () => {
             size="md"
             centered
             radius="lg"
-            styles={{
-              header: {
-                backgroundColor: '#1b365d',
-                padding: '16px 20px',
-              },
-              title: {
-                color: 'white',
-                fontWeight: 600,
-              },
-              body: {
-                padding: '24px',
-              },
-            }}
           >
             <Stack gap="md">
               <Paper p="md" radius="md" withBorder bg="blue.0">
                 <Text fw={600} size="sm" mb="md">📌 Fonctionnalités :</Text>
                 <Stack gap="xs">
                   <Text size="sm">1️⃣ Utilisez le bouton "Nouveau type" pour ajouter un type de mesure</Text>
-                  <Text size="sm">2️⃣ Les flèches ↑ ↓ permettent de réorganiser l'ordre d'affichage</Text>
-                  <Text size="sm">3️⃣ La recherche filtre par nom de mesure</Text>
-                  <Text size="sm">4️⃣ Cliquez sur ✏️ pour modifier un type existant</Text>
-                  <Text size="sm">5️⃣ Cliquez sur 🗑️ pour supprimer un type (désactivation)</Text>
+                  <Text size="sm">2️⃣ La recherche filtre par nom de mesure</Text>
+                  <Text size="sm">3️⃣ Cliquez sur ✏️ pour modifier un type existant</Text>
+                  <Text size="sm">4️⃣ Cliquez sur 🗑️ pour supprimer un type</Text>
                 </Stack>
               </Paper>
 
               <Paper p="md" radius="md" withBorder bg="yellow.0">
                 <Text fw={600} size="sm" mb="md">💡 Exemples de mesures :</Text>
                 <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs">
-                  <Group gap="xs"><Badge color="blue" size="sm">Tour de poitrine</Badge><Text size="xs">cm</Text></Group>
-                  <Group gap="xs"><Badge color="blue" size="sm">Tour de taille</Badge><Text size="xs">cm</Text></Group>
-                  <Group gap="xs"><Badge color="blue" size="sm">Tour de hanches</Badge><Text size="xs">cm</Text></Group>
-                  <Group gap="xs"><Badge color="blue" size="sm">Longueur dos</Badge><Text size="xs">cm</Text></Group>
+                  <Group gap="xs"><Badge color="blue" size="sm">Epaule</Badge><Text size="xs">cm</Text></Group>
+                  <Group gap="xs"><Badge color="blue" size="sm">Dos</Badge><Text size="xs">cm</Text></Group>
+                  <Group gap="xs"><Badge color="blue" size="sm">Poitrine</Badge><Text size="xs">cm</Text></Group>
+                  <Group gap="xs"><Badge color="blue" size="sm">Taille</Badge><Text size="xs">cm</Text></Group>
+                  <Group gap="xs"><Badge color="blue" size="sm">Bassin</Badge><Text size="xs">cm</Text></Group>
                   <Group gap="xs"><Badge color="blue" size="sm">Longueur manche</Badge><Text size="xs">cm</Text></Group>
-                  <Group gap="xs"><Badge color="blue" size="sm">Hauteur poitrine</Badge><Text size="xs">cm</Text></Group>
                 </SimpleGrid>
               </Paper>
 

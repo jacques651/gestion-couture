@@ -10,28 +10,14 @@ import {
   apiPost
 } from '../services/api';
 
-export type Role =
-  | 'admin'
-  | 'caissier'
-  | 'couturier';
+export type Role = string; // ✅ Accepte tous les rôles
 
 export interface User {
-
   id: number;
-
   nom: string;
-
   login: string;
-
-  role: Role;
-
-  permissions?: Record<
-    string,
-    {
-      lecture: boolean;
-      ecriture: boolean;
-    }
-  >;
+  role: string; // ✅ string au lieu de Role
+  permissions?: Record<string, { lecture: boolean; ecriture: boolean }>;
 }
 
 interface Permission {
@@ -71,10 +57,10 @@ interface AuthContextType {
   ) => boolean;
 
   permissions:
-    Record<
-      string,
-      Permission
-    >;
+  Record<
+    string,
+    Permission
+  >;
 
   canRead: (
     fonctionnalite: string
@@ -95,27 +81,8 @@ const AuthContext =
  * NORMALIZE ROLE
  * =========================
  */
-const normalizeRole = (
-  role: string
-): Role => {
-
-  const r =
-    role
-      ?.toLowerCase()
-      .trim();
-
-  if (
-    r === 'admin'
-    ||
-    r === 'caissier'
-    ||
-    r === 'couturier'
-  ) {
-
-    return r;
-  }
-
-  return 'couturier';
+const normalizeRole = (role: string): string => {
+  return role?.toLowerCase().trim() || 'couturier';
 };
 
 /**
@@ -123,57 +90,25 @@ const normalizeRole = (
  * LOAD USER PERMISSIONS
  * =========================
  */
-const loadUserPermissions =
-  async (
-    userId: number
-  ): Promise<
-    Record<
-      string,
-      Permission
-    >
-  > => {
+const loadUserPermissions = async (userId: number): Promise<Record<string, Permission>> => {
+  try {
+    const perms = await apiGet(`/utilisateurs/${userId}/permissions`);
+    const map: Record<string, Permission> = {};
 
-    try {
+    perms.forEach((p: any) => {
+      // ✅ Utiliser p.fonctionnalite (pas p.module)
+      map[p.fonctionnalite] = {
+        lecture: p.lecture === 1,
+        ecriture: p.ecriture === 1
+      };
+    });
 
-      const perms =
-        await apiGet(
-          `/utilisateurs/${userId}/permissions`
-        );
-
-      const map:
-        Record<
-          string,
-          Permission
-        > = {};
-
-      perms.forEach(
-        (p: any) => {
-
-          map[
-            p.module
-          ] = {
-
-            lecture:
-              p.peut_voir === 1,
-
-            ecriture:
-              p.peut_modifier === 1
-          };
-        }
-      );
-
-      return map;
-
-    } catch (error) {
-
-      console.error(
-        "Erreur permissions:",
-        error
-      );
-
-      return {};
-    }
-  };
+    return map;
+  } catch (error) {
+    console.error("Erreur permissions:", error);
+    return {};
+  }
+};
 
 /**
  * =========================
@@ -181,403 +116,403 @@ const loadUserPermissions =
  * =========================
  */
 export const AuthProvider:
-React.FC<{
-  children: React.ReactNode
-}> = ({
-  children
-}) => {
+  React.FC<{
+    children: React.ReactNode
+  }> = ({
+    children
+  }) => {
 
-  const [
-    user,
-    setUser
-  ] = useState<
-    User | null
-  >(null);
+    const [
+      user,
+      setUser
+    ] = useState<
+      User | null
+    >(null);
 
-  const [
-    loading,
-    setLoading
-  ] = useState(true);
+    const [
+      loading,
+      setLoading
+    ] = useState(true);
 
-  const [
-    permissions,
-    setPermissions
-  ] = useState<
-    Record<
-      string,
-      Permission
-    >
-  >({});
+    const [
+      permissions,
+      setPermissions
+    ] = useState<
+      Record<
+        string,
+        Permission
+      >
+    >({});
 
-  /**
-   * =========================
-   * LOAD SESSION
-   * =========================
-   */
-  useEffect(() => {
+    /**
+     * =========================
+     * LOAD SESSION
+     * =========================
+     */
+    useEffect(() => {
 
-    const init =
-    async () => {
+      const init =
+        async () => {
+
+          try {
+
+            const stored =
+
+              localStorage.getItem(
+                'utilisateur'
+              );
+
+            if (stored) {
+
+              const parsed =
+                JSON.parse(stored);
+
+              const userObj: User = {
+
+                id:
+                  parsed.id,
+
+                nom:
+                  parsed.nom,
+
+                login:
+                  parsed.login,
+
+                role:
+                  normalizeRole(
+                    parsed.role
+                  )
+              };
+
+              setUser(
+                userObj
+              );
+
+              /**
+               * ADMIN
+               */
+              if (
+                userObj.role === 'admin'
+              ) {
+
+                setPermissions({});
+
+              } else {
+
+                /**
+                 * USER PERMISSIONS
+                 */
+                const perms =
+
+                  await loadUserPermissions(
+                    userObj.id
+                  );
+
+                setPermissions(
+                  perms
+                );
+
+                userObj.permissions =
+                  perms;
+              }
+            }
+
+          } catch (err) {
+
+            console.error(
+              'Erreur chargement session:',
+              err
+            );
+
+            localStorage.removeItem(
+              'utilisateur'
+            );
+
+          } finally {
+
+            setLoading(false);
+          }
+        };
+
+      init();
+
+    }, []);
+
+    /**
+     * =========================
+     * REGISTER
+     * =========================
+     */
+    const register = async (
+
+      nom: string,
+
+      login: string,
+
+      password: string,
+
+      role: Role
+
+    ) => {
+
+      await apiPost(
+
+        "/utilisateurs",
+
+        {
+
+          nom:
+            nom.trim(),
+
+          login:
+            login.trim(),
+
+          mot_de_passe:
+            password,
+
+          role,
+
+          est_actif: 1
+        }
+      );
+    };
+
+    /**
+     * =========================
+     * LOGIN
+     * =========================
+     */
+    const login = async (
+
+      loginValue: string,
+
+      password: string
+
+    ): Promise<{
+
+      success: boolean;
+
+      utilisateur?: User;
+
+    }> => {
 
       try {
 
-        const stored =
+        /**
+         * API LOGIN
+         */
+        const utilisateur =
+          await apiPost(
 
-          localStorage.getItem(
-            'utilisateur'
+            "/utilisateurs/login",
+
+            {
+
+              login:
+                loginValue.trim(),
+
+              mot_de_passe:
+                password
+            }
           );
 
-        if (stored) {
+        /**
+         * USER OBJECT
+         */
+        const userObj: User = {
 
-          const parsed =
-            JSON.parse(stored);
+          id:
+            utilisateur.id,
 
-          const userObj: User = {
+          nom:
+            utilisateur.nom,
 
-            id:
-              parsed.id,
+          login:
+            utilisateur.login,
 
-            nom:
-              parsed.nom,
+          role:
+            normalizeRole(
+              utilisateur.role
+            )
+        };
 
-            login:
-              parsed.login,
+        /**
+         * SAVE SESSION
+         */
+        setUser(
+          userObj
+        );
 
-            role:
-              normalizeRole(
-                parsed.role
-              )
-          };
+        localStorage.setItem(
 
-          setUser(
+          'utilisateur',
+
+          JSON.stringify(
             userObj
-          );
+          )
+        );
+
+        /**
+         * ADMIN
+         */
+        if (
+          userObj.role === 'admin'
+        ) {
+
+          setPermissions({});
+
+        } else {
 
           /**
-           * ADMIN
+           * USER PERMISSIONS
            */
-          if (
-            userObj.role === 'admin'
-          ) {
+          const perms =
 
-            setPermissions({});
-
-          } else {
-
-            /**
-             * USER PERMISSIONS
-             */
-            const perms =
-
-              await loadUserPermissions(
-                userObj.id
-              );
-
-            setPermissions(
-              perms
+            await loadUserPermissions(
+              userObj.id
             );
 
-            userObj.permissions =
-              perms;
-          }
+          setPermissions(
+            perms
+          );
+
+          userObj.permissions =
+            perms;
         }
+
+        return {
+
+          success: true,
+
+          utilisateur:
+            userObj
+        };
 
       } catch (err) {
 
         console.error(
-          'Erreur chargement session:',
+          'Erreur login:',
           err
         );
 
-        localStorage.removeItem(
-          'utilisateur'
-        );
-
-      } finally {
-
-        setLoading(false);
+        return {
+          success: false
+        };
       }
     };
 
-    init();
+    /**
+     * =========================
+     * LOGOUT
+     * =========================
+     */
+    const logout = () => {
 
-  }, []);
+      setUser(null);
 
-  /**
-   * =========================
-   * REGISTER
-   * =========================
-   */
-  const register = async (
+      setPermissions({});
 
-    nom: string,
-
-    login: string,
-
-    password: string,
-
-    role: Role
-
-  ) => {
-
-    await apiPost(
-
-      "/utilisateurs",
-
-      {
-
-        nom:
-          nom.trim(),
-
-        login:
-          login.trim(),
-
-        mot_de_passe:
-          password,
-
-        role,
-
-        est_actif: 1
-      }
-    );
-  };
-
-  /**
-   * =========================
-   * LOGIN
-   * =========================
-   */
-  const login = async (
-
-    loginValue: string,
-
-    password: string
-
-  ): Promise<{
-
-    success: boolean;
-
-    utilisateur?: User;
-
-  }> => {
-
-    try {
-
-      /**
-       * API LOGIN
-       */
-      const utilisateur =
-        await apiPost(
-
-          "/utilisateurs/login",
-
-          {
-
-            login:
-              loginValue.trim(),
-
-            mot_de_passe:
-              password
-          }
-        );
-
-      /**
-       * USER OBJECT
-       */
-      const userObj: User = {
-
-        id:
-          utilisateur.id,
-
-        nom:
-          utilisateur.nom,
-
-        login:
-          utilisateur.login,
-
-        role:
-          normalizeRole(
-            utilisateur.role
-          )
-      };
-
-      /**
-       * SAVE SESSION
-       */
-      setUser(
-        userObj
+      localStorage.removeItem(
+        'utilisateur'
       );
+    };
 
-      localStorage.setItem(
+    /**
+     * =========================
+     * HAS ROLE
+     * =========================
+     */
+    const hasRole = (
+      roles: Role[]
+    ) => {
 
-        'utilisateur',
-
-        JSON.stringify(
-          userObj
-        )
-      );
-
-      /**
-       * ADMIN
-       */
-      if (
-        userObj.role === 'admin'
-      ) {
-
-        setPermissions({});
-
-      } else {
-
-        /**
-         * USER PERMISSIONS
-         */
-        const perms =
-
-          await loadUserPermissions(
-            userObj.id
-          );
-
-        setPermissions(
-          perms
-        );
-
-        userObj.permissions =
-          perms;
-      }
-
-      return {
-
-        success: true,
-
-        utilisateur:
-          userObj
-      };
-
-    } catch (err) {
-
-      console.error(
-        'Erreur login:',
-        err
-      );
-
-      return {
-        success: false
-      };
-    }
-  };
-
-  /**
-   * =========================
-   * LOGOUT
-   * =========================
-   */
-  const logout = () => {
-
-    setUser(null);
-
-    setPermissions({});
-
-    localStorage.removeItem(
-      'utilisateur'
-    );
-  };
-
-  /**
-   * =========================
-   * HAS ROLE
-   * =========================
-   */
-  const hasRole = (
-    roles: Role[]
-  ) => {
-
-    return user
-      ? roles.includes(
+      return user
+        ? roles.includes(
           user.role
         )
-      : false;
-  };
+        : false;
+    };
 
-  /**
-   * =========================
-   * CAN READ
-   * =========================
-   */
-  const canRead = (
-    fonctionnalite: string
-  ): boolean => {
+    /**
+     * =========================
+     * CAN READ
+     * =========================
+     */
+    const canRead = (
+      fonctionnalite: string
+    ): boolean => {
 
-    if (
-      user?.role === 'admin'
-    ) {
+      if (
+        user?.role === 'admin'
+      ) {
 
-      return true;
-    }
+        return true;
+      }
+
+      return (
+        permissions[
+          fonctionnalite
+        ]?.lecture || false
+      );
+    };
+
+    /**
+     * =========================
+     * CAN WRITE
+     * =========================
+     */
+    const canWrite = (
+      fonctionnalite: string
+    ): boolean => {
+
+      if (
+        user?.role === 'admin'
+      ) {
+
+        return true;
+      }
+
+      return (
+        permissions[
+          fonctionnalite
+        ]?.ecriture || false
+      );
+    };
 
     return (
-      permissions[
-        fonctionnalite
-      ]?.lecture || false
+
+      <AuthContext.Provider
+
+        value={{
+
+          user,
+
+          loading,
+
+          isAuthenticated:
+            !!user,
+
+          login,
+
+          register,
+
+          logout,
+
+          hasRole,
+
+          permissions,
+
+          canRead,
+
+          canWrite,
+        }}
+      >
+
+        {children}
+
+      </AuthContext.Provider>
     );
   };
-
-  /**
-   * =========================
-   * CAN WRITE
-   * =========================
-   */
-  const canWrite = (
-    fonctionnalite: string
-  ): boolean => {
-
-    if (
-      user?.role === 'admin'
-    ) {
-
-      return true;
-    }
-
-    return (
-      permissions[
-        fonctionnalite
-      ]?.ecriture || false
-    );
-  };
-
-  return (
-
-    <AuthContext.Provider
-
-      value={{
-
-        user,
-
-        loading,
-
-        isAuthenticated:
-          !!user,
-
-        login,
-
-        register,
-
-        logout,
-
-        hasRole,
-
-        permissions,
-
-        canRead,
-
-        canWrite,
-      }}
-    >
-
-      {children}
-
-    </AuthContext.Provider>
-  );
-};
 
 /**
  * =========================

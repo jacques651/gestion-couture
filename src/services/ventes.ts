@@ -105,18 +105,17 @@ async (id: number) => {
   );
 };
 
-export const payerVente =
-async (
+// services/ventes.ts
+
+export const payerVente = async (
   id: number,
   montant: number,
   mode_paiement: string
 ) => {
-
-  return await apiPut(
-    `/ventes/${id}/paiement`,
-    {
-      montant,
-      mode_paiement
-    }
-  );
+  // Utiliser POST au lieu de PUT, et /paiements (pluriel) au lieu de /paiement
+  return await apiPost(`/ventes/${id}/paiements`, {
+    montant,
+    mode_paiement,
+    observation: `Paiement de ${montant} FCFA par ${mode_paiement}`
+  });
 };

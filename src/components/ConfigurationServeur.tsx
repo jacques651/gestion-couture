@@ -1,281 +1,186 @@
-import React, {
-  useEffect,
-  useState
-} from 'react';
-
+import React, { useEffect, useState } from 'react';
 import {
-  Stack,
-  Card,
-  Title,
-  Text,
-  Group,
-  Button,
-  Alert,
-  Divider,
-  TextInput,
-  Box,
-  Container,
-  Avatar,
-  ThemeIcon,
-  Paper,
-  Badge,
-  Modal,
-  LoadingOverlay,
+  Stack, Card, Title, Text, Group, Button, Alert,
+  TextInput, Box, Container, Avatar, ThemeIcon, Badge,
+  Modal, LoadingOverlay,
 } from '@mantine/core';
-
 import {
-  IconServer,
-  IconCheck,
-  IconInfoCircle,
-  IconPlugConnected,
-  IconDeviceDesktop,
-  IconWorld,
-  IconArrowLeft,  // ← AJOUTÉ
+  IconServer, IconCheck, IconPlugConnected,
+  IconDeviceDesktop, IconWorld, IconArrowLeft,
 } from '@tabler/icons-react';
-
-import {
-  notifications
-} from '@mantine/notifications';
-
-interface HealthResponse {
-  success: boolean;
-}
+import { notifications } from '@mantine/notifications';
 
 const ConfigurationServeur: React.FC = () => {
-
-  /**
-   * =========================
-   * STATES
-   * =========================
-   */
-  const [serverUrl, setServerUrl] = useState('http://192.168.100.87:3001');
+  const [serverUrl, setServerUrl] = useState('http://192.168.2.1:3001');
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [, setDetectedIp] = useState<string | null>(null);
 
-  /**
-   * =========================
-   * LOAD CONFIG
-   * =========================
-   */
   useEffect(() => {
     const savedUrl = localStorage.getItem('api_url');
     if (savedUrl) {
       setServerUrl(savedUrl);
+      testerConnexionSilencieuse(savedUrl);
+    } else {
+      // URL par défaut
+      localStorage.setItem('api_url', 'http://192.168.2.1:3001');
     }
+    detecterIpLocale();
   }, []);
 
-  /**
-   * =========================
-   * TEST SERVER
-   * =========================
-   */
-  const testerConnexion = async () => {
-    if (!serverUrl) {
-      notifications.show({
-        title: 'Erreur',
-        message: 'Veuillez saisir une URL serveur',
-        color: 'red'
-      });
-      return;
-    }
-
-    setTesting(true);
-
+  const detecterIpLocale = async () => {
     try {
-      const response = await fetch(`${serverUrl}/health`);
-      if (!response.ok) {
-        throw new Error('Serveur inaccessible');
-      }
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      setDetectedIp(data.ip);
+    } catch (error) {
+      console.log('IP non détectée');
+    }
+  };
 
-      const data: HealthResponse = await response.json();
-
-      if (data.success) {
-        setConnected(true);
-        notifications.show({
-          title: 'Connexion réussie',
-          message: 'Le serveur est accessible',
-          color: 'green'
-        });
-      } else {
-        setConnected(false);
-        notifications.show({
-          title: 'Erreur',
-          message: 'Réponse serveur invalide',
-          color: 'red'
-        });
+  const testerConnexionSilencieuse = async (url: string) => {
+    try {
+      const response = await fetch(`${url}/health`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) setConnected(true);
       }
     } catch (error) {
-      console.error(error);
+      console.log('Serveur non accessible');
+    }
+  };
+
+  const testerConnexion = async () => {
+    setTesting(true);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`${serverUrl}/health`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setConnected(true);
+          notifications.show({ title: '✅ Connecté !', message: `Serveur accessible`, color: 'green' });
+        }
+      } else {
+        setConnected(false);
+        notifications.show({ title: '❌ Erreur', message: 'Serveur inaccessible', color: 'red' });
+      }
+    } catch (error: any) {
       setConnected(false);
-      notifications.show({
-        title: 'Connexion échouée',
-        message: 'Impossible de joindre le serveur',
-        color: 'red'
-      });
+      notifications.show({ title: '❌ Échec', message: error.name === 'AbortError' ? 'Délai dépassé' : 'Serveur introuvable', color: 'red' });
     } finally {
       setTesting(false);
     }
   };
 
-  /**
-   * =========================
-   * SAVE CONFIG
-   * =========================
-   */
   const enregistrerConfiguration = async () => {
-    if (!serverUrl) {
-      notifications.show({
-        title: 'Erreur',
-        message: 'Veuillez saisir une URL serveur',
-        color: 'red'
-      });
-      return;
-    }
-
     setLoading(true);
-
     try {
-      localStorage.setItem('api_url', serverUrl);
-      notifications.show({
-        title: 'Succès',
-        message: 'Configuration enregistrée',
-        color: 'green'
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`${serverUrl}/health`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        localStorage.setItem('api_url', serverUrl);
+        setConnected(true);
+        notifications.show({ title: '✅ Enregistré !', message: 'Redirection...', color: 'green' });
+        setTimeout(() => { window.location.href = '/'; }, 1000);
+      } else {
+        throw new Error('Inaccessible');
+      }
     } catch (error) {
-      console.error(error);
-      notifications.show({
-        title: 'Erreur',
-        message: 'Erreur enregistrement',
-        color: 'red'
-      });
+      notifications.show({ title: '❌ Erreur', message: 'Impossible de contacter le serveur', color: 'red' });
     } finally {
       setLoading(false);
     }
   };
 
-  // Fonction pour revenir à l'application
-  const retournerApplication = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      window.location.href = '/';
-    }
+  const utiliserLocalhost = () => {
+    setServerUrl('http://localhost:3001');
+    testerConnexionSilencieuse('http://localhost:3001');
+  };
+
+  const utiliserIpServeur = () => {
+    setServerUrl('http://192.168.2.1:3001');
+    testerConnexionSilencieuse('http://192.168.2.1:3001');
   };
 
   return (
     <Box p="md">
-      <Container size="full">
+      <Container size="sm">
         <Stack gap="lg">
 
-          {/* BOUTON DE RETOUR - NOUVEAU */}
-          <Card withBorder radius="lg" p="md">
-            <Group justify="space-between">
-              <Button
-                variant="light"
-                color="blue"
-                leftSection={<IconArrowLeft size={18} />}
-                onClick={retournerApplication}
-              >
-                Retour à l'application
-              </Button>
-              <Text size="sm" c="dimmed">
-                Après modification, cliquez sur "Enregistrer"
-              </Text>
-            </Group>
-          </Card>
-
           {/* HEADER */}
-          <Card
-            withBorder
-            radius="lg"
-            p="xl"
-            style={{
-              background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)'
-            }}
-          >
-            <Group justify="space-between">
-              <Group gap="md">
-                <Avatar
-                  size={60}
-                  radius="md"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                >
-                  <IconServer size={30} color="white" />
-                </Avatar>
-                <Box>
-                  <Title order={2} c="white">Configuration serveur</Title>
-                  <Text c="gray.3" size="sm">Connexion PostgreSQL via API Express</Text>
-                </Box>
-              </Group>
-              <Button
-                variant="light"
-                color="white"
-                leftSection={<IconInfoCircle size={18} />}
-                onClick={() => setInfoModalOpen(true)}
-                radius="md"
-              >
-                Aide
-              </Button>
+          <Card withBorder radius="lg" p="xl" style={{ background: 'linear-gradient(135deg, #1b365d 0%, #2a4a7a 100%)' }}>
+            <Group>
+              <Avatar size={50} radius="md" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                <IconServer size={26} color="white" />
+              </Avatar>
+              <Box>
+                <Title order={3} c="white">Configuration serveur</Title>
+                <Text c="gray.3" size="sm">Connexion à l'API Express</Text>
+              </Box>
             </Group>
           </Card>
 
-          {/* STATUS */}
-          <Paper
-            p="md"
-            radius="lg"
-            withBorder
-            bg={connected ? 'green.0' : 'gray.0'}
-          >
+          {/* STATUT */}
+          <Card withBorder radius="lg" p="md" bg={connected ? 'green.0' : 'gray.0'}>
             <Group justify="space-between">
               <Group gap="sm">
-                <ThemeIcon
-                  size="lg"
-                  radius="md"
-                  color={connected ? 'green' : 'gray'}
-                  variant="light"
-                >
+                <ThemeIcon size="lg" radius="md" color={connected ? 'green' : 'gray'} variant="light">
                   {connected ? <IconCheck size={20} /> : <IconDeviceDesktop size={20} />}
                 </ThemeIcon>
                 <Box>
-                  <Text fw={600}>
-                    {connected ? 'Serveur connecté' : 'Serveur non connecté'}
-                  </Text>
+                  <Text fw={600}>{connected ? '✅ Connecté' : '⚪ Non connecté'}</Text>
                   <Text size="xs" c="dimmed">{serverUrl}</Text>
                 </Box>
               </Group>
-              <Badge color={connected ? 'green' : 'gray'} variant="filled" size="lg">
-                {connected ? '🟢 CONNECTÉ' : '⚪ HORS LIGNE'}
+              <Badge color={connected ? 'green' : 'gray'} variant="filled">
+                {connected ? 'ONLINE' : 'OFFLINE'}
               </Badge>
             </Group>
-          </Paper>
+          </Card>
 
-          {/* CONFIG */}
+          {/* FORMULAIRE SIMPLIFIÉ */}
           <Card withBorder radius="lg" p="xl">
             <LoadingOverlay visible={loading} />
             <Stack gap="md">
-              <Title order={4}>Paramètres serveur</Title>
-              <Divider />
+              <Title order={4}>Adresse du backend Express</Title>
+
               <TextInput
-                label="URL du serveur API"
-                description="Adresse du backend Express"
-                placeholder="http://192.168.1.2:3001"
+                size="lg"
+                radius="md"
+                placeholder="http://192.168.2.1:3001"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.currentTarget.value)}
-                leftSection={<IconWorld size={16} />}
-                radius="md"
-                size="md"
+                leftSection={<IconWorld size={18} />}
               />
-              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" radius="md">
-                <Text size="sm" fw={600}>Exemples :</Text>
+
+              {/* BOUTONS RAPIDES */}
+              <Group grow>
+                <Button variant="light" size="sm" onClick={utiliserLocalhost} leftSection={<IconDeviceDesktop size={14} />}>
+                  Ce PC (localhost)
+                </Button>
+                <Button variant="light" size="sm" onClick={utiliserIpServeur} leftSection={<IconServer size={14} />}>
+                  Serveur (192.168.2.1)
+                </Button>
+              </Group>
+
+              <Alert color="blue" variant="light" radius="md">
                 <Text size="xs">
-                  • Local : http://localhost:3001
-                  <br />
-                  • Réseau : http://192.168.1.2:3001
+                  <strong>Ce PC est le serveur :</strong> utilisez <strong>localhost</strong><br />
+                  <strong>Autre PC client :</strong> utilisez l'IP <strong>192.168.2.1</strong>
                 </Text>
               </Alert>
-              <Group>
+
+              {/* ACTIONS */}
+              <Group grow>
                 <Button
                   leftSection={<IconPlugConnected size={16} />}
                   onClick={testerConnexion}
@@ -284,7 +189,7 @@ const ConfigurationServeur: React.FC = () => {
                   loading={testing}
                   radius="md"
                 >
-                  Tester connexion
+                  Tester
                 </Button>
                 <Button
                   onClick={enregistrerConfiguration}
@@ -300,27 +205,21 @@ const ConfigurationServeur: React.FC = () => {
             </Stack>
           </Card>
 
-          {/* GUIDE */}
-          <Card withBorder radius="lg" p="xl">
-            <Title order={4} mb="md">📋 Configuration multi-postes</Title>
-            <Divider mb="md" />
-            <Stack gap="sm">
-              <Group gap="xs"><Badge color="blue" circle>1</Badge><Text size="sm">Installer PostgreSQL sur le poste serveur</Text></Group>
-              <Group gap="xs"><Badge color="blue" circle>2</Badge><Text size="sm">Démarrer le backend Express</Text></Group>
-              <Group gap="xs"><Badge color="blue" circle>3</Badge><Text size="sm">Récupérer l'adresse IP du serveur</Text></Group>
-              <Group gap="xs"><Badge color="blue" circle>4</Badge><Text size="sm">Configurer : http://IP:3001</Text></Group>
-              <Group gap="xs"><Badge color="blue" circle>5</Badge><Text size="sm">Tester puis enregistrer</Text></Group>
-            </Stack>
-          </Card>
+          {/* RETOUR */}
+          <Button
+            variant="subtle"
+            leftSection={<IconArrowLeft size={16} />}
+            onClick={() => window.history.back()}
+          >
+            Retour
+          </Button>
 
-          {/* MODAL */}
-          <Modal opened={infoModalOpen} onClose={() => setInfoModalOpen(false)} title="📋 Aide" size="md" centered radius="md">
-            <Stack gap="md">
-              <Text size="sm">Cette configuration permet de connecter plusieurs postes au même serveur PostgreSQL.</Text>
-              <Text size="sm">Chaque poste communique avec le backend Express via HTTP.</Text>
-              <Text size="sm">Exemple :<br />http://192.168.1.2:3001</Text>
-              <Divider />
-              <Text size="xs" c="dimmed" ta="center">Gestion Couture PostgreSQL Edition</Text>
+          {/* MODAL AIDE */}
+          <Modal opened={infoModalOpen} onClose={() => setInfoModalOpen(false)} title="📋 Aide" size="sm" centered radius="md">
+            <Stack gap="sm">
+              <Text size="sm"><strong>Serveur = Ce PC :</strong> http://localhost:3001</Text>
+              <Text size="sm"><strong>Client = Autre PC :</strong> http://192.168.2.1:3001</Text>
+              <Text size="xs" c="dimmed">Le backend Express doit être démarré sur le serveur.</Text>
             </Stack>
           </Modal>
 

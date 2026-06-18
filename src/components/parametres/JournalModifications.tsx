@@ -11,7 +11,7 @@ import {
   IconHistory, IconSearch, IconRefresh, IconInfoCircle,
   IconEye, IconFileExcel, IconUser, IconClock,
   IconPlus, IconEdit, IconTrash, IconTrashX, IconFilter,
-  IconCalendarStats, IconDatabase,
+  IconCalendarStats, IconDatabase, IconAlertCircle,
 } from '@tabler/icons-react';
 import {
   apiGet,
@@ -41,7 +41,8 @@ const JournalModifications: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [clearModalOpen, { open: openClearModal, close: closeClearModal }] = useDisclosure(false);
+  const [clearAllModalOpen, { open: openClearAllModal, close: closeClearAllModal }] = useDisclosure(false);
+  const [clearing, setClearing] = useState(false);
   const itemsPerPage = 20;
 
   const loadJournal = async () => {
@@ -52,7 +53,7 @@ const JournalModifications: React.FC = () => {
     } catch (err: any) {
       notifications.show({
         title: 'Erreur',
-        message: err.message,
+        message: err.message || 'Impossible de charger le journal',
         color: 'red'
       });
     } finally {
@@ -62,14 +63,48 @@ const JournalModifications: React.FC = () => {
 
   useEffect(() => { loadJournal(); }, []);
 
-  const handleClearJournal = async () => {
+  // Vider tout le journal
+  const handleClearAllJournal = async () => {
+    setClearing(true);
     try {
-      await apiDelete("/journal");
-      notifications.show({ title: 'Succès', message: 'Journal vidé avec succès', color: 'green' });
-      closeClearModal();
+      await apiDelete("/journal/vider-tout?confirm=yes");
+      notifications.show({ 
+        title: '✅ Succès', 
+        message: 'Le journal a été entièrement vidé', 
+        color: 'green' 
+      });
+      closeClearAllModal();
       loadJournal();
     } catch (err: any) {
-      notifications.show({ title: 'Erreur', message: err.message, color: 'red' });
+      notifications.show({ 
+        title: '❌ Erreur', 
+        message: err.message || 'Impossible de vider le journal', 
+        color: 'red' 
+      });
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  // Vider les anciennes entrées
+  const handleClearOldEntries = async (jours: number) => {
+    setClearing(true);
+    try {
+      await apiDelete(`/journal/ancien?confirm=yes&jours=${jours}`);
+      notifications.show({ 
+        title: '✅ Succès', 
+        message: `Entrées plus anciennes que ${jours} jours supprimées`, 
+        color: 'green' 
+      });
+      loadJournal();
+    } catch (err: any) {
+      notifications.show({ 
+        title: '❌ Erreur', 
+        message: err.message || 'Impossible de supprimer les anciennes entrées', 
+        color: 'red' 
+      });
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -366,7 +401,7 @@ const JournalModifications: React.FC = () => {
                         <Table.Th style={{ color: 'white', width: 160 }}>Table</Table.Th>
                         <Table.Th style={{ color: 'white', width: 120 }}>Utilisateur</Table.Th>
                         <Table.Th style={{ color: 'white' }}>Détails</Table.Th>
-                        <Table.Th style={{ color: 'white', width: 50, textAlign: 'center' }}></Table.Th>
+                        <Table.Th style={{ color: 'white', width: 50, textAlign: 'center' }} />
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -435,15 +470,27 @@ const JournalModifications: React.FC = () => {
                   Affichage de {((currentPage - 1) * itemsPerPage) + 1} à {Math.min(currentPage * itemsPerPage, filtered.length)} sur {filtered.length} entrées
                 </Text>
               </Group>
-              <Button 
-                variant="light" 
-                color="red" 
-                leftSection={<IconTrashX size={16} />} 
-                onClick={openClearModal}
-                disabled={entries.length === 0}
-              >
-                Vider le journal
-              </Button>
+              <Group gap="sm">
+                <Button 
+                  variant="light" 
+                  color="yellow" 
+                  leftSection={<IconAlertCircle size={16} />} 
+                  onClick={() => handleClearOldEntries(90)}
+                  disabled={entries.length === 0}
+                  loading={clearing}
+                >
+                  Nettoyer (&gt;90 jours)
+                </Button>
+                <Button 
+                  variant="light" 
+                  color="red" 
+                  leftSection={<IconTrashX size={16} />} 
+                  onClick={openClearAllModal}
+                  disabled={entries.length === 0}
+                >
+                  Vider tout
+                </Button>
+              </Group>
             </Group>
           </Card>
         </Stack>
@@ -490,16 +537,21 @@ const JournalModifications: React.FC = () => {
         )}
       </Modal>
 
-      {/* Modal vider journal */}
-      <Modal opened={clearModalOpen} onClose={closeClearModal} title="⚠️ Vider le journal" size="sm" centered radius="md" padding="xl">
+      {/* Modal vider tout le journal */}
+      <Modal opened={clearAllModalOpen} onClose={closeClearAllModal} title="⚠️ Vider tout le journal" size="sm" centered radius="md" padding="xl">
         <Stack gap="md">
           <Alert color="red" variant="light" icon={<IconTrashX size={18} />}>
-            <Text size="sm" fw={500}>Vider définitivement tout le journal ?</Text>
-            <Text size="xs" mt={4}>Cette action est irréversible. Pensez à exporter avant de vider.</Text>
+            <Text size="sm" fw={500}>Vider définitivement TOUT le journal ?</Text>
+            <Text size="xs" mt={4}>Cette action est irréversible. Toutes les entrées seront supprimées définitivement.</Text>
+          </Alert>
+          <Alert color="yellow" variant="light" icon={<IconAlertCircle size={18} />}>
+            <Text size="xs">💡 Conseil : Exportez le journal avant de le vider.</Text>
           </Alert>
           <Group justify="flex-end" gap="sm">
-            <Button variant="light" onClick={closeClearModal}>Annuler</Button>
-            <Button color="red" onClick={handleClearJournal} leftSection={<IconTrashX size={16} />}>Vider le journal</Button>
+            <Button variant="light" onClick={closeClearAllModal}>Annuler</Button>
+            <Button color="red" onClick={handleClearAllJournal} leftSection={<IconTrashX size={16} />} loading={clearing}>
+              Vider tout
+            </Button>
           </Group>
         </Stack>
       </Modal>
@@ -514,7 +566,7 @@ const JournalModifications: React.FC = () => {
               <Text size="sm">2️⃣ Utilisez les filtres pour rechercher par action, table ou utilisateur</Text>
               <Text size="sm">3️⃣ Exportez le journal au format Excel pour archivage</Text>
               <Text size="sm">4️⃣ Consultez les détails complets en cliquant sur l'icône 👁️</Text>
-              <Text size="sm">5️⃣ Le journal est automatiquement alimenté par les triggers PostgreSQL</Text>
+              <Text size="sm">5️⃣ Nettoyez les anciennes entrées ou videz tout le journal</Text>
             </Stack>
           </Paper>
 
@@ -528,6 +580,14 @@ const JournalModifications: React.FC = () => {
               <Group gap="xs"><Badge color="cyan">IMPORT</Badge><Text size="xs">Import</Text></Group>
               <Group gap="xs"><Badge color="lime">EXPORT</Badge><Text size="xs">Export</Text></Group>
             </SimpleGrid>
+          </Paper>
+
+          <Paper p="md" withBorder bg="red.0">
+            <Text fw={600} size="sm" mb="xs">🗑️ Nettoyage du journal</Text>
+            <Stack gap="xs">
+              <Text size="sm">• <strong>Nettoyer (&gt;90 jours)</strong> : Supprime les entrées de plus de 90 jours</Text>
+              <Text size="sm">• <strong>Vider tout</strong> : Supprime TOUTES les entrées du journal</Text>
+            </Stack>
           </Paper>
 
           <Divider />
