@@ -47,18 +47,20 @@ import {
   IconList,
   IconHistory,
   IconLock,
+  IconCalendarEvent,
+  IconFileInvoice,
 } from '@tabler/icons-react';
 import { journaliserAction } from '../services/journal';
 import ChangerMotDePasse from './parametres/ChangerMotDePasse';
-import { Role } from '../contexts/AuthContext';
 
 export interface NavItemProps {
   label: string;
   path: string;
   icon?: React.ReactNode;
-  roles?: string[]; // ✅ string[] au lieu de Role[]
-  userRole?: string; // ✅ string au lieu de Role
+  roles?: string[];
+  userRole?: string;
   badge?: string;
+  onClick?: () => void;
 }
 
 export interface SectionProps {
@@ -66,40 +68,53 @@ export interface SectionProps {
   icon: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
-  roles?: string[]; // ✅ string[] au lieu de Role[]
-  userRole?: string; // ✅ string au lieu de Role
+  roles?: string[];
+  userRole?: string;
 }
 
 export interface NavbarProps {
-  userRole?: string; // ✅ string au lieu de Role
+  userRole?: string;
   userName?: string;
   onLogout?: () => void;
   onNavigate?: (page: string) => void;
 }
 
 // Composant NavItem
-function NavItem({ label, path, icon, roles, userRole, badge }: NavItemProps) {
+function NavItem({ 
+  label, 
+  path, 
+  icon, 
+  roles, 
+  userRole, 
+  badge,
+  onClick 
+}: NavItemProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useMantineTheme();
 
-  // ✅ Si roles est défini et non vide, on vérifie. Sinon on affiche pour tout le monde.
+  // Vérification des rôles
   if (roles && roles.length > 0 && userRole && !roles.includes(userRole)) {
     return null;
   }
 
   const active = location.pathname === path;
-
   const hoverBlue = theme.colors.adminBlue?.[6] || '#3a6a8a';
   const activeBg = '#2a5a7a';
   const textColor = active ? '#ffd700' : '#e0e0e0';
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (path) {
+      navigate(path);
+    }
+  };
+
   return (
     <Tooltip label={badge || label} position="right" withArrow openDelay={500} offset={10}>
       <Box
-        onClick={() => {
-          if (path) navigate(path);
-        }}
+        onClick={handleClick}
         style={{
           cursor: 'pointer',
           padding: '8px 12px 8px 28px',
@@ -133,11 +148,17 @@ function NavItem({ label, path, icon, roles, userRole, badge }: NavItemProps) {
 }
 
 // Composant NavSection
-function NavSection({ title, icon, children, defaultOpen = false, roles, userRole }: SectionProps) {
+function NavSection({ 
+  title, 
+  icon, 
+  children, 
+  defaultOpen = false, 
+  roles, 
+  userRole 
+}: SectionProps) {
   const [opened, setOpened] = useState(defaultOpen);
   const theme = useMantineTheme();
 
-  // ✅ Si roles est défini et non vide, on vérifie. Sinon on affiche pour tout le monde.
   if (roles && roles.length > 0 && userRole && !roles.includes(userRole)) {
     return null;
   }
@@ -183,18 +204,25 @@ function NavSection({ title, icon, children, defaultOpen = false, roles, userRol
 }
 
 // Composant principal Navbar
-export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
+export default function Navbar({ userRole, userName, onLogout, onNavigate }: NavbarProps) {
   const theme = useMantineTheme();
   const darkBlue = theme.colors.adminBlue?.[8] || '#1b365d';
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
-  // ✅ Tableaux vides = tout le monde voit tout (RouteGuard gère l'accès)
-  const allUsers: Role[] = [];
-  const adminOnly: Role[] = [];
+  // Rôles
+  const allUsers: string[] = [];
+  const adminOnly: string[] = ['admin'];
 
-  const getRoleLabel = (role?: string) => { // ✅ string au lieu de Role
+  const getRoleLabel = (role?: string) => {
     if (!role) return '';
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    const roleMap: Record<string, string> = {
+      'admin': 'Administrateur',
+      'couturier': 'Couturier',
+      'vendeur': 'Vendeur',
+      'caissier': 'Caissier',
+      'livreur': 'Livreur'
+    };
+    return roleMap[role] || role.charAt(0).toUpperCase() + role.slice(1);
   };
 
   const handleLogout = async () => {
@@ -206,6 +234,12 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
       details: `Déconnexion utilisateur : ${userName || 'Inconnu'}`
     });
     onLogout?.();
+  };
+
+  const handleNavigate = (page: string) => {
+    if (onNavigate) {
+      onNavigate(page);
+    }
   };
 
   return (
@@ -258,6 +292,7 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               path="/"
               icon={<IconLayoutDashboard size={20} stroke={1.5} />}
               userRole={userRole}
+              onClick={() => handleNavigate('dashboard')}
             />
 
             <Divider color={theme.colors.adminBlue?.[6]} my="sm" />
@@ -275,6 +310,7 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
                 icon={<IconUsers size={18} color="white" stroke={1.5} />}
                 roles={allUsers}
                 userRole={userRole}
+                onClick={() => handleNavigate('clients')}
               />
               <NavItem
                 label="Types de mesures"
@@ -282,6 +318,7 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
                 icon={<IconRuler size={18} color="white" stroke={1.5} />}
                 roles={adminOnly}
                 userRole={userRole}
+                onClick={() => handleNavigate('types_mesures')}
               />
             </NavSection>
 
@@ -293,13 +330,62 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               roles={adminOnly}
               defaultOpen={false}
             >
-              <NavItem label="Tailles" path="/tailles" icon={<IconRulerMeasure size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Couleurs" path="/couleurs" icon={<IconPalette size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Textures / Matières" path="/textures" icon={<IconTexture size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Types de tenues" path="/types-tenues" icon={<IconHanger size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Catégories matières" path="/categories-matieres" icon={<IconPackage size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Types de prestations" path="/ListeTypesPrestations" icon={<IconTools size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Configuration atelier" path="/atelier" icon={<IconSettings size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
+              <NavItem 
+                label="Tailles" 
+                path="/tailles" 
+                icon={<IconRulerMeasure size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('tailles')}
+              />
+              <NavItem 
+                label="Couleurs" 
+                path="/couleurs" 
+                icon={<IconPalette size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('couleurs')}
+              />
+              <NavItem 
+                label="Textures" 
+                path="/textures" 
+                icon={<IconTexture size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('textures')}
+              />
+              <NavItem 
+                label="Types de tenues" 
+                path="/types-tenues" 
+                icon={<IconHanger size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('types_tenues')}
+              />
+              <NavItem 
+                label="Catégories matières" 
+                path="/categories-matieres" 
+                icon={<IconPackage size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('categories_matieres')}
+              />
+              <NavItem 
+                label="Types de prestations" 
+                path="/ListeTypesPrestations" 
+                icon={<IconTools size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('types_prestations')}
+              />
+              <NavItem 
+                label="Configuration atelier" 
+                path="/atelier" 
+                icon={<IconSettings size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('atelier')}
+              />
             </NavSection>
 
             {/* ================= SECTION STOCK & INVENTAIRE ================= */}
@@ -310,9 +396,30 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               roles={allUsers}
               defaultOpen={false}
             >
-              <NavItem label="Inventaire (Tenues)" path="/articles" icon={<IconScissors size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
-              <NavItem label="Matières premières" path="/matieres" icon={<IconPackage size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
-              <NavItem label="Mouvements de stock" path="/mouvements-stock" icon={<IconList size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
+              <NavItem 
+                label="Inventaire (Tenues)" 
+                path="/articles" 
+                icon={<IconScissors size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('articles')}
+              />
+              <NavItem 
+                label="Matières premières" 
+                path="/matieres" 
+                icon={<IconPackage size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('matieres')}
+              />
+              <NavItem 
+                label="Mouvements de stock" 
+                path="/mouvements-stock" 
+                icon={<IconList size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('mouvements_stock')}
+              />
             </NavSection>
 
             {/* ================= SECTION VENTES ================= */}
@@ -323,10 +430,38 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               roles={allUsers}
               defaultOpen={false}
             >
-              <NavItem label="Gestion des ventes" path="/ventes" icon={<IconShoppingBag size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
-              <NavItem label="Factures & reçus" path="/factures-recus" icon={<IconShoppingBag size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
-              <NavItem label="Rendez-vous" path="/rendezvous" icon={<IconShoppingBag size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
-              <NavItem label="Historique des paiements" path="/historique-paiements" icon={<IconReceipt size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
+              <NavItem 
+                label="Gestion des ventes" 
+                path="/ventes" 
+                icon={<IconShoppingBag size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('ventes')}
+              />
+              <NavItem 
+                label="Factures & reçus" 
+                path="/factures-recus" 
+                icon={<IconFileInvoice size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('factures_recus')}
+              />
+              <NavItem 
+                label="Rendez-vous" 
+                path="/rendezvous" 
+                icon={<IconCalendarEvent size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('rendezvous')}
+              />
+              <NavItem 
+                label="Historique des paiements" 
+                path="/historique-paiements" 
+                icon={<IconReceipt size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('historique_paiements')}
+              />
             </NavSection>
 
             {/* ================= SECTION FINANCES ================= */}
@@ -336,9 +471,30 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
               roles={adminOnly}
             >
-              <NavItem label="Dépenses" path="/depenses" icon={<IconMoneybag size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Bilan financier" path="/bilan" icon={<IconChartBar size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Journal de caisse" path="/journal" icon={<IconReceipt size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
+              <NavItem 
+                label="Dépenses" 
+                path="/depenses" 
+                icon={<IconMoneybag size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('depenses')}
+              />
+              <NavItem 
+                label="Bilan financier" 
+                path="/bilan" 
+                icon={<IconChartBar size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('bilan')}
+              />
+              <NavItem 
+                label="Journal de caisse" 
+                path="/journal" 
+                icon={<IconReceipt size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('journal')}
+              />
             </NavSection>
 
             {/* ================= SECTION RESSOURCES HUMAINES ================= */}
@@ -348,11 +504,46 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
               roles={adminOnly}
             >
-              <NavItem label="Employés" path="/employes" icon={<IconUsers size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Prestations réalisées" path="/prestations-realisees" icon={<IconTools size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Salaires" path="/salaires" icon={<IconMoneybag size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Historique salaires" path="/historiques-salaires" icon={<IconHistory size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Emprunts" path="/emprunts" icon={<IconMoneybag size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
+              <NavItem 
+                label="Employés" 
+                path="/employes" 
+                icon={<IconUsers size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('employes')}
+              />
+              <NavItem 
+                label="Prestations réalisées" 
+                path="/prestations-realisees" 
+                icon={<IconTools size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('prestations_realisees')}
+              />
+              <NavItem 
+                label="Salaires" 
+                path="/salaires" 
+                icon={<IconMoneybag size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('salaires')}
+              />
+              <NavItem 
+                label="Historique salaires" 
+                path="/historiques-salaires" 
+                icon={<IconHistory size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('historique_salaires')}
+              />
+              <NavItem 
+                label="Emprunts" 
+                path="/emprunts" 
+                icon={<IconMoneybag size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('emprunts')}
+              />
             </NavSection>
 
             {/* ================= SECTION PARAMÈTRES ================= */}
@@ -362,10 +553,38 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
               roles={adminOnly}
             >
-              <NavItem label="Utilisateurs" path="/utilisateurs" icon={<IconUserShield size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Configuration serveur" path="/config-serveur" icon={<IconNetwork size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Import/Export" path="/import-export" icon={<IconFileExcel size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Journal modifications" path="/journal-modifications" icon={<IconHistory size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
+              <NavItem 
+                label="Utilisateurs" 
+                path="/utilisateurs" 
+                icon={<IconUserShield size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('utilisateurs')}
+              />
+              <NavItem 
+                label="Configuration serveur" 
+                path="/config-serveur" 
+                icon={<IconNetwork size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('config_serveur')}
+              />
+              <NavItem 
+                label="Import/Export" 
+                path="/import-export" 
+                icon={<IconFileExcel size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('import_export')}
+              />
+              <NavItem 
+                label="Journal modifications" 
+                path="/journal-modifications" 
+                icon={<IconHistory size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('journal_modifications')}
+              />
             </NavSection>
 
             {/* ================= SECTION SUPPORT ================= */}
@@ -377,9 +596,30 @@ export default function Navbar({ userRole, userName, onLogout }: NavbarProps) {
               userRole={userRole}
               roles={allUsers}
             >
-              <NavItem label="Guide d'utilisation" path="/aide" icon={<IconHelpCircle size={18} color="white" stroke={1.5} />} roles={allUsers} userRole={userRole} />
-              <NavItem label="Support technique" path="/support" icon={<IconHeadset size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
-              <NavItem label="Exporter pour support" path="/export-support" icon={<IconDownload size={18} color="white" stroke={1.5} />} roles={adminOnly} userRole={userRole} />
+              <NavItem 
+                label="Guide d'utilisation" 
+                path="/aide" 
+                icon={<IconHelpCircle size={18} color="white" stroke={1.5} />} 
+                roles={allUsers} 
+                userRole={userRole}
+                onClick={() => handleNavigate('aide')}
+              />
+              <NavItem 
+                label="Support technique" 
+                path="/support" 
+                icon={<IconHeadset size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('support')}
+              />
+              <NavItem 
+                label="Exporter pour support" 
+                path="/export-support" 
+                icon={<IconDownload size={18} color="white" stroke={1.5} />} 
+                roles={adminOnly} 
+                userRole={userRole}
+                onClick={() => handleNavigate('export_support')}
+              />
             </NavSection>
           </Stack>
         </ScrollArea>

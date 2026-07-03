@@ -25,7 +25,8 @@ const ListeClientsAvecMesures = lazy(() => import('./components/clients/ListeCli
 // ==================== STOCK & INVENTAIRE ====================
 const MatieresManager = lazy(() => import('./components/stock/MatieresManager'));
 const ArticlesManager = lazy(() => import('./components/stock/ArticlesManager'));
-const TypesTenuesManager = lazy(() => import('./components/stock/TypesTenuesManager')); const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
+const TypesTenuesManager = lazy(() => import('./components/stock/TypesTenuesManager'));
+const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
 
 // ==================== VENTES ====================
 const VentesManager = lazy(() => import('./components/ventes/VentesManager'));
@@ -60,6 +61,7 @@ const ConfigurationMesures = lazy(() => import('./components/parametres/Configur
 const ParametresAtelier = lazy(() => import('./components/parametres/ParametresAtelier'));
 const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtilisateurs'));
 const JournalModifications = lazy(() => import('./components/parametres/JournalModifications'));
+const ChangerMotDePasse = lazy(() => import('./components/parametres/ChangerMotDePasse'));
 
 // ==================== OUTILS ====================
 const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
@@ -78,7 +80,14 @@ const LoadingFallback = () => (
   </Center>
 );
 
-function RouteGuard({ children, roles, fonctionnalite }: { children: React.ReactNode; roles?: string[]; fonctionnalite?: string }) {
+// ==================== ROUTE GUARD ====================
+function RouteGuard({ 
+  children, 
+  fonctionnalite 
+}: { 
+  children: React.ReactNode; 
+  fonctionnalite?: string;
+}) {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [hasAccess, setHasAccess] = useState(true);
@@ -87,30 +96,24 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
   useEffect(() => {
     const check = async () => {
       try {
-        console.log("🔍 USER:", JSON.stringify(user));
-        console.log("🔍 FONCTIONNALITE:", fonctionnalite);
-
+        // Admin a toujours accès
         if (user?.role === 'admin') {
-          console.log("🔍 Admin détecté - accès total");
           setHasAccess(true);
           setChecking(false);
           return;
         }
 
+        // Si une fonctionnalité est spécifiée, vérifier les permissions
         if (fonctionnalite) {
-          console.log("🔍 Vérification permissions pour:", fonctionnalite);
           const perms = await apiGet(`/utilisateurs/${user?.id || 0}/permissions`);
-          console.log("🔍 PERMS reçues:", perms.length, "lignes");
-          console.log("🔍 PERMS:", JSON.stringify(perms));
           const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
-          console.log("🔍 Permission trouvée:", p);
-          console.log("🔍 p?.lecture:", p?.lecture, "| p?.lecture === 1:", p?.lecture === 1);
           setHasAccess(p?.lecture === 1 || p?.lecture === true);
         } else {
-          console.log("🔍 Pas de fonctionnalite - accès accordé");
+          // Si pas de fonctionnalité, accès accordé
+          setHasAccess(true);
         }
       } catch (error) {
-        console.error("❌ Erreur:", error);
+        console.error("❌ Erreur vérification permissions:", error);
         setHasAccess(false);
       } finally {
         setChecking(false);
@@ -139,24 +142,6 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
     );
   }
 
-  // ✅ Si fonctionnalite est définie, on se fie aux permissions (pas aux rôles)
-  if (fonctionnalite) {
-    return <>{children}</>;
-  }
-
-  // ✅ Sinon, on vérifie les rôles (compatibilité)
-  if (roles && user && !roles.includes(user.role)) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2>⛔ Accès non autorisé</h2>
-          <p>Rôle non autorisé.</p>
-          <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-        </div>
-      </Center>
-    );
-  }
-
   return <>{children}</>;
 }
 
@@ -164,11 +149,8 @@ function RouteGuard({ children, roles, fonctionnalite }: { children: React.React
 function AuthenticatedApp() {
   const { user, logout, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
-
-  // ✅ TOUS LES HOOKS D'ABORD (avant tout return conditionnel)
   const [erreurAPI, setErreurAPI] = useState(false);
   const [verificationFaite, setVerificationFaite] = useState(false);
-  const [] = useState(false);
 
   // Vérifier la connexion au démarrage
   useEffect(() => {
@@ -177,7 +159,6 @@ function AuthenticatedApp() {
         const url = localStorage.getItem('api_url') || 'http://192.168.100.151:3001';
         console.log('🔍 Vérification connexion à:', url);
 
-        // Ajouter un timeout de 5 secondes
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -205,13 +186,6 @@ function AuthenticatedApp() {
     verifierConnexion();
   }, []);
 
-  useEffect(() => {
-    if (!erreurAPI && verificationFaite) {
-      console.log('✅ API PostgreSQL prête');
-    }
-  }, [erreurAPI, verificationFaite]);
-
-  // ⚠️ LES RETOURS CONDITIONNELS VIENNENT APRÈS TOUS LES HOOKS
   if (loading) return <LoadingFallback />;
   if (!isAuthenticated) return <Login />;
 
@@ -234,11 +208,7 @@ function AuthenticatedApp() {
 
           <Button
             mt="md"
-            onClick={() => {
-              console.log('🔧 Navigation vers configuration serveur');
-              // Utiliser window.location pour forcer la navigation
-              window.location.href = '/config-serveur';
-            }}
+            onClick={() => window.location.href = '/config-serveur'}
             variant="white"
           >
             🔧 Configurer le serveur
@@ -246,11 +216,9 @@ function AuthenticatedApp() {
 
           <Button
             mt="md"
-            onClick={() => {
-              window.location.reload();
-            }}
+            ml="md"
+            onClick={() => window.location.reload()}
             variant="subtle"
-            style={{ marginLeft: '10px' }}
           >
             🔄 Réessayer
           </Button>
@@ -258,7 +226,6 @@ function AuthenticatedApp() {
       </Center>
     );
   }
-
 
   const handleLogout = () => {
     const confirmed = globalThis.confirm("Voulez-vous vous déconnecter ?");
@@ -269,37 +236,60 @@ function AuthenticatedApp() {
 
   const handleSetPage = (page: string) => {
     const routeMap: Record<string, string> = {
+      // Dashboard
       dashboard: '/',
+      
+      // Clients
       clients: '/clients',
       types_mesures: '/types-mesures',
+      
+      // Stock
       articles: '/articles',
       matieres: '/matieres',
       mouvements_stock: '/mouvements-stock',
+      types_tenues: '/types-tenues',
+      
+      // Référentiels
       tailles: '/tailles',
       couleurs: '/couleurs',
       textures: '/textures',
-      types_tenues: '/types-tenues',
       categories_matieres: '/categories-matieres',
-      ListeTypesPrestations: '/ListeTypesPrestations',
+      types_prestations: '/ListeTypesPrestations',
+      
+      // Atelier
       atelier: '/atelier',
+      
+      // Ventes
       ventes: '/ventes',
       factures_recus: '/factures-recus',
+      
+      // Rendez-vous
+      rendezvous: '/rendezvous',
+      historique_paiements: '/historique-paiements',
+      
+      // Finances
       depenses: '/depenses',
       bilan: '/bilan',
       journal: '/journal',
+      
+      // RH
       employes: '/employes',
       prestations_realisees: '/prestations-realisees',
       salaires: '/salaires',
+      historiques_salaires: '/historiques-salaires',
       emprunts: '/emprunts',
+      
+      // Paramètres
       utilisateurs: '/utilisateurs',
-      ConfigurationServeur: '/config-serveur',
+      config_serveur: '/config-serveur',
       import_export: '/import-export',
       export_config: '/export-config',
       journal_modifications: '/journal-modifications',
+      changer_mot_de_passe: '/changer-mot-de-passe',
+      
+      // Support
       aide: '/aide',
       support: '/support',
-      SuiviRendezVous: '/SuiviRendezVous',
-      HistoriquePaiements: '/HistoriquePaiements',
       export_support: '/export-support',
     };
     navigate(routeMap[page] || '/');
@@ -312,7 +302,12 @@ function AuthenticatedApp() {
       styles={{ main: { height: '100%', overflow: 'auto', backgroundColor: '#f5f7fa' } }}
     >
       <AppShell.Navbar>
-        <Navbar userRole={user?.role} userName={user?.nom} onLogout={handleLogout} onNavigate={handleSetPage} />
+        <Navbar 
+          userRole={user?.role} 
+          userName={user?.nom} 
+          onLogout={handleLogout} 
+          onNavigate={handleSetPage} 
+        />
       </AppShell.Navbar>
       <AppShell.Main>
         <Suspense fallback={<LoadingFallback />}>
@@ -472,6 +467,13 @@ function AuthenticatedApp() {
                 <ListeUtilisateurs />
               </RouteGuard>
             } />
+            <Route path="/changer-mot-de-passe" element={
+              <RouteGuard>
+                <ChangerMotDePasse opened={false} onClose={function (): void {
+                  throw new Error('Function not implemented.');
+                } } />
+              </RouteGuard>
+            } />
             <Route path="/config-serveur" element={
               <RouteGuard fonctionnalite="config_serveur">
                 <ConfigurationServeur />
@@ -487,7 +489,6 @@ function AuthenticatedApp() {
                 <ExportImportConfiguration />
               </RouteGuard>
             } />
-
             <Route path="/journal-modifications" element={
               <RouteGuard fonctionnalite="journal_modifications">
                 <JournalModifications />
@@ -528,6 +529,7 @@ function AuthenticatedApp() {
     </AppShell>
   );
 }
+
 // ==================== QUERY CLIENT ====================
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -222,13 +222,14 @@ router.get("/", async (_, res) => {
     const result = await pool.query(`
       SELECT
         v.*,
-        c.nom_prenom AS client_nom,
+        c.nom_prenom AS client_nom_complet,
+        c.telephone_id AS client_telephone,
         COALESCE(SUM(vd.quantite * vd.prix_unitaire), 0) AS montant_total_calc
       FROM ventes v
       LEFT JOIN clients c ON c.id = v.client_id
       LEFT JOIN vente_details vd ON vd.vente_id = v.id
       WHERE v.est_supprime = 0
-      GROUP BY v.id, c.nom_prenom
+      GROUP BY v.id, c.nom_prenom, c.telephone_id
       ORDER BY v.date_vente DESC
     `);
 
@@ -237,7 +238,10 @@ router.get("/", async (_, res) => {
         ...r,
         montant_total: Number(r.montant_total || 0),
         montant_regle: Number(r.montant_regle || 0),
-        montant_total_calc: Number(r.montant_total_calc || 0)
+        montant_total_calc: Number(r.montant_total_calc || 0),
+        // 🔥 Si client_nom est null, utiliser client_nom_complet
+        client_nom: r.client_nom || r.client_nom_complet || null,
+        client_telephone: r.client_telephone || null
       }))
     );
   } catch (error: any) {
@@ -384,7 +388,7 @@ router.get("/:id", async (req, res) => {
       `
       SELECT
         v.*,
-        c.nom_prenom AS client_nom,
+        c.nom_prenom AS client_nom_complet,
         c.telephone_id AS client_telephone
       FROM ventes v
       LEFT JOIN clients c ON c.id = v.client_id
@@ -401,7 +405,10 @@ router.get("/:id", async (req, res) => {
     res.json({
       ...vente,
       montant_total: Number(vente.montant_total),
-      montant_regle: Number(vente.montant_regle)
+      montant_regle: Number(vente.montant_regle),
+      // 🔥 Si client_nom est null, utiliser client_nom_complet
+      client_nom: vente.client_nom || vente.client_nom_complet || null,
+      client_telephone: vente.client_telephone || null
     });
   } catch (error) {
     console.error(error);

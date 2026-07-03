@@ -252,6 +252,7 @@ router.get("/id/:id", async (req, res) => {
 // ============================================
 // POST - Créer ou mettre à jour un client
 // ============================================
+
 router.post("/", async (req, res) => {
   try {
     const { telephone_id, nom_prenom, profil, adresse, email, observations } = req.body;
@@ -260,9 +261,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Les champs telephone_id et nom_prenom sont obligatoires" });
     }
 
+    // 🔥 Utiliser CURRENT_TIMESTAMP de PostgreSQL au lieu d'une date externe
     const result = await pool.query(
-      `INSERT INTO clients (telephone_id, nom_prenom, profil, adresse, email, observations, est_supprime)
-       VALUES ($1, $2, $3, $4, $5, $6, 0)
+      `INSERT INTO clients (telephone_id, nom_prenom, profil, adresse, email, observations, est_supprime, date_enregistrement)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, CURRENT_TIMESTAMP)
        ON CONFLICT (telephone_id) 
        DO UPDATE SET
          nom_prenom = EXCLUDED.nom_prenom,
@@ -289,15 +291,16 @@ router.post("/", async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
 // ============================================
 // PUT - Mettre à jour un client par ID
-// ============================================
+
 router.put("/id/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { nom_prenom, profil, adresse, email, observations, telephone_id } = req.body;
     
+    // 🔥 Mettre à jour date_enregistrement seulement si on veut conserver la date de création
+    // Sinon, ne pas modifier date_enregistrement
     const result = await pool.query(
       `UPDATE clients 
        SET nom_prenom = COALESCE($1, nom_prenom), 

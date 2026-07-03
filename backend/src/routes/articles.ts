@@ -8,7 +8,7 @@ router.get("/", async (_, res) => {
     const result = await pool.query(`
       SELECT
         a.*,
-        tt.nom AS type_tenue,
+        tt.nom AS type_tenue,  -- 🔥 Correction: nom au lieu de designation
         tt.categorie,
         t.libelle AS taille,
         c.nom_couleur AS couleur,
@@ -37,15 +37,22 @@ router.get("/", async (_, res) => {
 });
 
 /**
- * GET ARTICLE BY ID
+ * GET ARTICLE BY ID - CORRIGÉ
  */
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    
+    console.log(`📊 Récupération de l'article ID: ${id}`);
+    
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ error: "ID invalide" });
+    }
+
     const result = await pool.query(`
       SELECT
         a.*,
-        tt.designation AS type_tenue,
+        tt.nom AS type_tenue,  -- 🔥 Correction: nom au lieu de designation
         tt.categorie,
         t.libelle AS taille,
         c.nom_couleur AS couleur,
@@ -63,6 +70,8 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Article non trouvé" });
     }
 
+    console.log(`✅ Article ${id} récupéré`);
+
     res.json({
       ...result.rows[0],
       prix_achat: Number(result.rows[0].prix_achat || 0),
@@ -71,8 +80,11 @@ router.get("/:id", async (req, res) => {
       seuil_alerte: Number(result.rows[0].seuil_alerte || 0)
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erreur récupération article" });
+    console.error("❌ Erreur récupération article:", error);
+    res.status(500).json({ 
+      error: "Erreur récupération article",
+      details: error.message 
+    });
   }
 });
 
@@ -162,7 +174,7 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * UPDATE
+ * UPDATE - CORRIGÉ
  */
 router.put("/:id", async (req, res) => {
   try {
@@ -183,6 +195,18 @@ router.put("/:id", async (req, res) => {
       est_disponible,
       est_actif
     } = req.body;
+
+    console.log(`📊 Mise à jour article ID: ${id}, stock: ${quantite_stock}`);
+
+    // Vérifier si l'article existe
+    const checkResult = await pool.query(
+      `SELECT id FROM articles WHERE id = $1 AND est_actif = 1`,
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: "Article non trouvé" });
+    }
 
     const result = await pool.query(
       `
@@ -225,9 +249,7 @@ router.put("/:id", async (req, res) => {
       ]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Article non trouvé" });
-    }
+    console.log(`✅ Article ${id} mis à jour, nouveau stock: ${quantite_stock}`);
 
     res.json({
       ...result.rows[0],
@@ -250,12 +272,14 @@ router.put("/:id", async (req, res) => {
 });
 
 /**
- * UPDATE STOCK
+ * UPDATE STOCK - CORRIGÉ
  */
 router.put("/:id/stock", async (req, res) => {
   try {
     const { id } = req.params;
     const { quantite, action } = req.body;
+
+    console.log(`📊 Mise à jour stock article ID: ${id}, quantite: ${quantite}, action: ${action}`);
 
     const checkResult = await pool.query(
       `SELECT id, quantite_stock FROM articles WHERE id = $1 AND est_actif = 1`,
@@ -278,6 +302,8 @@ router.put("/:id/stock", async (req, res) => {
       `,
       [quantite, id]
     );
+
+    console.log(`✅ Stock article ${id} mis à jour: ${result.rows[0].quantite_stock}`);
 
     res.json({
       ...result.rows[0],
@@ -335,7 +361,7 @@ router.get("/code-barre/:code", async (req, res) => {
       `
       SELECT
         a.*,
-        tt.designation AS type_tenue,
+        tt.nom AS type_tenue,  -- 🔥 Correction: nom au lieu de designation
         t.libelle AS taille,
         c.nom_couleur AS couleur,
         tx.nom_texture AS texture
@@ -375,7 +401,7 @@ router.get("/rupture-stock", async (_, res) => {
     const result = await pool.query(`
       SELECT
         a.*,
-        tt.designation AS type_tenue,
+        tt.nom AS type_tenue,  -- 🔥 Correction: nom au lieu de designation
         t.libelle AS taille
       FROM articles a
       LEFT JOIN types_tenues tt ON a.type_tenue_id = tt.id

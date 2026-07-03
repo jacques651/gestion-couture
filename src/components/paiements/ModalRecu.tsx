@@ -21,11 +21,13 @@ import {
   IconX,
   IconCalendarEvent,
   IconUser,
+  IconPhone,
 } from '@tabler/icons-react';
 import { apiGet } from '../../services/api';
 
 // Interface VenteRecu avec rendezvous
 interface VenteRecu {
+  client_nom_complet: string | undefined;
   id: number;
   code_vente?: string;
   date_vente?: string;
@@ -68,26 +70,37 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // Récupérer la vente
         const vente = await apiGet(`/ventes/${commande.id}`);
+        console.log("📊 Vente récupérée:", vente);
+
+        // Récupérer les détails
         const details = await apiGet(`/ventes/${commande.id}/details`);
-        
+        console.log("📊 Détails récupérés:", details);
+
+        // Récupérer le rendez-vous
         let rendezvous = null;
         try {
           const rendezvousList = await apiGet('/rendezvous');
           const rdv = rendezvousList.find((r: any) => r.vente_id === commande.id);
           if (rdv) {
             rendezvous = rdv;
+            console.log("📊 Rendez-vous trouvé:", rendezvous);
           }
         } catch (err) {
           console.warn('Aucun rendez-vous trouvé');
         }
-        
+
+        // 🔥 CORRECTION: S'assurer que client_nom et client_telephone sont bien définis
         setVenteData({
           ...vente,
+          client_nom: vente.client_nom || 'Client non renseigné',
+          client_telephone: vente.client_telephone || vente.telephone_id || null,
           lignes: details || [],
           rendezvous: rendezvous
         });
-        
+
+        // Récupérer les infos de l'atelier
         const atelierData = await apiGet('/atelier');
         if (atelierData && atelierData.length > 0) {
           setAtelier(atelierData[0]);
@@ -98,14 +111,13 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, [commande.id]);
 
   const handlePrint = () => {
     if (!printRef.current || !venteData) return;
-    
-    // Créer une iframe pour l'impression
+
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
     iframe.style.width = '0px';
@@ -117,7 +129,6 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
     const montantRegle = venteData.montant_regle || 0;
     const resteAPayer = totalGeneral - montantRegle;
 
-    // Générer le HTML pour l'impression
     const printHtml = `
       <!DOCTYPE html>
       <html>
@@ -226,11 +237,11 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
             <p>Date : ${venteData.date_vente ? new Date(venteData.date_vente).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</p>
           </div>
 
-          <!-- Infos client -->
+          <!-- 🔥 Infos client - CORRIGÉ -->
           <div class="section">
             <div class="section-title">🧑 CLIENT</div>
             <p><strong>${venteData.client_nom || 'Client non renseigné'}</strong></p>
-            ${venteData.client_telephone ? `<p style="font-size: 10px; color: #666;">Tél: ${venteData.client_telephone}</p>` : ''}
+            ${venteData.client_telephone ? `<p style="font-size: 10px; color: #666;">📞 ${venteData.client_telephone}</p>` : ''}
           </div>
 
           <!-- Rendez-vous -->
@@ -266,8 +277,8 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
               </tr>
             </thead>
             <tbody>
-              ${venteData.lignes && venteData.lignes.length > 0 ? 
-                venteData.lignes.map(item => `
+              ${venteData.lignes && venteData.lignes.length > 0 ?
+        venteData.lignes.map(item => `
                   <tr>
                     <td>${item.designation}</td>
                     <td class="text-center">${item.quantite}</td>
@@ -275,8 +286,8 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
                     <td class="text-right"><strong>${item.total.toLocaleString()} FCFA</strong></td>
                   </tr>
                 `).join('') :
-                '<tr><td colspan="4" class="text-center">Aucun détail disponible</td></tr>'
-              }
+        '<tr><td colspan="4" class="text-center">Aucun détail disponible</td></tr>'
+      }
             </tbody>
           </table>
 
@@ -318,7 +329,7 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
       doc.open();
       doc.write(printHtml);
       doc.close();
-      
+
       iframe.onload = () => {
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
@@ -326,8 +337,7 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
           document.body.removeChild(iframe);
         }, 500);
       };
-      
-      // Si l'événement onload ne se déclenche pas
+
       setTimeout(() => {
         if (document.body.contains(iframe)) {
           iframe.contentWindow?.focus();
@@ -382,10 +392,9 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
         }
       }}
     >
-      {/* Contenu visible à l'écran (identique à l'impression mais référence) */}
       <div ref={printRef}>
         <Stack gap="sm">
-          {/* En-tête compact */}
+          {/* En-tête */}
           <Box style={{ textAlign: 'center', marginBottom: 15 }}>
             <Title order={3} c="#1b365d" size="h4">{atelier?.nom_atelier || 'GESTION COUTURE'}</Title>
             <Text size="xs">{atelier?.adresse || 'Ouagadougou, Burkina Faso'}</Text>
@@ -395,17 +404,24 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
             <Text size="xs">Date : {venteData.date_vente ? new Date(venteData.date_vente).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</Text>
           </Box>
 
-          {/* Infos client compactes */}
+          {/* 🔥 Infos client - CORRIGÉ */}
           <Paper p="sm" withBorder mb="sm">
             <Group gap="xs">
               <IconUser size={14} />
               <Text fw={600} size="sm">CLIENT</Text>
             </Group>
-            <Text size="sm">{venteData.client_nom || 'Client non renseigné'}</Text>
-            {venteData.client_telephone && <Text size="xs" c="dimmed">Tél: {venteData.client_telephone}</Text>}
+            <Text size="sm" fw={500}>
+              {venteData.client_nom || venteData.client_nom_complet || 'Client non renseigné'}
+            </Text>
+            {venteData.client_telephone && (
+              <Group gap="xs" mt={2}>
+                <IconPhone size={12} color="#666" />
+                <Text size="xs" c="dimmed">{venteData.client_telephone}</Text>
+              </Group>
+            )}
           </Paper>
 
-          {/* Section Rendez-vous compacte */}
+          {/* Rendez-vous */}
           {venteData.rendezvous && venteData.rendezvous.date_rendezvous && (
             <Paper p="sm" withBorder mb="sm" style={{ backgroundColor: '#FFF8E7', borderLeft: '4px solid #1b365d' }}>
               <Group gap="xs" mb="xs">
@@ -425,24 +441,24 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
                 </Box>
                 <Box>
                   <Text size="xs" c="dimmed">Type</Text>
-                  <Badge 
+                  <Badge
                     color={venteData.rendezvous.type_rendezvous === 'essayage' ? 'pink' :
-                           venteData.rendezvous.type_rendezvous === 'livraison' ? 'cyan' : 'orange'} 
+                      venteData.rendezvous.type_rendezvous === 'livraison' ? 'cyan' : 'orange'}
                     size="xs"
                   >
                     {venteData.rendezvous.type_rendezvous === 'essayage' ? '👗 Essayage' :
-                     venteData.rendezvous.type_rendezvous === 'livraison' ? '🚚 Livraison' : '📦 Retrait'}
+                      venteData.rendezvous.type_rendezvous === 'livraison' ? '🚚 Livraison' : '📦 Retrait'}
                   </Badge>
                 </Box>
                 <Box>
                   <Text size="xs" c="dimmed">Statut</Text>
-                  <Badge 
+                  <Badge
                     color={venteData.rendezvous.statut === 'planifie' ? 'orange' :
-                           venteData.rendezvous.statut === 'termine' ? 'green' : 'red'} 
+                      venteData.rendezvous.statut === 'termine' ? 'green' : 'red'}
                     size="xs"
                   >
                     {venteData.rendezvous.statut === 'planifie' ? '⏳ Planifié' :
-                     venteData.rendezvous.statut === 'termine' ? '✅ Terminé' : '❌ Annulé'}
+                      venteData.rendezvous.statut === 'termine' ? '✅ Terminé' : '❌ Annulé'}
                   </Badge>
                 </Box>
               </SimpleGrid>
@@ -454,7 +470,7 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
             </Paper>
           )}
 
-          {/* Tableau compact */}
+          {/* Tableau */}
           <Table striped highlightOnHover>
             <Table.Thead style={{ backgroundColor: '#1b365d' }}>
               <Table.Tr>
@@ -484,7 +500,7 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
             </Table.Tbody>
           </Table>
 
-          {/* Totaux compacts */}
+          {/* Totaux */}
           <Box style={{ textAlign: 'right', marginTop: 15 }}>
             <Group justify="flex-end" gap="md">
               <Text size="sm">Total:</Text>
@@ -508,21 +524,21 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
             </Group>
           </Box>
 
-          {/* Statut compact */}
+          {/* Statut */}
           <Box mt="sm" p="xs" style={{ backgroundColor: '#f8f9fa', borderRadius: 6 }}>
             <Group justify="center" gap="xs">
               <Text size="sm" fw={500}>Statut:</Text>
-              <Badge 
-                color={venteData.statut === 'PAYEE' ? 'green' : venteData.statut === 'PARTIEL' ? 'orange' : 'red'} 
+              <Badge
+                color={venteData.statut === 'PAYEE' ? 'green' : venteData.statut === 'PARTIEL' ? 'orange' : 'red'}
                 size="sm"
               >
-                {venteData.statut === 'PAYEE' ? '✅ Payée' : 
-                 venteData.statut === 'PARTIEL' ? '⚠️ Paiement partiel' : '❌ En attente'}
+                {venteData.statut === 'PAYEE' ? '✅ Payée' :
+                  venteData.statut === 'PARTIEL' ? '⚠️ Paiement partiel' : '❌ En attente'}
               </Badge>
             </Group>
           </Box>
 
-          {/* Observations compactes */}
+          {/* Observations */}
           {venteData.observation && (
             <Box mt="sm">
               <Text size="xs" c="dimmed">Observations:</Text>
@@ -530,7 +546,7 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
             </Box>
           )}
 
-          {/* Signature compacte */}
+          {/* Signature */}
           <Box mt={30} style={{ textAlign: 'right' }}>
             <Text size="xs">Signature & cachet</Text>
             <Divider style={{ width: 150, marginLeft: 'auto' }} />
@@ -540,7 +556,6 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
 
       <Divider my="sm" />
 
-      {/* Boutons d'action */}
       <Group justify="flex-end" gap="sm">
         <Button variant="light" onClick={onClose} leftSection={<IconX size={16} />} size="sm">
           Fermer
