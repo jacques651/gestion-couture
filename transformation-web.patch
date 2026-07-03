@@ -1,0 +1,604 @@
+diff --git a/.gitignore b/.gitignore
+index f38d677..78121b1 100644
+Binary files a/.gitignore and b/.gitignore differ
+diff --git a/backend/src/routes/admin.ts b/backend/src/routes/admin.ts
+index bc6f3f5..35efd32 100644
+--- a/backend/src/routes/admin.ts
++++ b/backend/src/routes/admin.ts
+@@ -56,4 +56,43 @@ router.post(
+   }
+ );
+ 
++/**
++ * BACKUP / EXPORT COMPLET (JSON)
++ * Remplace l'ancien export du fichier SQLite local (obsolète en mode web).
++ * Renvoie le contenu de toutes les tables applicatives sous forme de JSON.
++ */
++router.get(
++  '/backup',
++  async (_, res) => {
++    try {
++      const tablesRes = await pool.query(
++        `SELECT table_name
++         FROM information_schema.tables
++         WHERE table_schema = 'public'
++           AND table_type = 'BASE TABLE'
++         ORDER BY table_name`
++      );
++
++      const data: Record<string, any[]> = {};
++
++      for (const row of tablesRes.rows) {
++        const table = row.table_name as string;
++        const content = await pool.query(`SELECT * FROM "${table}"`);
++        data[table] = content.rows;
++      }
++
++      res.json({
++        exported_at: new Date().toISOString(),
++        tables: Object.keys(data).length,
++        data
++      });
++    } catch (error) {
++      console.error(error);
++      res.status(500).json({
++        error: 'Erreur lors de la sauvegarde'
++      });
++    }
++  }
++);
++
+ export default router;
+\ No newline at end of file
+diff --git a/backend/src/server.ts b/backend/src/server.ts
+index a165779..9cae5f7 100644
+--- a/backend/src/server.ts
++++ b/backend/src/server.ts
+@@ -54,33 +54,33 @@ app.use((req, res, next) => {
+ });
+ 
+ // Routes API - UNIQUEMENT ICI, PAS DE ROUTES DIRECTES
+-app.use("/clients", clientsRoutes);
+-app.use("/modeles-tenues", modelesTenuesRoutes);
+-app.use("/types-tenues", typesTenuesRoutes);
+-app.use("/tailles", taillesRoutes);
+-app.use("/types-mesures", typesMesuresRoutes);
+-app.use("/couleurs", couleursRoutes);
+-app.use("/textures", texturesRoutes);
+-app.use("/articles", articlesRoutes);
+-app.use("/categories-matieres", categoriesMatieresRoutes);
+-app.use("/matieres", matieresRoutes);
+-app.use("/atelier", atelierRoutes);
+-app.use("/types-prestations", typesPrestationsRoutes);
+-app.use("/ventes", ventesRoutes);
+-app.use("/depenses", depensesRoutes);
+-app.use("/rendezvous", rendezVousRoutes);
+-app.use("/utilisateurs", utilisateursRoutes);
+-app.use("/journal", journalRoutes);
+-app.use("/journal-modifications", journalRoutes);
+-app.use("/employes", employesRoutes);
+-app.use("/prestations-realisees", prestationsRoutes);
+-app.use("/salaires", salairesRoutes);
+-app.use("/historique-salaires", historiqueSalairesRoutes);
+-app.use("/emprunts", empruntsRoutes);
++app.use("/api/clients", clientsRoutes);
++app.use("/api/modeles-tenues", modelesTenuesRoutes);
++app.use("/api/types-tenues", typesTenuesRoutes);
++app.use("/api/tailles", taillesRoutes);
++app.use("/api/types-mesures", typesMesuresRoutes);
++app.use("/api/couleurs", couleursRoutes);
++app.use("/api/textures", texturesRoutes);
++app.use("/api/articles", articlesRoutes);
++app.use("/api/categories-matieres", categoriesMatieresRoutes);
++app.use("/api/matieres", matieresRoutes);
++app.use("/api/atelier", atelierRoutes);
++app.use("/api/types-prestations", typesPrestationsRoutes);
++app.use("/api/ventes", ventesRoutes);
++app.use("/api/depenses", depensesRoutes);
++app.use("/api/rendezvous", rendezVousRoutes);
++app.use("/api/utilisateurs", utilisateursRoutes);
++app.use("/api/journal", journalRoutes);
++app.use("/api/journal-modifications", journalRoutes);
++app.use("/api/employes", employesRoutes);
++app.use("/api/prestations-realisees", prestationsRoutes);
++app.use("/api/salaires", salairesRoutes);
++app.use("/api/historique-salaires", historiqueSalairesRoutes);
++app.use("/api/emprunts", empruntsRoutes);
+ app.use('/admin', adminRoutes);
+-app.use("/finances", financesRoutes);
+-app.use("/mouvements-stock", stockRoutes);
+-app.use("/stock", stockRoutes);
++app.use("/api/finances", financesRoutes);
++app.use("/api/mouvements-stock", stockRoutes);
++app.use("/api/stock", stockRoutes);
+ 
+ // Routes de test
+ app.get("/test", async (_, res) => {
+@@ -107,6 +107,38 @@ app.get("/health", (_, res) => {
+   });
+ });
+ 
++// ============================================
++// SERVIR LE FRONTEND (mode application web)
++// ============================================
++// Le build Vite est produit dans backend/public (voir vite.config.ts).
++// __dirname vaut backend/src en dev (ts-node) et backend/dist en prod (node),
++// donc "../public" pointe vers backend/public dans les deux cas.
++const frontendDir = path.join(__dirname, "..", "public");
++
++if (fs.existsSync(frontendDir)) {
++  // Sert index.html, le JS, le CSS et les autres fichiers statiques
++  app.use(express.static(frontendDir));
++
++  // Repli SPA : toute navigation navigateur (Accept: text/html) qui n'a pas
++  // été servie par une route API ni par un fichier statique renvoie index.html,
++  // ce qui laisse React Router gérer les routes internes (/ventes, /clients...).
++  app.use((req, res, next) => {
++    if (
++      req.method === "GET" &&
++      req.headers.accept &&
++      req.headers.accept.includes("text/html")
++    ) {
++      return res.sendFile(path.join(frontendDir, "index.html"));
++    }
++    next();
++  });
++} else {
++  console.warn(
++    "⚠️  Dossier frontend introuvable (backend/public). " +
++    "Lancez 'npm run build' à la racine pour générer l'interface web."
++  );
++}
++
+ // ============================================
+ // INITIALISATION DE LA BASE DE DONNÉES
+ // ============================================
+diff --git a/src/App.tsx b/src/App.tsx
+index 2323c2f..cabadb3 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -156,7 +156,7 @@ function AuthenticatedApp() {
+   useEffect(() => {
+     const verifierConnexion = async () => {
+       try {
+-        const url = localStorage.getItem('api_url') || 'http://192.168.100.151:3001';
++        const url = localStorage.getItem('api_url') || '';
+         console.log('🔍 Vérification connexion à:', url);
+ 
+         const controller = new AbortController();
+diff --git a/src/components/ConfigurationServeur.tsx b/src/components/ConfigurationServeur.tsx
+index 98a653b..cecda78 100644
+--- a/src/components/ConfigurationServeur.tsx
++++ b/src/components/ConfigurationServeur.tsx
+@@ -23,10 +23,8 @@ const ConfigurationServeur: React.FC = () => {
+     if (savedUrl) {
+       setServerUrl(savedUrl);
+       testerConnexionSilencieuse(savedUrl);
+-    } else {
+-      // URL par défaut
+-      localStorage.setItem('api_url', 'http://192.168.2.1:3001');
+     }
++    // Mode web : par défaut, l'API est en même origine (aucune URL à forcer).
+     detecterIpLocale();
+   }, []);
+ 
+diff --git a/src/components/DiagnosticReseau.tsx b/src/components/DiagnosticReseau.tsx
+index d0804dc..cded320 100644
+--- a/src/components/DiagnosticReseau.tsx
++++ b/src/components/DiagnosticReseau.tsx
+@@ -7,7 +7,7 @@ const DiagnosticReseau: React.FC = () => {
+   const [loading, setLoading] = useState(false);
+ 
+   const getServerUrl = () => {
+-    return localStorage.getItem('api_url') || 'http://localhost:3001';
++    return localStorage.getItem('api_url') || '';
+   };
+ 
+   const testerConnexion = async () => {
+diff --git a/src/components/auth/Login.tsx b/src/components/auth/Login.tsx
+index 91c6cc8..41b3b04 100644
+--- a/src/components/auth/Login.tsx
++++ b/src/components/auth/Login.tsx
+@@ -77,7 +77,7 @@ const Login: React.FC = () => {
+   useEffect(() => {
+     const verifierConnexionServeur = async () => {
+       try {
+-        const url = localStorage.getItem('api_url') || 'http://localhost:3001';
++        const url = localStorage.getItem('api_url') || '';
+         const response = await fetch(`${url}/health`);
+         if (response.ok) {
+           const data = await response.json();
+diff --git a/src/components/layout/BoutonSupport.tsx b/src/components/layout/BoutonSupport.tsx
+index 0230de3..b1a15a7 100644
+--- a/src/components/layout/BoutonSupport.tsx
++++ b/src/components/layout/BoutonSupport.tsx
+@@ -1,7 +1,6 @@
+ import React, { useState } from 'react';
+-import { save } from '@tauri-apps/plugin-dialog';
+-import { readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+-import { info, error as logError } from '@tauri-apps/plugin-log';
++import { apiGet } from '../../services/api';
++import { downloadJson } from '../../utils/download';
+ import { Button, Tooltip, Box, Text, Stack, Modal, Alert, Group } from '@mantine/core';
+ import { useDisclosure } from '@mantine/hooks';
+ import { IconDownload, IconHelpCircle, IconCheck, IconAlertCircle } from '@tabler/icons-react';
+@@ -16,30 +15,19 @@ const BoutonSupport: React.FC = () => {
+     try {
+       setLoading(true);
+       setStatus('idle');
+-      
+-      // 📁 Choix du fichier destination
+-      const cheminDestination = await save({
+-        title: "Exporter la base pour le support technique",
+-        filters: [{ name: 'Base de données SQLite', extensions: ['db'] }],
+-        defaultPath: `SAV_Gestion_Couture_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`
+-      });
+ 
+-      if (!cheminDestination) {
+-        setLoading(false);
+-        return;
+-      }
++      // 📥 Récupère une sauvegarde complète des données depuis le serveur
++      const backup = await apiGet('/admin/backup');
+ 
+-      // 📥 Lire la base locale (Tauri v2 → baseDir)
+-      const data = await readFile('gestion-couture.db', {
+-        baseDir: BaseDirectory.AppData
+-      });
++      // 📤 Télécharge le fichier JSON via le navigateur
++      const nomFichier = `SAV_Gestion_Couture_${new Date()
++        .toISOString()
++        .slice(0, 19)
++        .replace(/:/g, '-')}.json`;
++      downloadJson(backup, nomFichier);
+ 
+-      // 📤 Écrire vers le fichier choisi
+-      await writeFile(cheminDestination, data);
+-
+-      await info("Base exportée avec succès");
+       setStatus('success');
+-      
++
+       // Fermer la modale après 1.5 secondes
+       setTimeout(() => {
+         close();
+@@ -48,7 +36,6 @@ const BoutonSupport: React.FC = () => {
+ 
+     } catch (err: any) {
+       console.error(err);
+-      await logError(`Erreur export support : ${err?.message || err}`);
+       setStatus('error');
+       setErrorMessage(err?.message || "Une erreur inattendue s'est produite");
+     } finally {
+@@ -108,7 +95,7 @@ const BoutonSupport: React.FC = () => {
+                 Export de la base de données
+               </Text>
+               <Text size="sm" c="dimmed">
+-                Cette opération va exporter l'intégralité de votre base de données dans un fichier .db
++                Cette opération va exporter l'intégralité de votre base de données dans un fichier .json
+               </Text>
+             </Box>
+ 
+diff --git a/src/components/prestations/ListePrestationsRealisees.tsx b/src/components/prestations/ListePrestationsRealisees.tsx
+index 54b91f9..1303777 100644
+--- a/src/components/prestations/ListePrestationsRealisees.tsx
++++ b/src/components/prestations/ListePrestationsRealisees.tsx
+@@ -50,8 +50,7 @@ import FormulairePrestationRealisee from './FormulairePrestationRealisee';
+ import * as XLSX from 'xlsx';
+ import jsPDF from 'jspdf';
+ import autoTable from 'jspdf-autotable';
+-import { save } from '@tauri-apps/plugin-dialog';
+-import { writeFile } from '@tauri-apps/plugin-fs';
++import { downloadFile } from '../../utils/download';
+ import { useReactToPrint } from 'react-to-print';
+ import { apiDelete, apiGet } from '../../services/api';
+ 
+@@ -200,16 +199,13 @@ const result: Prestation[] =
+     const wb = XLSX.utils.book_new();
+     XLSX.utils.book_append_sheet(wb, ws, 'Prestations');
+     const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+-    const filePath = await save({
+-      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`
+-    });
+-    if (filePath) {
+-      await writeFile(filePath, new Uint8Array(buffer));
+-      setSuccessMessage('Export Excel réussi');
+-      setShowSuccess(true);
+-      setTimeout(() => setShowSuccess(false), 3000);
+-    }
++    downloadFile(
++      new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
++      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`
++    );
++    setSuccessMessage('Export Excel réussi');
++    setShowSuccess(true);
++    setTimeout(() => setShowSuccess(false), 3000);
+   };
+ 
+   const handleExportPDF = async () => {
+@@ -239,16 +235,13 @@ const result: Prestation[] =
+     });
+     
+     const blob = doc.output('blob');
+-    const filePath = await save({
+-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
+-    });
+-    if (filePath) {
+-      await writeFile(filePath, new Uint8Array(await blob.arrayBuffer()));
+-      setSuccessMessage('Export PDF réussi');
+-      setShowSuccess(true);
+-      setTimeout(() => setShowSuccess(false), 3000);
+-    }
++    downloadFile(
++      blob,
++      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
++    );
++    setSuccessMessage('Export PDF réussi');
++    setShowSuccess(true);
++    setTimeout(() => setShowSuccess(false), 3000);
+   };
+ 
+   const handleExportWord = async () => {
+@@ -300,16 +293,13 @@ const result: Prestation[] =
+     </html>`;
+ 
+     const blob = new Blob([htmlContent], { type: 'application/msword' });
+-    const filePath = await save({
+-      filters: [{ name: 'Word', extensions: ['doc'] }],
+-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.doc`
+-    });
+-    if (filePath) {
+-      await writeFile(filePath, new Uint8Array(await blob.arrayBuffer()));
+-      setSuccessMessage('Export Word réussi');
+-      setShowSuccess(true);
+-      setTimeout(() => setShowSuccess(false), 3000);
+-    }
++    downloadFile(
++      blob,
++      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.doc`
++    );
++    setSuccessMessage('Export Word réussi');
++    setShowSuccess(true);
++    setTimeout(() => setShowSuccess(false), 3000);
+   };
+ 
+   const supprimer = async (id: number, designation: string) => {
+diff --git a/src/components/stock/ArticlesManager.tsx b/src/components/stock/ArticlesManager.tsx
+index 3f44e98..4bd3e04 100644
+--- a/src/components/stock/ArticlesManager.tsx
++++ b/src/components/stock/ArticlesManager.tsx
+@@ -24,9 +24,6 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../../services/api';
+ import * as XLSX from 'xlsx';
+ import jsPDF from 'jspdf';
+ import autoTable from 'jspdf-autotable';
+-import { save } from '@tauri-apps/plugin-dialog';
+-import { writeFile } from '@tauri-apps/plugin-fs';
+-
+ interface FormData {
+   type_tenue_id: number | null;
+   taille_id: number | null;
+@@ -492,8 +489,14 @@ const ArticlesManager: React.FC = () => {
+       const wb = XLSX.utils.book_new();
+       XLSX.utils.book_append_sheet(wb, ws, 'Articles');
+       const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+-      const path = await save({ filters: [{ name: 'Excel', extensions: ['xlsx'] }], defaultPath: `articles_${new Date().toISOString().split('T')[0]}.xlsx` });
+-      if (path) { await writeFile(path, new Uint8Array(buf)); notifications.show({ title: 'Succès', message: 'Export Excel réussi', color: 'green' }); }
++      const fileName = `articles_${new Date().toISOString().split('T')[0]}.xlsx`;
++      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
++      const url = URL.createObjectURL(blob);
++      const link = document.createElement('a');
++      link.href = url; link.download = fileName;
++      document.body.appendChild(link); link.click(); document.body.removeChild(link);
++      setTimeout(() => URL.revokeObjectURL(url), 1000);
++      notifications.show({ title: 'Succès', message: 'Export Excel réussi', color: 'green' });
+     } catch (e) { console.error(e); notifications.show({ title: 'Erreur', message: 'Échec export Excel', color: 'red' }); }
+     finally { setExporting(false); }
+   };
+@@ -518,9 +521,8 @@ const ArticlesManager: React.FC = () => {
+         a.emplacement || ''
+       ]);
+       autoTable(doc, { head, body, startY: 30, theme: 'striped', headStyles: { fillColor: [27, 54, 93] }, styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 5, right: 5 } });
+-      const pdfBuf = doc.output('arraybuffer');
+-      const path = await save({ filters: [{ name: 'PDF', extensions: ['pdf'] }], defaultPath: `articles_${new Date().toISOString().split('T')[0]}.pdf` });
+-      if (path) { await writeFile(path, new Uint8Array(pdfBuf)); notifications.show({ title: 'Succès', message: 'Export PDF réussi', color: 'green' }); }
++      doc.save(`articles_${new Date().toISOString().split('T')[0]}.pdf`);
++      notifications.show({ title: 'Succès', message: 'Export PDF réussi', color: 'green' });
+     } catch (e) { console.error(e); notifications.show({ title: 'Erreur', message: 'Échec export PDF', color: 'red' }); }
+     finally { setExporting(false); }
+   };
+diff --git a/src/components/support/ExportSupport.tsx b/src/components/support/ExportSupport.tsx
+index e3bc633..906e0bb 100644
+--- a/src/components/support/ExportSupport.tsx
++++ b/src/components/support/ExportSupport.tsx
+@@ -50,7 +50,7 @@ const API_URL =
+ 
+   ||
+ 
+-  'http://localhost:3001';
++  '';
+ 
+ const ExportSupport:
+ React.FC = () => {
+diff --git a/src/services/api.ts b/src/services/api.ts
+index 550531e..0434f17 100644
+--- a/src/services/api.ts
++++ b/src/services/api.ts
+@@ -1,12 +1,17 @@
+ // src/services/api.ts
+ 
+-// Fonction pour récupérer l'URL du serveur configurée
++// URL du serveur API.
++// En mode application web, le front est servi par le même serveur Express
++// que l'API : on utilise donc des URL relatives (même origine), sans config.
++// Une URL explicite peut toujours être forcée via localStorage('api_url').
+ const getApiUrl = () => {
++  // L'API est servie sous le préfixe /api par le même serveur Express.
+   const savedUrl = localStorage.getItem('api_url');
+   if (savedUrl) {
+-    return savedUrl;
++    // Override explicite (ex. front et API sur des origines différentes)
++    return `${savedUrl.replace(/\/$/, '')}/api`;
+   }
+-  return 'http://localhost:3001';
++  return '/api';
+ };
+ 
+ export const apiGet = async (url: string) => {
+diff --git a/src/services/backend.ts b/src/services/backend.ts
+index bc02c67..14bc811 100644
+--- a/src/services/backend.ts
++++ b/src/services/backend.ts
+@@ -1,68 +1,16 @@
+-import {
+-  Command
+-} from '@tauri-apps/plugin-shell';
++// src/services/backend.ts
++//
++// En mode application web, le backend Express n'est plus lancé par le client :
++// il tourne en permanence sur la machine serveur. Cette fonction est conservée
++// pour compatibilité mais ne fait plus rien côté navigateur.
+ 
+ let backendStarted = false;
+ 
+ export async function startBackend() {
+-
+   if (backendStarted) {
+     return;
+   }
+-
+-  try {
+-
+-    const command = Command.create(
+-
+-      'cmd',
+-
+-      [
+-
+-        '/C',
+-
+-        'node backend/dist/server.js'
+-      ]
+-    );
+-
+-    command.stdout.on(
+-
+-      'data',
+-
+-      line => {
+-
+-        console.log(
+-          '[BACKEND]',
+-          line
+-        );
+-      }
+-    );
+-
+-    command.stderr.on(
+-
+-      'data',
+-
+-      line => {
+-
+-        console.error(
+-          '[BACKEND ERROR]',
+-          line
+-        );
+-      }
+-    );
+-
+-    await command.spawn();
+-
+-    backendStarted = true;
+-
+-    console.log(
+-      '✅ Backend démarré automatiquement'
+-    );
+-
+-  } catch (error) {
+-
+-    console.error(
+-      '❌ Erreur backend',
+-      error
+-    );
+-  }
+-}
+\ No newline at end of file
++  backendStarted = true;
++  // Aucun lancement de processus en mode web : le serveur est déjà démarré.
++  console.log('ℹ️ Mode web : le backend est hébergé sur le serveur.');
++}
+diff --git a/src/utils/download.ts b/src/utils/download.ts
+new file mode 100644
+index 0000000..1bad11b
+--- /dev/null
++++ b/src/utils/download.ts
+@@ -0,0 +1,41 @@
++// src/utils/download.ts
++//
++// Téléchargement de fichiers côté navigateur (mode application web).
++// Remplace les anciens appels Tauri `save()` + `writeFile()` qui n'existent
++// que dans l'application desktop.
++
++/**
++ * Déclenche le téléchargement d'un contenu binaire ou texte via le navigateur.
++ */
++export function downloadFile(
++  content: BlobPart,
++  filename: string,
++  mimeType?: string
++): void {
++  const blob =
++    content instanceof Blob
++      ? content
++      : new Blob([content], mimeType ? { type: mimeType } : undefined);
++
++  const url = URL.createObjectURL(blob);
++  const link = document.createElement('a');
++  link.href = url;
++  link.download = filename;
++  document.body.appendChild(link);
++  link.click();
++  document.body.removeChild(link);
++
++  // Libère l'URL objet après le déclenchement du téléchargement
++  setTimeout(() => URL.revokeObjectURL(url), 1000);
++}
++
++/**
++ * Télécharge un objet JavaScript sous forme de fichier JSON indenté.
++ */
++export function downloadJson(data: unknown, filename: string): void {
++  downloadFile(
++    JSON.stringify(data, null, 2),
++    filename,
++    'application/json'
++  );
++}
+diff --git a/vite.config.ts b/vite.config.ts
+index b5dbfe7..4eb6fe6 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,10 +1,16 @@
+ import { defineConfig } from 'vite'
+ import react from '@vitejs/plugin-react'
+ 
++// https://vitejs.dev/config/
+ export default defineConfig({
+   plugins: [react()],
++  build: {
++    // Le front compilé est servi directement par le backend Express
++    outDir: 'backend/public',
++    emptyOutDir: true,
++  },
+   server: {
+-    port: 1420,      // 🔥 IMPORTANT
+-    strictPort: true // évite changement automatique
+-  }
+-})
+\ No newline at end of file
++    port: 1420,
++    strictPort: true,
++  },
++})
