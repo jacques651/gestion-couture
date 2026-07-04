@@ -7,7 +7,7 @@ const DiagnosticReseau: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const getServerUrl = () => {
-    return localStorage.getItem('api_url') || 'http://localhost:3001';
+    return localStorage.getItem('api_url') || '';
   };
 
   const testerConnexion = async () => {

@@ -1,0 +1,1104 @@
+diff --git a/.gitignore b/.gitignore
+index f38d677..78121b1 100644
+Binary files a/.gitignore and b/.gitignore differ
+diff --git a/GUIDE-INSTALLATION.md b/GUIDE-INSTALLATION.md
+new file mode 100644
+index 0000000..4761546
+--- /dev/null
++++ b/GUIDE-INSTALLATION.md
+@@ -0,0 +1,140 @@
++# Gestion Couture — Guide d'installation (démarrage automatique)
++
++Ce guide explique comment installer l'application pour qu'elle **démarre toute
++seule** et que les utilisateurs n'aient **rien à faire** à part travailler.
++
++L'application fonctionne en réseau local (câble Ethernet), **sans Internet**.
++Un PC joue le rôle de **serveur** ; les autres postes s'y connectent avec un
++simple navigateur.
++
++**Connexion hybride (câble ou Wi-Fi).** Le serveur répond en même temps sur
++toutes ses cartes réseau. Un poste peut donc se connecter via le **câble** ou
++via le **Wi-Fi**, indifféremment. Le raccourci installé sur chaque poste teste
++automatiquement les adresses du serveur et ouvre l'application sur celle qui
++répond — l'utilisateur n'a rien à choisir.
++
++---
++
++## Vue d'ensemble
++
++- **1 PC serveur** : héberge la base de données + l'application. On l'installe
++  une seule fois avec `INSTALLER-SERVEUR.bat`. Ensuite, il démarre tout seul.
++- **Les autres postes (clients)** : rien à installer. On lance une fois
++  `INSTALLER-CLIENT.bat` pour créer un raccourci d'ouverture automatique.
++
++---
++
++## PARTIE 1 — Installer le PC serveur (à faire une seule fois)
++
++### Pré-requis (à installer une seule fois sur le PC serveur)
++
++1. **Node.js** (version LTS) : https://nodejs.org
++2. **PostgreSQL** : https://www.postgresql.org/download/windows/
++   - Lors de l'installation, notez le **mot de passe** du compte `postgres`.
++   - Ce mot de passe doit correspondre à celui du fichier `backend/src/db.ts`.
++
++### Installation
++
++1. Copiez le dossier du projet sur le PC serveur (par exemple `C:\gestion-couture`).
++2. **Clic droit** sur `INSTALLER-SERVEUR.bat` → **Exécuter en tant qu'administrateur**.
++3. Laissez faire. Le script va tout préparer automatiquement :
++   - construire l'application,
++   - activer PostgreSQL au démarrage,
++   - ouvrir le port 3001 dans le pare-feu,
++   - installer le serveur comme **service Windows** (démarrage automatique),
++   - créer un raccourci qui ouvre l'application.
++4. À la fin, l'écran affiche les **adresses IP** du serveur (par exemple
++   `http://192.168.1.10:3001`). **Notez-en une** : vous en aurez besoin pour
++   les autres postes.
++
++C'est terminé. À partir de maintenant, **le serveur démarre tout seul** à chaque
++allumage du PC, avant même qu'une personne se connecte, et se relance
++automatiquement en cas de problème.
++
++> Conseil : donnez une **adresse IP fixe** au PC serveur pour que l'adresse ne
++> change jamais. (Souvent réglable dans la box/routeur ou dans les paramètres
++> réseau de Windows.)
++
++---
++
++## PARTIE 2 — Configurer les autres postes (clients)
++
++Sur chaque autre PC :
++
++1. Copiez au moins le fichier `INSTALLER-CLIENT.bat` **et** le dossier `outils`.
++2. Double-cliquez sur `INSTALLER-CLIENT.bat` (pas besoin d'administrateur).
++3. Saisissez les **adresses IP du serveur**, séparées par un espace. Mettez
++   celle du **câble** et celle du **Wi-Fi** si vous utilisez les deux
++   (ex. `192.168.100.151 192.168.11.114`).
++4. C'est fait : un raccourci **Gestion Couture** apparaît sur le Bureau, et
++   l'application **s'ouvrira automatiquement** à chaque démarrage du poste, en
++   choisissant seule le réseau disponible (câble ou Wi-Fi).
++
++> Le PC serveur doit être allumé pour que les postes clients puissent travailler.
++> Pour modifier les adresses plus tard, éditez le fichier `outils\serveurs.txt`
++> (une adresse par ligne).
++
++---
++
++## Utilisation au quotidien
++
++- L'utilisateur allume son PC → l'application s'ouvre toute seule dans une
++  fenêtre propre (comme un vrai logiciel).
++- Rien d'autre à faire.
++
++---
++
++## Gestion du service (pour le technicien, si besoin)
++
++Le serveur tourne en tant que service Windows nommé **GestionCouture**.
++
++- Le voir : touche Windows → tapez « Services » → cherchez « GestionCouture ».
++- Le désinstaller : dans le dossier `backend`, ouvrir une invite de commandes
++  **administrateur** et lancer :
++  ```
++  node service\uninstall-service.js
++  ```
++- Le réinstaller : `node service\install-service.js` (administrateur).
++
++---
++
++## Mettre à jour l'application plus tard
++
++Sur le PC serveur :
++
++1. Remplacez les fichiers du projet par la nouvelle version.
++2. Relancez `INSTALLER-SERVEUR.bat` en administrateur (il reconstruit et
++   redémarre le service).
++
++Tous les postes ont la nouvelle version au prochain rechargement — **rien à
++réinstaller sur les clients**.
++
++---
++
++## En cas de souci
++
++- **Un poste client n'affiche rien** : vérifiez que le PC serveur est allumé,
++  et que l'adresse IP saisie est la bonne (elle a pu changer si l'IP n'est pas
++  fixe).
++- **L'application ne se charge pas sur le serveur** : vérifiez dans « Services »
++  que **GestionCouture** est bien « En cours d'exécution », et que le service
++  **PostgreSQL** l'est aussi.
++- **Vérifier que le serveur répond** : ouvrez `http://localhost:3001/health`
++  sur le PC serveur — vous devez voir un message indiquant que le serveur est
++  actif.
++
++---
++
++## Note de sécurité (importante)
++
++L'API du serveur est joignable par tout appareil du réseau local, **sur le câble
++comme sur le Wi-Fi**. Tant qu'il n'y a pas d'authentification **côté serveur**,
++n'importe quel appareil connecté à l'un de ces réseaux peut accéder aux données
++via l'adresse du serveur.
++
++- Le Wi-Fi utilisé donnant aussi accès à Internet, veillez à ce que ce Wi-Fi
++  soit **privé et protégé par mot de passe** (pas un réseau ouvert/public).
++- **N'exposez pas** le port 3001 sur Internet (pas de redirection de port sur la
++  box/routeur) tant que l'authentification serveur n'est pas en place.
++- Avant une mise en production réelle, il est fortement recommandé d'ajouter une
++  authentification serveur et de hacher les mots de passe.
+diff --git a/INSTALLER-CLIENT.bat b/INSTALLER-CLIENT.bat
+new file mode 100644
+index 0000000..bca50f9
+--- /dev/null
++++ b/INSTALLER-CLIENT.bat
+@@ -0,0 +1,47 @@
++@echo off
++setlocal enabledelayedexpansion
++title Configuration d'un poste - Gestion Couture
++
++:: ================================================================
++::  A executer sur chaque POSTE CLIENT (mode hybride cable/Wi-Fi).
++::  Pas besoin de droits administrateur.
++:: ================================================================
++
++cd /d "%~dp0"
++
++echo ================================================
++echo    Configuration d'un poste client (hybride)
++echo ================================================
++echo.
++echo   Entrez les adresses IP du PC SERVEUR, separees par un ESPACE.
++echo   Mettez celle du cable ET celle du Wi-Fi si vous utilisez les deux.
++echo.
++echo   Exemple :  192.168.100.151 192.168.11.114
++echo.
++set /p SERVERIPS=Adresses IP du serveur : 
++
++if "%SERVERIPS%"=="" (
++  echo.
++  echo   Aucune adresse saisie. Abandon.
++  pause
++  exit /b 1
++)
++
++:: Ecrit la liste des adresses (une par ligne) dans outils\serveurs.txt
++powershell -NoProfile -Command "$saisie = '%SERVERIPS%'; $ips = $saisie -split '[ ,;]+' | Where-Object { $_ }; $lignes = @('# Adresses du serveur (saisies le ' + (Get-Date -Format 'yyyy-MM-dd HH:mm') + ')') + $ips; Set-Content -Path 'outils\serveurs.txt' -Value $lignes -Encoding UTF8"
++
++powershell -NoProfile -ExecutionPolicy Bypass -File "outils\creer-raccourci.ps1"
++
++echo.
++echo ================================================
++echo    TERMINE !
++echo ================================================
++echo.
++echo   L'application s'ouvrira automatiquement au demarrage de ce poste,
++echo   en choisissant seule le reseau disponible (cable ou Wi-Fi).
++echo   Un raccourci "Gestion Couture" est aussi sur le Bureau.
++echo.
++echo   (Le PC serveur doit etre allume.)
++echo.
++pause
++exit /b 0
+diff --git a/INSTALLER-SERVEUR.bat b/INSTALLER-SERVEUR.bat
+new file mode 100644
+index 0000000..addf7ca
+--- /dev/null
++++ b/INSTALLER-SERVEUR.bat
+@@ -0,0 +1,89 @@
++@echo off
++setlocal enabledelayedexpansion
++title Installation du serveur - Gestion Couture
++
++:: ================================================================
++::  Installateur du SERVEUR Gestion Couture (mode hybride cable/Wi-Fi)
++:: ================================================================
++
++net session >nul 2>&1
++if %errorlevel% neq 0 (
++  echo.
++  echo   Ce programme doit etre lance en tant qu'ADMINISTRATEUR.
++  echo   Clic droit sur ce fichier  -^>  "Executer en tant qu'administrateur".
++  echo.
++  pause
++  exit /b 1
++)
++
++cd /d "%~dp0"
++
++where node >nul 2>&1
++if %errorlevel% neq 0 (
++  echo.
++  echo   Node.js n'est pas installe. Installez-le depuis https://nodejs.org puis relancez.
++  echo.
++  pause
++  exit /b 1
++)
++
++echo ================================================
++echo    Installation du serveur Gestion Couture
++echo ================================================
++echo.
++
++echo [1/8] Dependances de l'interface...
++call npm install || goto :erreur
++
++echo [2/8] Construction de l'interface web...
++call npm run build || goto :erreur
++
++echo [3/8] Dependances du serveur...
++cd backend
++call npm install || goto :erreur
++
++echo [4/8] Construction du serveur...
++call npm run build || goto :erreur
++if exist init.sql copy /Y init.sql dist\init.sql >nul
++cd ..
++
++echo [5/8] Activation de PostgreSQL au demarrage...
++powershell -NoProfile -Command "Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | ForEach-Object { Set-Service -Name $_.Name -StartupType Automatic; Start-Service -Name $_.Name -ErrorAction SilentlyContinue }"
++
++echo [6/8] Ouverture du port 3001 dans le pare-feu (cable + Wi-Fi)...
++powershell -NoProfile -Command "if (-not (Get-NetFirewallRule -DisplayName 'Gestion Couture (3001)' -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName 'Gestion Couture (3001)' -Direction Inbound -LocalPort 3001 -Protocol TCP -Action Allow -Profile Any | Out-Null }"
++
++echo [7/8] Detection des adresses reseau du serveur...
++powershell -NoProfile -Command "$ips = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.*' } | Select-Object -ExpandProperty IPAddress -Unique; $lignes = @('# Adresses du serveur (generees automatiquement le ' + (Get-Date -Format 'yyyy-MM-dd HH:mm') + ')') + $ips; Set-Content -Path 'outils\serveurs.txt' -Value $lignes -Encoding UTF8; Write-Host ('   ' + ($ips -join ' , '))"
++
++echo [8/8] Installation du service Windows (demarrage automatique)...
++cd backend
++node service\install-service.js || goto :erreur
++cd ..
++
++echo.
++echo Creation du raccourci d'ouverture automatique (lanceur hybride)...
++powershell -NoProfile -ExecutionPolicy Bypass -File "outils\creer-raccourci.ps1"
++
++echo.
++echo ================================================
++echo    TERMINE !
++echo ================================================
++echo.
++echo   Le serveur demarre TOUT SEUL a chaque allumage de Windows et se
++echo   relance automatiquement. Il repond a la fois sur le cable ET le Wi-Fi.
++echo.
++echo   Adresses de l'application (a donner aux autres postes) :
++powershell -NoProfile -Command "Get-Content 'outils\serveurs.txt' | Where-Object { $_ -and -not $_.Trim().StartsWith('#') } | ForEach-Object { '        http://' + $_.Trim() + ':3001' }"
++echo.
++echo   Sur CE PC serveur : http://localhost:3001
++echo.
++pause
++exit /b 0
++
++:erreur
++echo.
++echo   *** Une erreur est survenue. Lisez les messages ci-dessus. ***
++echo.
++pause
++exit /b 1
+diff --git a/backend/package.json b/backend/package.json
+index 268b70e..5607e75 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -13,6 +13,7 @@
+     "cors": "^2.8.6",
+     "dotenv": "^17.4.2",
+     "express": "^5.2.1",
++    "node-windows": "^1.0.0-beta.8",
+     "pg": "^8.20.0"
+   },
+   "devDependencies": {
+diff --git a/backend/service/install-service.js b/backend/service/install-service.js
+new file mode 100644
+index 0000000..74383d9
+--- /dev/null
++++ b/backend/service/install-service.js
+@@ -0,0 +1,57 @@
++// backend/service/install-service.js
++//
++// Installe le backend Gestion Couture comme SERVICE WINDOWS.
++// Un service démarre automatiquement au démarrage de Windows (avant même
++// qu'un utilisateur se connecte) et se relance tout seul en cas de plantage.
++//
++// À exécuter UNE SEULE FOIS, en tant qu'administrateur :
++//   node service/install-service.js
++
++const path = require('path');
++const { Service } = require('node-windows');
++
++// Chemins absolus (indépendants du dossier depuis lequel on lance le script)
++const scriptPath = path.resolve(__dirname, '..', 'dist', 'server.js');
++const workingDir = path.resolve(__dirname, '..');
++
++const svc = new Service({
++  name: 'GestionCouture',
++  description: 'Serveur de l\'application Gestion Couture (interface web + API + base de donnees).',
++  script: scriptPath,
++  workingDirectory: workingDir,
++  // Redémarrage automatique en cas d'arrêt inattendu
++  wait: 2,          // attendre 2s avant de retenter
++  grow: 0.5,        // augmenter progressivement le délai entre tentatives
++  maxRestarts: 10,  // nombre de tentatives dans une fenêtre de 60s
++  env: [
++    { name: 'NODE_ENV', value: 'production' },
++    { name: 'PORT', value: '3001' }
++  ]
++});
++
++svc.on('install', () => {
++  console.log('OK - Service "GestionCouture" installe.');
++  svc.start();
++});
++
++svc.on('alreadyinstalled', () => {
++  console.log('INFO - Le service est deja installe. Rien a faire.');
++});
++
++svc.on('start', () => {
++  console.log('OK - Service demarre.');
++  console.log('     L\'application est accessible sur http://<ip-du-serveur>:3001');
++  console.log('     Le serveur redemarrera automatiquement a chaque allumage de Windows.');
++});
++
++svc.on('error', (err) => {
++  console.error('ERREUR du service :', err);
++});
++
++svc.on('invalidinstallation', () => {
++  console.error('ERREUR - Installation invalide (droits administrateur requis ?).');
++});
++
++console.log('Installation du service Windows "GestionCouture"...');
++console.log('Script serveur :', scriptPath);
++svc.install();
+diff --git a/backend/service/uninstall-service.js b/backend/service/uninstall-service.js
+new file mode 100644
+index 0000000..6851b06
+--- /dev/null
++++ b/backend/service/uninstall-service.js
+@@ -0,0 +1,28 @@
++// backend/service/uninstall-service.js
++//
++// Désinstalle le service Windows "GestionCouture".
++// À exécuter en tant qu'administrateur :
++//   node service/uninstall-service.js
++
++const path = require('path');
++const { Service } = require('node-windows');
++
++const svc = new Service({
++  name: 'GestionCouture',
++  script: path.resolve(__dirname, '..', 'dist', 'server.js')
++});
++
++svc.on('uninstall', () => {
++  console.log('OK - Service "GestionCouture" desinstalle.');
++});
++
++svc.on('alreadyuninstalled', () => {
++  console.log('INFO - Le service n\'etait pas installe.');
++});
++
++svc.on('error', (err) => {
++  console.error('ERREUR :', err);
++});
++
++console.log('Desinstallation du service "GestionCouture"...');
++svc.uninstall();
+diff --git a/backend/src/routes/admin.ts b/backend/src/routes/admin.ts
+index bc6f3f5..9db5274 100644
+--- a/backend/src/routes/admin.ts
++++ b/backend/src/routes/admin.ts
+@@ -56,4 +56,36 @@ router.post(
+   }
+ );
+ 
++/**
++ * BACKUP / EXPORT COMPLET (JSON)
++ */
++router.get(
++  '/backup',
++  async (_, res) => {
++    try {
++      const tablesRes = await pool.query(
++        `SELECT table_name
++         FROM information_schema.tables
++         WHERE table_schema = 'public'
++           AND table_type = 'BASE TABLE'
++         ORDER BY table_name`
++      );
++      const data: Record<string, any[]> = {};
++      for (const row of tablesRes.rows) {
++        const table = row.table_name as string;
++        const content = await pool.query(`SELECT * FROM "${table}"`);
++        data[table] = content.rows;
++      }
++      res.json({
++        exported_at: new Date().toISOString(),
++        tables: Object.keys(data).length,
++        data
++      });
++    } catch (error) {
++      console.error(error);
++      res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
++    }
++  }
++);
++
+ export default router;
+\ No newline at end of file
+diff --git a/backend/src/server.ts b/backend/src/server.ts
+index a165779..29993c1 100644
+--- a/backend/src/server.ts
++++ b/backend/src/server.ts
+@@ -54,33 +54,33 @@ app.use((req, res, next) => {
+ });
+ 
+ // Routes API - UNIQUEMENT ICI, PAS DE ROUTES DIRECTES
+-app.use("/clients", clientsRoutes);
+-app.use("/modeles-tenues", modelesTenuesRoutes);
+-app.use("/types-tenues", typesTenuesRoutes);
+-app.use("/tailles", taillesRoutes);
+-app.use("/types-mesures", typesMesuresRoutes);
+-app.use("/couleurs", couleursRoutes);
+-app.use("/textures", texturesRoutes);
+-app.use("/articles", articlesRoutes);
+-app.use("/categories-matieres", categoriesMatieresRoutes);
+-app.use("/matieres", matieresRoutes);
+-app.use("/atelier", atelierRoutes);
+-app.use("/types-prestations", typesPrestationsRoutes);
+-app.use("/ventes", ventesRoutes);
+-app.use("/depenses", depensesRoutes);
+-app.use("/rendezvous", rendezVousRoutes);
+-app.use("/utilisateurs", utilisateursRoutes);
+-app.use("/journal", journalRoutes);
+-app.use("/journal-modifications", journalRoutes);
+-app.use("/employes", employesRoutes);
+-app.use("/prestations-realisees", prestationsRoutes);
+-app.use("/salaires", salairesRoutes);
+-app.use("/historique-salaires", historiqueSalairesRoutes);
+-app.use("/emprunts", empruntsRoutes);
+-app.use('/admin', adminRoutes);
+-app.use("/finances", financesRoutes);
+-app.use("/mouvements-stock", stockRoutes);
+-app.use("/stock", stockRoutes);
++app.use("/api/clients", clientsRoutes);
++app.use("/api/modeles-tenues", modelesTenuesRoutes);
++app.use("/api/types-tenues", typesTenuesRoutes);
++app.use("/api/tailles", taillesRoutes);
++app.use("/api/types-mesures", typesMesuresRoutes);
++app.use("/api/couleurs", couleursRoutes);
++app.use("/api/textures", texturesRoutes);
++app.use("/api/articles", articlesRoutes);
++app.use("/api/categories-matieres", categoriesMatieresRoutes);
++app.use("/api/matieres", matieresRoutes);
++app.use("/api/atelier", atelierRoutes);
++app.use("/api/types-prestations", typesPrestationsRoutes);
++app.use("/api/ventes", ventesRoutes);
++app.use("/api/depenses", depensesRoutes);
++app.use("/api/rendezvous", rendezVousRoutes);
++app.use("/api/utilisateurs", utilisateursRoutes);
++app.use("/api/journal", journalRoutes);
++app.use("/api/journal-modifications", journalRoutes);
++app.use("/api/employes", employesRoutes);
++app.use("/api/prestations-realisees", prestationsRoutes);
++app.use("/api/salaires", salairesRoutes);
++app.use("/api/historique-salaires", historiqueSalairesRoutes);
++app.use("/api/emprunts", empruntsRoutes);
++app.use("/api/admin", adminRoutes);
++app.use("/api/finances", financesRoutes);
++app.use("/api/mouvements-stock", stockRoutes);
++app.use("/api/stock", stockRoutes);
+ 
+ // Routes de test
+ app.get("/test", async (_, res) => {
+@@ -107,6 +107,33 @@ app.get("/health", (_, res) => {
+   });
+ });
+ 
++// ============================================
++// SERVIR LE FRONTEND (mode application web)
++// ============================================
++const frontendDir = path.join(__dirname, "..", "public");
++
++if (fs.existsSync(frontendDir)) {
++  app.use(express.static(frontendDir));
++
++  // Repli SPA : toute navigation navigateur (Accept: text/html) non servie
++  // par une route API ni un fichier statique renvoie index.html.
++  app.use((req, res, next) => {
++    if (
++      req.method === "GET" &&
++      req.headers.accept &&
++      req.headers.accept.includes("text/html")
++    ) {
++      return res.sendFile(path.join(frontendDir, "index.html"));
++    }
++    next();
++  });
++} else {
++  console.warn(
++    "\u26a0\ufe0f  Dossier frontend introuvable (backend/public). " +
++    "Lancez 'npm run build' a la racine pour generer l'interface web."
++  );
++}
++
+ // ============================================
+ // INITIALISATION DE LA BASE DE DONNÉES
+ // ============================================
+diff --git a/outils/creer-raccourci.ps1 b/outils/creer-raccourci.ps1
+new file mode 100644
+index 0000000..5d5efe5
+--- /dev/null
++++ b/outils/creer-raccourci.ps1
+@@ -0,0 +1,37 @@
++param(
++  [string]$Nom = "Gestion Couture"
++)
++
++# Cree des raccourcis qui lancent le "lanceur hybride" (lancer-application.ps1).
++# Le lanceur choisit automatiquement l'adresse du serveur qui repond
++# (cable ou Wi-Fi). Les raccourcis sont places sur le Bureau et dans le
++# dossier Demarrage (ouverture automatique a la connexion).
++
++$dir = Split-Path -Parent $MyInvocation.MyCommand.Definition
++$lanceur = Join-Path $dir 'lancer-application.ps1'
++$powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
++
++# Icone Edge si disponible (sinon icone PowerShell par defaut)
++$edge = @(
++  "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
++  "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
++) | Where-Object { Test-Path $_ } | Select-Object -First 1
++
++$ws = New-Object -ComObject WScript.Shell
++$dossiers = @(
++  [Environment]::GetFolderPath('Startup'),
++  [Environment]::GetFolderPath('Desktop')
++)
++
++foreach ($d in $dossiers) {
++  $lnk = $ws.CreateShortcut((Join-Path $d "$Nom.lnk"))
++  $lnk.TargetPath = $powershell
++  $lnk.Arguments  = "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$lanceur`""
++  $lnk.WorkingDirectory = $dir
++  if ($edge) { $lnk.IconLocation = "$edge,0" }
++  $lnk.Description = "Application Gestion Couture (connexion automatique cable ou Wi-Fi)"
++  $lnk.Save()
++}
++
++Write-Host "Raccourcis crees (Bureau + Demarrage automatique)."
++Write-Host "Adresses testees : voir le fichier serveurs.txt"
+diff --git a/outils/lancer-application.ps1 b/outils/lancer-application.ps1
+new file mode 100644
+index 0000000..ad03737
+--- /dev/null
++++ b/outils/lancer-application.ps1
+@@ -0,0 +1,73 @@
++param(
++  [int]$Port = 3001
++)
++
++# ================================================================
++#  Lanceur "hybride" de Gestion Couture.
++#  Teste les adresses connues du serveur (cable + Wi-Fi) et ouvre
++#  l'application sur la premiere qui repond. Ainsi, que le poste
++#  soit branche en cable ou connecte en Wi-Fi, ca marche tout seul.
++# ================================================================
++
++$ErrorActionPreference = 'SilentlyContinue'
++$dir = Split-Path -Parent $MyInvocation.MyCommand.Definition
++$listeFichier = Join-Path $dir 'serveurs.txt'
++
++# Liste des adresses candidates : localhost d'abord (si on est SUR le serveur),
++# puis les adresses lues dans serveurs.txt (modifiable sans toucher au code).
++$hotes = @('localhost')
++if (Test-Path $listeFichier) {
++  $hotes += Get-Content $listeFichier |
++    Where-Object { $_ -and -not $_.Trim().StartsWith('#') } |
++    ForEach-Object { $_.Trim() }
++}
++$hotes = $hotes | Select-Object -Unique
++
++# Test rapide de connexion TCP (800 ms max par adresse)
++function Test-Serveur([string]$h, [int]$p, [int]$timeoutMs = 800) {
++  try {
++    $client = New-Object System.Net.Sockets.TcpClient
++    $iar = $client.BeginConnect($h, $p, $null, $null)
++    $ok = $iar.AsyncWaitHandle.WaitOne($timeoutMs, $false)
++    $connecte = $ok -and $client.Connected
++    if ($connecte) { $client.EndConnect($iar) }
++    $client.Close()
++    return $connecte
++  } catch {
++    return $false
++  }
++}
++
++$cible = $null
++foreach ($h in $hotes) {
++  if (Test-Serveur $h $Port) {
++    $cible = "http://${h}:$Port"
++    break
++  }
++}
++
++if (-not $cible) {
++  Add-Type -AssemblyName System.Windows.Forms
++  [System.Windows.Forms.MessageBox]::Show(
++    "Impossible de joindre le serveur Gestion Couture.`n`n" +
++    "Verifiez que :`n" +
++    " - le PC serveur est allume,`n" +
++    " - vous etes bien connecte au reseau (cable ou Wi-Fi).",
++    "Gestion Couture",
++    'OK',
++    'Warning'
++  ) | Out-Null
++  exit 1
++}
++
++# Ouvre l'application en mode "application" (fenetre propre) via Edge si dispo
++$edge = @(
++  "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
++  "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
++) | Where-Object { Test-Path $_ } | Select-Object -First 1
++
++if ($edge) {
++  Start-Process $edge -ArgumentList "--app=$cible"
++} else {
++  Start-Process $cible
++}
+diff --git a/outils/serveurs.txt b/outils/serveurs.txt
+new file mode 100644
+index 0000000..d6c925c
+--- /dev/null
++++ b/outils/serveurs.txt
+@@ -0,0 +1,11 @@
++# Adresses du serveur Gestion Couture (une par ligne).
++# Le lanceur essaie chaque adresse et ouvre l'application sur celle qui repond.
++# Ajoutez ou modifiez les adresses selon votre reseau.
++# Les lignes commencant par # sont ignorees.
++
++# --- Reseau cable (Ethernet) ---
++192.168.100.151
++192.168.2.1
++
++# --- Reseau Wi-Fi ---
++192.168.11.114
+diff --git a/src/App.tsx b/src/App.tsx
+index 2323c2f..cabadb3 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -156,7 +156,7 @@ function AuthenticatedApp() {
+   useEffect(() => {
+     const verifierConnexion = async () => {
+       try {
+-        const url = localStorage.getItem('api_url') || 'http://192.168.100.151:3001';
++        const url = localStorage.getItem('api_url') || '';
+         console.log('🔍 Vérification connexion à:', url);
+ 
+         const controller = new AbortController();
+diff --git a/src/components/ConfigurationServeur.tsx b/src/components/ConfigurationServeur.tsx
+index 98a653b..cecda78 100644
+--- a/src/components/ConfigurationServeur.tsx
++++ b/src/components/ConfigurationServeur.tsx
+@@ -23,10 +23,8 @@ const ConfigurationServeur: React.FC = () => {
+     if (savedUrl) {
+       setServerUrl(savedUrl);
+       testerConnexionSilencieuse(savedUrl);
+-    } else {
+-      // URL par défaut
+-      localStorage.setItem('api_url', 'http://192.168.2.1:3001');
+     }
++    // Mode web : par défaut, l'API est en même origine (aucune URL à forcer).
+     detecterIpLocale();
+   }, []);
+ 
+diff --git a/src/components/DiagnosticReseau.tsx b/src/components/DiagnosticReseau.tsx
+index d0804dc..cded320 100644
+--- a/src/components/DiagnosticReseau.tsx
++++ b/src/components/DiagnosticReseau.tsx
+@@ -7,7 +7,7 @@ const DiagnosticReseau: React.FC = () => {
+   const [loading, setLoading] = useState(false);
+ 
+   const getServerUrl = () => {
+-    return localStorage.getItem('api_url') || 'http://localhost:3001';
++    return localStorage.getItem('api_url') || '';
+   };
+ 
+   const testerConnexion = async () => {
+diff --git a/src/components/auth/Login.tsx b/src/components/auth/Login.tsx
+index 91c6cc8..41b3b04 100644
+--- a/src/components/auth/Login.tsx
++++ b/src/components/auth/Login.tsx
+@@ -77,7 +77,7 @@ const Login: React.FC = () => {
+   useEffect(() => {
+     const verifierConnexionServeur = async () => {
+       try {
+-        const url = localStorage.getItem('api_url') || 'http://localhost:3001';
++        const url = localStorage.getItem('api_url') || '';
+         const response = await fetch(`${url}/health`);
+         if (response.ok) {
+           const data = await response.json();
+diff --git a/src/components/layout/BoutonSupport.tsx b/src/components/layout/BoutonSupport.tsx
+index 0230de3..9b27974 100644
+--- a/src/components/layout/BoutonSupport.tsx
++++ b/src/components/layout/BoutonSupport.tsx
+@@ -1,7 +1,6 @@
+ import React, { useState } from 'react';
+-import { save } from '@tauri-apps/plugin-dialog';
+-import { readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+-import { info, error as logError } from '@tauri-apps/plugin-log';
++import { apiGet } from '../../services/api';
++import { downloadJson } from '../../utils/download';
+ import { Button, Tooltip, Box, Text, Stack, Modal, Alert, Group } from '@mantine/core';
+ import { useDisclosure } from '@mantine/hooks';
+ import { IconDownload, IconHelpCircle, IconCheck, IconAlertCircle } from '@tabler/icons-react';
+@@ -17,27 +16,16 @@ const BoutonSupport: React.FC = () => {
+       setLoading(true);
+       setStatus('idle');
+       
+-      // 📁 Choix du fichier destination
+-      const cheminDestination = await save({
+-        title: "Exporter la base pour le support technique",
+-        filters: [{ name: 'Base de données SQLite', extensions: ['db'] }],
+-        defaultPath: `SAV_Gestion_Couture_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`
+-      });
++      // 📥 Récupère une sauvegarde complète des données depuis le serveur
++      const backup = await apiGet('/admin/backup');
+ 
+-      if (!cheminDestination) {
+-        setLoading(false);
+-        return;
+-      }
++      // 📤 Télécharge le fichier JSON via le navigateur
++      const nomFichier = `SAV_Gestion_Couture_${new Date()
++        .toISOString()
++        .slice(0, 19)
++        .replace(/:/g, '-')}.json`;
++      downloadJson(backup, nomFichier);
+ 
+-      // 📥 Lire la base locale (Tauri v2 → baseDir)
+-      const data = await readFile('gestion-couture.db', {
+-        baseDir: BaseDirectory.AppData
+-      });
+-
+-      // 📤 Écrire vers le fichier choisi
+-      await writeFile(cheminDestination, data);
+-
+-      await info("Base exportée avec succès");
+       setStatus('success');
+       
+       // Fermer la modale après 1.5 secondes
+@@ -48,7 +36,6 @@ const BoutonSupport: React.FC = () => {
+ 
+     } catch (err: any) {
+       console.error(err);
+-      await logError(`Erreur export support : ${err?.message || err}`);
+       setStatus('error');
+       setErrorMessage(err?.message || "Une erreur inattendue s'est produite");
+     } finally {
+@@ -108,7 +95,7 @@ const BoutonSupport: React.FC = () => {
+                 Export de la base de données
+               </Text>
+               <Text size="sm" c="dimmed">
+-                Cette opération va exporter l'intégralité de votre base de données dans un fichier .db
++                Cette opération va exporter l'intégralité de votre base de données dans un fichier .json
+               </Text>
+             </Box>
+ 
+diff --git a/src/components/prestations/ListePrestationsRealisees.tsx b/src/components/prestations/ListePrestationsRealisees.tsx
+index 54b91f9..1303777 100644
+--- a/src/components/prestations/ListePrestationsRealisees.tsx
++++ b/src/components/prestations/ListePrestationsRealisees.tsx
+@@ -50,8 +50,7 @@ import FormulairePrestationRealisee from './FormulairePrestationRealisee';
+ import * as XLSX from 'xlsx';
+ import jsPDF from 'jspdf';
+ import autoTable from 'jspdf-autotable';
+-import { save } from '@tauri-apps/plugin-dialog';
+-import { writeFile } from '@tauri-apps/plugin-fs';
++import { downloadFile } from '../../utils/download';
+ import { useReactToPrint } from 'react-to-print';
+ import { apiDelete, apiGet } from '../../services/api';
+ 
+@@ -200,16 +199,13 @@ const result: Prestation[] =
+     const wb = XLSX.utils.book_new();
+     XLSX.utils.book_append_sheet(wb, ws, 'Prestations');
+     const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+-    const filePath = await save({
+-      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`
+-    });
+-    if (filePath) {
+-      await writeFile(filePath, new Uint8Array(buffer));
+-      setSuccessMessage('Export Excel réussi');
+-      setShowSuccess(true);
+-      setTimeout(() => setShowSuccess(false), 3000);
+-    }
++    downloadFile(
++      new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
++      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`
++    );
++    setSuccessMessage('Export Excel réussi');
++    setShowSuccess(true);
++    setTimeout(() => setShowSuccess(false), 3000);
+   };
+ 
+   const handleExportPDF = async () => {
+@@ -239,16 +235,13 @@ const result: Prestation[] =
+     });
+     
+     const blob = doc.output('blob');
+-    const filePath = await save({
+-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
+-    });
+-    if (filePath) {
+-      await writeFile(filePath, new Uint8Array(await blob.arrayBuffer()));
+-      setSuccessMessage('Export PDF réussi');
+-      setShowSuccess(true);
+-      setTimeout(() => setShowSuccess(false), 3000);
+-    }
++    downloadFile(
++      blob,
++      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
++    );
++    setSuccessMessage('Export PDF réussi');
++    setShowSuccess(true);
++    setTimeout(() => setShowSuccess(false), 3000);
+   };
+ 
+   const handleExportWord = async () => {
+@@ -300,16 +293,13 @@ const result: Prestation[] =
+     </html>`;
+ 
+     const blob = new Blob([htmlContent], { type: 'application/msword' });
+-    const filePath = await save({
+-      filters: [{ name: 'Word', extensions: ['doc'] }],
+-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.doc`
+-    });
+-    if (filePath) {
+-      await writeFile(filePath, new Uint8Array(await blob.arrayBuffer()));
+-      setSuccessMessage('Export Word réussi');
+-      setShowSuccess(true);
+-      setTimeout(() => setShowSuccess(false), 3000);
+-    }
++    downloadFile(
++      blob,
++      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.doc`
++    );
++    setSuccessMessage('Export Word réussi');
++    setShowSuccess(true);
++    setTimeout(() => setShowSuccess(false), 3000);
+   };
+ 
+   const supprimer = async (id: number, designation: string) => {
+diff --git a/src/components/stock/ArticlesManager.tsx b/src/components/stock/ArticlesManager.tsx
+index 3f44e98..497126b 100644
+--- a/src/components/stock/ArticlesManager.tsx
++++ b/src/components/stock/ArticlesManager.tsx
+@@ -24,8 +24,6 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../../services/api';
+ import * as XLSX from 'xlsx';
+ import jsPDF from 'jspdf';
+ import autoTable from 'jspdf-autotable';
+-import { save } from '@tauri-apps/plugin-dialog';
+-import { writeFile } from '@tauri-apps/plugin-fs';
+ 
+ interface FormData {
+   type_tenue_id: number | null;
+@@ -492,8 +490,13 @@ const ArticlesManager: React.FC = () => {
+       const wb = XLSX.utils.book_new();
+       XLSX.utils.book_append_sheet(wb, ws, 'Articles');
+       const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+-      const path = await save({ filters: [{ name: 'Excel', extensions: ['xlsx'] }], defaultPath: `articles_${new Date().toISOString().split('T')[0]}.xlsx` });
+-      if (path) { await writeFile(path, new Uint8Array(buf)); notifications.show({ title: 'Succès', message: 'Export Excel réussi', color: 'green' }); }
++      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
++      const url = URL.createObjectURL(blob);
++      const link = document.createElement('a');
++      link.href = url; link.download = `articles_${new Date().toISOString().split('T')[0]}.xlsx`;
++      document.body.appendChild(link); link.click(); document.body.removeChild(link);
++      setTimeout(() => URL.revokeObjectURL(url), 1000);
++      notifications.show({ title: 'Succès', message: 'Export Excel réussi', color: 'green' });
+     } catch (e) { console.error(e); notifications.show({ title: 'Erreur', message: 'Échec export Excel', color: 'red' }); }
+     finally { setExporting(false); }
+   };
+@@ -518,9 +521,8 @@ const ArticlesManager: React.FC = () => {
+         a.emplacement || ''
+       ]);
+       autoTable(doc, { head, body, startY: 30, theme: 'striped', headStyles: { fillColor: [27, 54, 93] }, styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 5, right: 5 } });
+-      const pdfBuf = doc.output('arraybuffer');
+-      const path = await save({ filters: [{ name: 'PDF', extensions: ['pdf'] }], defaultPath: `articles_${new Date().toISOString().split('T')[0]}.pdf` });
+-      if (path) { await writeFile(path, new Uint8Array(pdfBuf)); notifications.show({ title: 'Succès', message: 'Export PDF réussi', color: 'green' }); }
++      doc.save(`articles_${new Date().toISOString().split('T')[0]}.pdf`);
++      notifications.show({ title: 'Succès', message: 'Export PDF réussi', color: 'green' });
+     } catch (e) { console.error(e); notifications.show({ title: 'Erreur', message: 'Échec export PDF', color: 'red' }); }
+     finally { setExporting(false); }
+   };
+diff --git a/src/components/support/ExportSupport.tsx b/src/components/support/ExportSupport.tsx
+index e3bc633..906e0bb 100644
+--- a/src/components/support/ExportSupport.tsx
++++ b/src/components/support/ExportSupport.tsx
+@@ -50,7 +50,7 @@ const API_URL =
+ 
+   ||
+ 
+-  'http://localhost:3001';
++  '';
+ 
+ const ExportSupport:
+ React.FC = () => {
+diff --git a/src/services/api.ts b/src/services/api.ts
+index 550531e..f34e73b 100644
+--- a/src/services/api.ts
++++ b/src/services/api.ts
+@@ -2,11 +2,13 @@
+ 
+ // Fonction pour récupérer l'URL du serveur configurée
+ const getApiUrl = () => {
++  // L'API est servie sous le préfixe /api par le même serveur Express.
+   const savedUrl = localStorage.getItem('api_url');
+   if (savedUrl) {
+-    return savedUrl;
++    // Override explicite (ex. front et API sur des origines différentes)
++    return `${savedUrl.replace(/\/$/, '')}/api`;
+   }
+-  return 'http://localhost:3001';
++  return '/api';
+ };
+ 
+ export const apiGet = async (url: string) => {
+diff --git a/src/services/backend.ts b/src/services/backend.ts
+index bc02c67..28906f1 100644
+--- a/src/services/backend.ts
++++ b/src/services/backend.ts
+@@ -1,68 +1,12 @@
+-import {
+-  Command
+-} from '@tauri-apps/plugin-shell';
++// src/services/backend.ts
++// En mode application web, le backend tourne sur la machine serveur.
+ 
+ let backendStarted = false;
+ 
+ export async function startBackend() {
+-
+   if (backendStarted) {
+     return;
+   }
+-
+-  try {
+-
+-    const command = Command.create(
+-
+-      'cmd',
+-
+-      [
+-
+-        '/C',
+-
+-        'node backend/dist/server.js'
+-      ]
+-    );
+-
+-    command.stdout.on(
+-
+-      'data',
+-
+-      line => {
+-
+-        console.log(
+-          '[BACKEND]',
+-          line
+-        );
+-      }
+-    );
+-
+-    command.stderr.on(
+-
+-      'data',
+-
+-      line => {
+-
+-        console.error(
+-          '[BACKEND ERROR]',
+-          line
+-        );
+-      }
+-    );
+-
+-    await command.spawn();
+-
+-    backendStarted = true;
+-
+-    console.log(
+-      '✅ Backend démarré automatiquement'
+-    );
+-
+-  } catch (error) {
+-
+-    console.error(
+-      '❌ Erreur backend',
+-      error
+-    );
+-  }
+-}
+\ No newline at end of file
++  backendStarted = true;
++  console.log('Mode web : le backend est hébergé sur le serveur.');
++}
+diff --git a/src/utils/download.ts b/src/utils/download.ts
+new file mode 100644
+index 0000000..975d48f
+--- /dev/null
++++ b/src/utils/download.ts
+@@ -0,0 +1,25 @@
++// src/utils/download.ts
++// Téléchargement de fichiers côté navigateur (mode application web).
++
++export function downloadFile(
++  content: BlobPart,
++  filename: string,
++  mimeType?: string
++): void {
++  const blob =
++    content instanceof Blob
++      ? content
++      : new Blob([content], mimeType ? { type: mimeType } : undefined);
++  const url = URL.createObjectURL(blob);
++  const link = document.createElement('a');
++  link.href = url;
++  link.download = filename;
++  document.body.appendChild(link);
++  link.click();
++  document.body.removeChild(link);
++  setTimeout(() => URL.revokeObjectURL(url), 1000);
++}
++
++export function downloadJson(data: unknown, filename: string): void {
++  downloadFile(JSON.stringify(data, null, 2), filename, 'application/json');
++}
+diff --git a/vite.config.ts b/vite.config.ts
+index b5dbfe7..4eb6fe6 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,10 +1,16 @@
+ import { defineConfig } from 'vite'
+ import react from '@vitejs/plugin-react'
+ 
++// https://vitejs.dev/config/
+ export default defineConfig({
+   plugins: [react()],
++  build: {
++    // Le front compilé est servi directement par le backend Express
++    outDir: 'backend/public',
++    emptyOutDir: true,
++  },
+   server: {
+-    port: 1420,      // 🔥 IMPORTANT
+-    strictPort: true // évite changement automatique
+-  }
+-})
+\ No newline at end of file
++    port: 1420,
++    strictPort: true,
++  },
++})

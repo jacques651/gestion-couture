@@ -1,0 +1,11 @@
+# Adresses du serveur Gestion Couture (une par ligne).
+# Le lanceur essaie chaque adresse et ouvre l'application sur celle qui repond.
+# Ajoutez ou modifiez les adresses selon votre reseau.
+# Les lignes commencant par # sont ignorees.
+
+# --- Reseau cable (Ethernet) ---
+192.168.100.151
+192.168.2.1
+
+# --- Reseau Wi-Fi ---
+192.168.11.114

@@ -50,8 +50,7 @@ import FormulairePrestationRealisee from './FormulairePrestationRealisee';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import { downloadFile } from '../../utils/download';
 import { useReactToPrint } from 'react-to-print';
 import { apiDelete, apiGet } from '../../services/api';
 
@@ -200,16 +199,13 @@ const result: Prestation[] =
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Prestations');
     const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const filePath = await save({
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`
-    });
-    if (filePath) {
-      await writeFile(filePath, new Uint8Array(buffer));
-      setSuccessMessage('Export Excel réussi');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }
+    downloadFile(
+      new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`
+    );
+    setSuccessMessage('Export Excel réussi');
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const handleExportPDF = async () => {
@@ -239,16 +235,13 @@ const result: Prestation[] =
     });
     
     const blob = doc.output('blob');
-    const filePath = await save({
-      filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
-    });
-    if (filePath) {
-      await writeFile(filePath, new Uint8Array(await blob.arrayBuffer()));
-      setSuccessMessage('Export PDF réussi');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }
+    downloadFile(
+      blob,
+      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`
+    );
+    setSuccessMessage('Export PDF réussi');
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const handleExportWord = async () => {
@@ -300,16 +293,13 @@ const result: Prestation[] =
     </html>`;
 
     const blob = new Blob([htmlContent], { type: 'application/msword' });
-    const filePath = await save({
-      filters: [{ name: 'Word', extensions: ['doc'] }],
-      defaultPath: `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.doc`
-    });
-    if (filePath) {
-      await writeFile(filePath, new Uint8Array(await blob.arrayBuffer()));
-      setSuccessMessage('Export Word réussi');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }
+    downloadFile(
+      blob,
+      `prestations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.doc`
+    );
+    setSuccessMessage('Export Word réussi');
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
   };
 
   const supprimer = async (id: number, designation: string) => {

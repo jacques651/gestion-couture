@@ -1,0 +1,1 @@
+import{c as e}from"./index-BA-Rp2mN.js";const a=[["path",{d:"M16 17a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",key:"svg-0"}],["path",{d:"M6 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",key:"svg-1"}],["path",{d:"M6 18l12 -12",key:"svg-2"}]],o=e("outline","percentage","Percentage",a);export{o as I};

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { save } from '@tauri-apps/plugin-dialog';
-import { readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
-import { info, error as logError } from '@tauri-apps/plugin-log';
+import { apiGet } from '../../services/api';
+import { downloadJson } from '../../utils/download';
 import { Button, Tooltip, Box, Text, Stack, Modal, Alert, Group } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconDownload, IconHelpCircle, IconCheck, IconAlertCircle } from '@tabler/icons-react';
@@ -17,27 +16,16 @@ const BoutonSupport: React.FC = () => {
       setLoading(true);
       setStatus('idle');
       
-      // 📁 Choix du fichier destination
-      const cheminDestination = await save({
-        title: "Exporter la base pour le support technique",
-        filters: [{ name: 'Base de données SQLite', extensions: ['db'] }],
-        defaultPath: `SAV_Gestion_Couture_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`
-      });
+      // 📥 Récupère une sauvegarde complète des données depuis le serveur
+      const backup = await apiGet('/admin/backup');
 
-      if (!cheminDestination) {
-        setLoading(false);
-        return;
-      }
+      // 📤 Télécharge le fichier JSON via le navigateur
+      const nomFichier = `SAV_Gestion_Couture_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/:/g, '-')}.json`;
+      downloadJson(backup, nomFichier);
 
-      // 📥 Lire la base locale (Tauri v2 → baseDir)
-      const data = await readFile('gestion-couture.db', {
-        baseDir: BaseDirectory.AppData
-      });
-
-      // 📤 Écrire vers le fichier choisi
-      await writeFile(cheminDestination, data);
-
-      await info("Base exportée avec succès");
       setStatus('success');
       
       // Fermer la modale après 1.5 secondes
@@ -48,7 +36,6 @@ const BoutonSupport: React.FC = () => {
 
     } catch (err: any) {
       console.error(err);
-      await logError(`Erreur export support : ${err?.message || err}`);
       setStatus('error');
       setErrorMessage(err?.message || "Une erreur inattendue s'est produite");
     } finally {
@@ -108,7 +95,7 @@ const BoutonSupport: React.FC = () => {
                 Export de la base de données
               </Text>
               <Text size="sm" c="dimmed">
-                Cette opération va exporter l'intégralité de votre base de données dans un fichier .db
+                Cette opération va exporter l'intégralité de votre base de données dans un fichier .json
               </Text>
             </Box>
 

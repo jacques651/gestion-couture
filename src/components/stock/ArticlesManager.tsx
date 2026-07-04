@@ -24,8 +24,6 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../../services/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
 
 interface FormData {
   type_tenue_id: number | null;
@@ -492,8 +490,13 @@ const ArticlesManager: React.FC = () => {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Articles');
       const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const path = await save({ filters: [{ name: 'Excel', extensions: ['xlsx'] }], defaultPath: `articles_${new Date().toISOString().split('T')[0]}.xlsx` });
-      if (path) { await writeFile(path, new Uint8Array(buf)); notifications.show({ title: 'Succès', message: 'Export Excel réussi', color: 'green' }); }
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = `articles_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      notifications.show({ title: 'Succès', message: 'Export Excel réussi', color: 'green' });
     } catch (e) { console.error(e); notifications.show({ title: 'Erreur', message: 'Échec export Excel', color: 'red' }); }
     finally { setExporting(false); }
   };
@@ -518,9 +521,8 @@ const ArticlesManager: React.FC = () => {
         a.emplacement || ''
       ]);
       autoTable(doc, { head, body, startY: 30, theme: 'striped', headStyles: { fillColor: [27, 54, 93] }, styles: { fontSize: 8, cellPadding: 2 }, margin: { left: 5, right: 5 } });
-      const pdfBuf = doc.output('arraybuffer');
-      const path = await save({ filters: [{ name: 'PDF', extensions: ['pdf'] }], defaultPath: `articles_${new Date().toISOString().split('T')[0]}.pdf` });
-      if (path) { await writeFile(path, new Uint8Array(pdfBuf)); notifications.show({ title: 'Succès', message: 'Export PDF réussi', color: 'green' }); }
+      doc.save(`articles_${new Date().toISOString().split('T')[0]}.pdf`);
+      notifications.show({ title: 'Succès', message: 'Export PDF réussi', color: 'green' });
     } catch (e) { console.error(e); notifications.show({ title: 'Erreur', message: 'Échec export PDF', color: 'red' }); }
     finally { setExporting(false); }
   };

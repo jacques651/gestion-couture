@@ -77,7 +77,7 @@ const Login: React.FC = () => {
   useEffect(() => {
     const verifierConnexionServeur = async () => {
       try {
-        const url = localStorage.getItem('api_url') || 'http://localhost:3001';
+        const url = localStorage.getItem('api_url') || '';
         const response = await fetch(`${url}/health`);
         if (response.ok) {
           const data = await response.json();

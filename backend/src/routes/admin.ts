@@ -56,4 +56,36 @@ router.post(
   }
 );
 
+/**
+ * BACKUP / EXPORT COMPLET (JSON)
+ */
+router.get(
+  '/backup',
+  async (_, res) => {
+    try {
+      const tablesRes = await pool.query(
+        `SELECT table_name
+         FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_type = 'BASE TABLE'
+         ORDER BY table_name`
+      );
+      const data: Record<string, any[]> = {};
+      for (const row of tablesRes.rows) {
+        const table = row.table_name as string;
+        const content = await pool.query(`SELECT * FROM "${table}"`);
+        data[table] = content.rows;
+      }
+      res.json({
+        exported_at: new Date().toISOString(),
+        tables: Object.keys(data).length,
+        data
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
+    }
+  }
+);
+
 export default router;

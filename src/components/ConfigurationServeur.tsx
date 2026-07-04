@@ -23,10 +23,8 @@ const ConfigurationServeur: React.FC = () => {
     if (savedUrl) {
       setServerUrl(savedUrl);
       testerConnexionSilencieuse(savedUrl);
-    } else {
-      // URL par défaut
-      localStorage.setItem('api_url', 'http://192.168.2.1:3001');
     }
+    // Mode web : par défaut, l'API est en même origine (aucune URL à forcer).
     detecterIpLocale();
   }, []);
 

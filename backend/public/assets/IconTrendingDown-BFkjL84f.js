@@ -1,0 +1,1 @@
+import{c as n}from"./index-BA-Rp2mN.js";const o=[["path",{d:"M3 7l6 6l4 -4l8 8",key:"svg-0"}],["path",{d:"M21 10l0 7l-7 0",key:"svg-1"}]],t=n("outline","trending-down","TrendingDown",o);export{t as I};

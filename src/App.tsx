@@ -174,7 +174,7 @@ function AuthenticatedApp() {
   useEffect(() => {
     const verifierConnexion = async () => {
       try {
-        const url = localStorage.getItem('api_url') || 'http://192.168.100.151:3001';
+        const url = localStorage.getItem('api_url') || '';
         console.log('🔍 Vérification connexion à:', url);
 
         // Ajouter un timeout de 5 secondes
