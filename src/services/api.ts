@@ -1,18 +1,21 @@
 // src/services/api.ts
+import { getApiUrl as getBackendUrl } from '../utils/backend';
 
 // Fonction pour récupérer l'URL du serveur configurée
 const getApiUrl = () => {
-  const savedUrl = localStorage.getItem('api_url');
-  if (savedUrl) {
-    return savedUrl;
-  }
-  return 'http://localhost:3001';
+  // Utiliser la fonction centralisée de backend.ts
+  return getBackendUrl('');
 };
 
 export const apiGet = async (url: string) => {
   try {
+    // url doit commencer par / (ex: /utilisateurs)
+    // getApiUrl retourne déjà le préfixe /api
     const baseUrl = getApiUrl();
-    const response = await fetch(`${baseUrl}${url}`);
+    const fullUrl = `${baseUrl}${url}`;
+    console.log('📤 GET:', fullUrl);
+    
+    const response = await fetch(fullUrl);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `Erreur API: ${response.status}`);
@@ -27,7 +30,10 @@ export const apiGet = async (url: string) => {
 export const apiPost = async (url: string, data?: any) => {
   try {
     const baseUrl = getApiUrl();
-    const response = await fetch(`${baseUrl}${url}`, {
+    const fullUrl = `${baseUrl}${url}`;
+    console.log('📤 POST:', fullUrl, data);
+    
+    const response = await fetch(fullUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -36,7 +42,7 @@ export const apiPost = async (url: string, data?: any) => {
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('API POST error details:', errorData); // ✅ Log détaillé
+      console.error('API POST error details:', errorData);
       throw new Error(errorData.error || errorData.detail || `Erreur API: ${response.status}`);
     }
     return await response.json();
@@ -49,7 +55,10 @@ export const apiPost = async (url: string, data?: any) => {
 export const apiPut = async (url: string, data?: any) => {
   try {
     const baseUrl = getApiUrl();
-    const response = await fetch(`${baseUrl}${url}`, {
+    const fullUrl = `${baseUrl}${url}`;
+    console.log('📤 PUT:', fullUrl, data);
+    
+    const response = await fetch(fullUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -71,7 +80,10 @@ export const apiPut = async (url: string, data?: any) => {
 export const apiDelete = async (url: string) => {
   try {
     const baseUrl = getApiUrl();
-    const response = await fetch(`${baseUrl}${url}`, {
+    const fullUrl = `${baseUrl}${url}`;
+    console.log('📤 DELETE:', fullUrl);
+    
+    const response = await fetch(fullUrl, {
       method: 'DELETE',
     });
     if (!response.ok) {

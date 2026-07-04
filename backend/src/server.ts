@@ -53,37 +53,55 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes API - UNIQUEMENT ICI, PAS DE ROUTES DIRECTES
-app.use("/clients", clientsRoutes);
-app.use("/modeles-tenues", modelesTenuesRoutes);
-app.use("/types-tenues", typesTenuesRoutes);
-app.use("/tailles", taillesRoutes);
-app.use("/types-mesures", typesMesuresRoutes);
-app.use("/couleurs", couleursRoutes);
-app.use("/textures", texturesRoutes);
-app.use("/articles", articlesRoutes);
-app.use("/categories-matieres", categoriesMatieresRoutes);
-app.use("/matieres", matieresRoutes);
-app.use("/atelier", atelierRoutes);
-app.use("/types-prestations", typesPrestationsRoutes);
-app.use("/ventes", ventesRoutes);
-app.use("/depenses", depensesRoutes);
-app.use("/rendezvous", rendezVousRoutes);
-app.use("/utilisateurs", utilisateursRoutes);
-app.use("/journal", journalRoutes);
-app.use("/journal-modifications", journalRoutes);
-app.use("/employes", employesRoutes);
-app.use("/prestations-realisees", prestationsRoutes);
-app.use("/salaires", salairesRoutes);
-app.use("/historique-salaires", historiqueSalairesRoutes);
-app.use("/emprunts", empruntsRoutes);
-app.use('/admin', adminRoutes);
-app.use("/finances", financesRoutes);
-app.use("/mouvements-stock", stockRoutes);
-app.use("/stock", stockRoutes);
+// ============================================
+// SERVIR LE FRONTEND STATIQUE
+// ============================================
 
-// Routes de test
-app.get("/test", async (_, res) => {
+const publicPath = path.join(__dirname, 'public');
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+  console.log(`✅ Frontend statique servi depuis: ${publicPath}`);
+} else {
+  console.warn(`⚠️ Dossier public non trouvé: ${publicPath}`);
+  console.warn('   Construis le frontend avec: npm run build');
+}
+
+// ============================================
+// ROUTES API (préfixées par /api)
+// ============================================
+
+const API_PREFIX = '/api';
+
+app.use(`${API_PREFIX}/clients`, clientsRoutes);
+app.use(`${API_PREFIX}/modeles-tenues`, modelesTenuesRoutes);
+app.use(`${API_PREFIX}/types-tenues`, typesTenuesRoutes);
+app.use(`${API_PREFIX}/tailles`, taillesRoutes);
+app.use(`${API_PREFIX}/types-mesures`, typesMesuresRoutes);
+app.use(`${API_PREFIX}/couleurs`, couleursRoutes);
+app.use(`${API_PREFIX}/textures`, texturesRoutes);
+app.use(`${API_PREFIX}/articles`, articlesRoutes);
+app.use(`${API_PREFIX}/categories-matieres`, categoriesMatieresRoutes);
+app.use(`${API_PREFIX}/matieres`, matieresRoutes);
+app.use(`${API_PREFIX}/atelier`, atelierRoutes);
+app.use(`${API_PREFIX}/types-prestations`, typesPrestationsRoutes);
+app.use(`${API_PREFIX}/ventes`, ventesRoutes);
+app.use(`${API_PREFIX}/depenses`, depensesRoutes);
+app.use(`${API_PREFIX}/rendezvous`, rendezVousRoutes);
+app.use(`${API_PREFIX}/utilisateurs`, utilisateursRoutes);
+app.use(`${API_PREFIX}/journal`, journalRoutes);
+app.use(`${API_PREFIX}/journal-modifications`, journalRoutes);
+app.use(`${API_PREFIX}/employes`, employesRoutes);
+app.use(`${API_PREFIX}/prestations-realisees`, prestationsRoutes);
+app.use(`${API_PREFIX}/salaires`, salairesRoutes);
+app.use(`${API_PREFIX}/historique-salaires`, historiqueSalairesRoutes);
+app.use(`${API_PREFIX}/emprunts`, empruntsRoutes);
+app.use(`${API_PREFIX}/admin`, adminRoutes);
+app.use(`${API_PREFIX}/finances`, financesRoutes);
+app.use(`${API_PREFIX}/mouvements-stock`, stockRoutes);
+app.use(`${API_PREFIX}/stock`, stockRoutes);
+
+// Route de test API
+app.get(`${API_PREFIX}/test`, async (_, res) => {
   try {
     const result = await pool.query("SELECT NOW()");
     res.json({
@@ -108,12 +126,32 @@ app.get("/health", (_, res) => {
 });
 
 // ============================================
+// SPA FALLBACK - Toutes les routes non-API
+// ============================================
+
+// IMPORTANT: Ce middleware doit être APRÈS toutes les routes API
+// Utiliser app.use au lieu de app.get pour capturer toutes les méthodes HTTP
+app.use((req, res, next) => {
+  // Ignorer les routes API
+  if (req.path.startsWith(API_PREFIX) || req.path === '/health' || req.path === '/test') {
+    return next();
+  }
+  
+  // Servir index.html pour le SPA
+  const indexPath = path.join(publicPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ error: 'Frontend not built. Run npm run build first.' });
+  }
+});
+
+// ============================================
 // INITIALISATION DE LA BASE DE DONNÉES
 // ============================================
 
 async function initDatabase() {
   try {
-    // Vérifier si les tables existent déjà
     const checkResult = await pool.query(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -126,18 +164,14 @@ async function initDatabase() {
       return;
     }
 
-    // Si les tables n'existent pas, les créer
     const sqlPath = path.join(__dirname, "..", "init.sql");
-    
-    // Alternative pour l'exécutable compilé
     let finalPath = sqlPath;
     if (!fs.existsSync(sqlPath)) {
       finalPath = path.join(path.dirname(process.execPath), "init.sql");
     }
 
-    // Vérifier si le fichier existe
     if (!fs.existsSync(finalPath)) {
-      console.warn("⚠️ Fichier init.sql non trouvé, création des tables ignorée");
+      console.warn("⚠️ Fichier init.sql non trouvé");
       console.warn(`   Recherché à: ${finalPath}`);
       return;
     }
@@ -150,12 +184,16 @@ async function initDatabase() {
   }
 }
 
-// Gestion des erreurs 404
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: `Route non trouvée: ${req.method} ${req.url}`
-  });
+// Gestion des erreurs 404 (API uniquement)
+app.use((req, res, next) => {
+  if (req.path.startsWith(API_PREFIX) || req.path === '/health') {
+    res.status(404).json({
+      success: false,
+      error: `Route non trouvée: ${req.method} ${req.url}`
+    });
+  } else {
+    next();
+  }
 });
 
 // Gestion des erreurs globales
@@ -175,6 +213,7 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Backend lancé sur le port ${PORT}`);
   console.log(`📡 Accessible sur http://0.0.0.0:${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(`🌐 Application web: http://localhost:${PORT}`);
   
   await initDatabase();
 });

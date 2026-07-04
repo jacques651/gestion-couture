@@ -4,7 +4,7 @@ import { pool } from "../db";
 const router = Router();
 
 /**
- * GET ALL
+ * GET ALL - Uniquement les tailles actives
  */
 router.get("/", async (_, res) => {
   try {
@@ -24,10 +24,7 @@ router.get("/", async (_, res) => {
 });
 
 /**
- * CREATE
- */
-/**
- * CREATE
+ * CREATE - Avec réactivation si le code existe déjà mais est désactivé
  */
 router.post("/", async (req, res) => {
   try {
@@ -40,18 +37,49 @@ router.post("/", async (req, res) => {
       est_actif
     } = req.body;
 
-    // Vérifier si le code existe déjà
+    // Vérifier si le code existe déjà (actif ou inactif)
     const existing = await pool.query(
-      `SELECT id FROM tailles WHERE code_taille = $1`,
+      `SELECT id, est_actif FROM tailles WHERE code_taille = $1`,
       [code_taille]
     );
 
+    // Si la taille existe déjà
     if (existing.rows.length > 0) {
+      const existingTaille = existing.rows[0];
+      
+      // Si elle est désactivée (est_actif = 0), on la réactive
+      if (existingTaille.est_actif === 0) {
+        const result = await pool.query(
+          `
+          UPDATE tailles
+          SET
+            libelle = $1,
+            ordre = $2,
+            categorie = $3,
+            description = $4,
+            est_actif = 1,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $5
+          RETURNING *
+          `,
+          [
+            libelle,
+            ordre || 0,
+            categorie || null,
+            description || null,
+            existingTaille.id
+          ]
+        );
+        return res.json(result.rows[0]);
+      }
+      
+      // Si elle est active, c'est un vrai doublon
       return res.status(400).json({
-        error: `Le code taille "${code_taille}" existe déjà. Utilisez un code unique.`
+        error: `Le code taille "${code_taille}" existe déjà et est actif.`
       });
     }
 
+    // Création normale (code inexistant)
     const result = await pool.query(
       `
       INSERT INTO tailles (
@@ -148,7 +176,7 @@ router.put("/:id", async (req, res) => {
 });
 
 /**
- * DELETE LOGIQUE
+ * DELETE LOGIQUE - Désactive la taille
  */
 router.delete("/:id", async (req, res) => {
   try {
