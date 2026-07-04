@@ -43,6 +43,7 @@ import {
   IconShoppingCart,
   IconFileImport,
   IconClock,
+  IconRefresh,
 } from '@tabler/icons-react';
 import { apiGet, apiDelete } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,10 +54,39 @@ import FormulaireClient from './FormulaireClient';
 import ModalMesures from './ModalMesures';
 import ImportClientsExcel from '../ImportClientsExcel';
 
+// 🔥 Mapping des noms de mesures pour affichage lisible
+const NOMS_AFFICHAGE: Record<string, string> = {
+  'epaule': 'Epaule',
+  'dos': 'Dos',
+  'poitrine': 'Poitrine',
+  'long_poitrine': 'Lg Poitrine',
+  'taille': 'Taille',
+  'long_taille': 'Lg Taille',
+  'long_chemise': 'Lg Chemise',
+  'manche': 'Manche',
+  'tour_de_manche': 'T. Manche',
+  'col': 'Col',
+  'poignet': 'Poignet',
+  'ceinture': 'Ceinture',
+  'bassin': 'Bassin',
+  'cuisse': 'Cuisse',
+  'long_pantalon': 'Lg Pantalon',
+  'bas': 'Bas',
+  'long_bassin': 'Lg Bassin',
+  'long_robe': 'Lg Robe',
+  'epaule_droite': 'Epaule D',
+  'epaule_gauche': 'Epaule G',
+  'longueur_manche': 'Lg Manche',
+  'tour_bras': 'T. Bras',
+  'ba': 'Bas',
+  'basin': 'Bassin',
+  'centure': 'Ceinture',
+  'centre': 'Ceinture',
+};
 
 interface Mesure {
   nom: string;
-  valeur: string;  // Garder en string pour les valeurs complexes
+  valeur: string;
   unite: string;
 }
 
@@ -90,8 +120,10 @@ export default function ListeClientsAvecMesures() {
   const [showModal, setShowModal] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const itemsPerPage = 10;
 
+  // 🔥 Requête avec refreshKey pour forcer le rechargement
   const {
     data: clientsAvecMesures = [],
     isLoading,
@@ -99,7 +131,7 @@ export default function ListeClientsAvecMesures() {
     refetch,
     isError
   } = useQuery<ClientAvecMesures[]>({
-    queryKey: ['clients_avec_mesures'],
+    queryKey: ['clients_avec_mesures', refreshKey],
     queryFn: async () => {
       try {
         const clients = await apiGet("/clients");
@@ -120,16 +152,25 @@ export default function ListeClientsAvecMesures() {
     staleTime: 1000 * 60 * 5,
   });
 
+  // 🔥 Force le rafraîchissement des données
+  const forceRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+    queryClient.invalidateQueries({ queryKey: ['clients_avec_mesures'] });
+    refetch();
+  };
+
+  // 🔥 Récupérer tous les noms de mesures uniques
   const tousNomsMesures = useMemo(() => {
     const noms = new Set<string>();
     for (const client of clientsAvecMesures) {
       for (const mesure of client.mesures) {
-        if (mesure.nom) noms.add(mesure.nom);
+        if (mesure.nom) noms.add(mesure.nom.trim());
       }
     }
     return Array.from(noms).sort();
   }, [clientsAvecMesures]);
 
+  // 🔥 Filtrer et trier les données
   const filteredAndSortedData = useMemo(() => {
     if (!clientsAvecMesures || clientsAvecMesures.length === 0) return [];
 
@@ -156,6 +197,7 @@ export default function ListeClientsAvecMesures() {
   const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
   const paginatedData = filteredAndSortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  // 🔥 Suppression
   const deleteMutation = useMutation({
     mutationFn: async (telephone_id: string) => {
       await apiDelete(`/clients/${telephone_id}`);
@@ -169,10 +211,7 @@ export default function ListeClientsAvecMesures() {
     },
     onSuccess: async () => {
       setDeleteId(null);
-      await queryClient.invalidateQueries({
-        queryKey: ['clients_avec_mesures']
-      });
-      await refetch();
+      forceRefresh();
       alert("✅ Client supprimé avec succès");
     },
     onError: (error) => {
@@ -181,6 +220,7 @@ export default function ListeClientsAvecMesures() {
     }
   });
 
+  // 🔥 Vider la liste
   const viderListeMutation = useMutation({
     mutationFn: async () => {
       await apiDelete("/clients/mesures/all");
@@ -194,9 +234,7 @@ export default function ListeClientsAvecMesures() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['clients_avec_mesures']
-      });
+      forceRefresh();
       alert("✅ Liste des clients vidée avec succès");
     },
     onError: (error) => {
@@ -205,8 +243,42 @@ export default function ListeClientsAvecMesures() {
     }
   });
 
+  // 🔥 Ouvrir les détails des mesures
+
+  const handleVoir = async (client: ClientAvecMesures) => {
+  try {
+    console.log('📏 Client sélectionné:', client.nom_prenom);
+    console.log('📏 telephone_id:', client.telephone_id);
+    
+    // 🔥 Utiliser la route /details/
+    const url = `/api/clients/details/${encodeURIComponent(client.telephone_id)}`;
+    console.log('📏 URL appelée:', url);
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Erreur API:', response.status, errorText);
+      throw new Error(`Erreur API: ${response.status}`);
+    }
+    
+    const clientFrais = await response.json();
+    console.log('📏 Mesures fraîches API:', clientFrais.mesures);
+    
+    setSelectedClient({
+      ...client,
+      mesures: clientFrais.mesures || []
+    });
+    setShowModal(true);
+  } catch (error) {
+    console.error('❌ Erreur chargement client:', error);
+    // Fallback: utiliser les données du tableau
+    setSelectedClient(client);
+    setShowModal(true);
+  }
+};
+
   const handleModifier = (client: Client) => {
-    console.log("📝 Modification du client:", client);
     const clientData = {
       id: client.id,
       telephone_id: client.telephone_id,
@@ -221,7 +293,6 @@ export default function ListeClientsAvecMesures() {
   };
 
   const handleSupprimer = (id: string) => setDeleteId(id);
-  const handleVoir = (client: ClientAvecMesures) => { setSelectedClient(client); setShowModal(true); };
   const handleCreateVente = (client: Client) => {
     navigate(`/ventes?client_id=${client.telephone_id}&client_nom=${encodeURIComponent(client.nom_prenom)}`);
   };
@@ -236,11 +307,12 @@ export default function ListeClientsAvecMesures() {
     setCurrentPage(1);
   };
 
+  // 🔥 Export Excel
   const exportToExcel = async () => {
     try {
       setExporting(true);
       const data = filteredAndSortedData.map(client => {
-        const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
+        const mesuresMap = new Map(client.mesures.map(m => [m.nom.trim(), `${m.valeur} ${m.unite || 'cm'}`]));
         const row: any = {
           'Téléphone': client.telephone_id,
           'Nom complet': client.nom_prenom,
@@ -249,7 +321,9 @@ export default function ListeClientsAvecMesures() {
           'Observations': client.observations || '',
           'Date enregistrement': client.date_enregistrement || '',
         };
-        for (const nom of tousNomsMesures) { row[nom] = mesuresMap.get(nom) || ''; }
+        for (const nom of tousNomsMesures) {
+          row[nom] = mesuresMap.get(nom) || '';
+        }
         return row;
       });
 
@@ -264,6 +338,7 @@ export default function ListeClientsAvecMesures() {
     } finally { setExporting(false); }
   };
 
+  // 🔥 Export PDF
   const exportToPDF = async () => {
     try {
       setExporting(true);
@@ -276,17 +351,21 @@ export default function ListeClientsAvecMesures() {
 
       const head = ['N°', 'Téléphone', 'Nom', 'Adresse', 'Observations', 'Date', ...tousNomsMesures];
       const body = filteredAndSortedData.map((client, idx) => {
-        const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
-        const dateFormatted = client.date_enregistrement 
+        const mesuresMap = new Map(client.mesures.map(m => [m.nom.trim(), `${m.valeur} ${m.unite || 'cm'}`]));
+        const dateFormatted = client.date_enregistrement
           ? new Date(client.date_enregistrement).toLocaleDateString('fr-FR')
           : '';
         const ligne = [idx + 1, client.telephone_id, client.nom_prenom, client.adresse || '', (client.observations || '').substring(0, 50), dateFormatted];
-        for (const nom of tousNomsMesures) { ligne.push(mesuresMap.get(nom) || ''); }
+        for (const nom of tousNomsMesures) {
+          ligne.push(mesuresMap.get(nom) || '');
+        }
         return ligne;
       });
 
       autoTable(doc, {
-        head: [head], body: body, startY: 40,
+        head: [head],
+        body: body,
+        startY: 40,
         theme: 'striped',
         headStyles: { fillColor: [27, 54, 93], textColor: 255, fontStyle: 'bold' },
         styles: { fontSize: 7, cellPadding: 2 },
@@ -301,13 +380,14 @@ export default function ListeClientsAvecMesures() {
     } finally { setExporting(false); }
   };
 
+  // 🔥 Impression
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) { alert("Veuillez autoriser les popups"); return; }
 
     const rows = filteredAndSortedData.map((client, idx) => {
-      const mesuresMap = new Map(client.mesures.map(m => [m.nom, `${m.valeur} ${m.unite || 'cm'}`]));
-      const dateFormatted = client.date_enregistrement 
+      const mesuresMap = new Map(client.mesures.map(m => [m.nom.trim(), `${m.valeur} ${m.unite || 'cm'}`]));
+      const dateFormatted = client.date_enregistrement
         ? new Date(client.date_enregistrement).toLocaleDateString('fr-FR')
         : '';
       return `<tr>
@@ -354,7 +434,7 @@ export default function ListeClientsAvecMesures() {
         onSuccess={(clientId, clientNom) => {
           setVueForm(false);
           setClientEdit(null);
-          refetch();
+          forceRefresh();
           if (clientId && clientNom) {
             const confirmed = globalThis.confirm(
               'Client créé/modifié avec succès ! Voulez-vous créer une vente pour ce client ?'
@@ -389,7 +469,7 @@ export default function ListeClientsAvecMesures() {
           <Stack>
             <Text>Impossible de charger les clients</Text>
             <Text size="sm">{error instanceof Error ? error.message : 'Erreur inconnue'}</Text>
-            <Button onClick={() => refetch()} variant="white" size="xs" mt="md">Réessayer</Button>
+            <Button onClick={() => forceRefresh()} variant="white" size="xs" mt="md">Réessayer</Button>
           </Stack>
         </Alert>
       </Container>
@@ -412,11 +492,20 @@ export default function ListeClientsAvecMesures() {
                 </Box>
               </Group>
               <Group>
-                <Button 
-                  variant="light" 
-                  color="white" 
-                  leftSection={<IconFileImport size={18} />} 
-                  onClick={() => setVueImport(true)} 
+                <Button
+                  variant="light"
+                  color="white"
+                  leftSection={<IconRefresh size={18} />}
+                  onClick={forceRefresh}
+                  radius="md"
+                >
+                  Rafraîchir
+                </Button>
+                <Button
+                  variant="light"
+                  color="white"
+                  leftSection={<IconFileImport size={18} />}
+                  onClick={() => setVueImport(true)}
                   radius="md"
                 >
                   Importer Excel
@@ -443,9 +532,9 @@ export default function ListeClientsAvecMesures() {
                   </Text>
                 </Box>
                 <Group>
-                  <Button 
-                    leftSection={<IconFileImport size={16} />} 
-                    variant="outline" 
+                  <Button
+                    leftSection={<IconFileImport size={16} />}
+                    variant="outline"
                     color="green"
                     onClick={() => setVueImport(true)}
                   >
@@ -534,24 +623,29 @@ export default function ListeClientsAvecMesures() {
                             </Group>
                           </Table.Th>
 
-                          {tousNomsMesures.map(nom => (
-                            <Table.Th
-                              key={nom}
-                              style={{
-                                color: 'white',
-                                fontSize: '9px',
-                                fontWeight: 500,
-                                padding: '8px 3px',
-                                whiteSpace: 'nowrap',
-                                textAlign: 'center',
-                                minWidth: 50,
-                                cursor: 'default'
-                              }}
-                              title={nom}
-                            >
-                              {nom}
-                            </Table.Th>
-                          ))}
+                          {/* 🔥 Colonnes des mesures avec affichage lisible */}
+                          {tousNomsMesures.map(nom => {
+                            const nomAffichage = NOMS_AFFICHAGE[nom.toLowerCase()] || nom;
+                            return (
+                              <Table.Th
+                                key={nom}
+                                style={{
+                                  color: 'white',
+                                  fontSize: '9px',
+                                  fontWeight: 600,
+                                  padding: '8px 2px',
+                                  whiteSpace: 'nowrap',
+                                  textAlign: 'center',
+                                  minWidth: 35,
+                                  maxWidth: 50,
+                                  cursor: 'default'
+                                }}
+                                title={nom}
+                              >
+                                {nomAffichage}
+                              </Table.Th>
+                            );
+                          })}
 
                           <Table.Th style={{ textAlign: 'center', color: 'white', fontSize: '12px', padding: '8px 8px', width: 150, minWidth: 150 }}>
                             Actions
@@ -561,9 +655,11 @@ export default function ListeClientsAvecMesures() {
 
                       <Table.Tbody>
                         {paginatedData.map((client) => {
-                          const mesuresMap = new Map(
-                            client.mesures.map(m => [m.nom, `${m.valeur}${m.unite && m.unite !== 'cm' ? ' ' + m.unite : ''}`])
-                          );
+                          // 🔥 Construire un Map des mesures par nom (insensible à la casse)
+                          const mesuresMap = new Map();
+                          client.mesures.forEach(m => {
+                            mesuresMap.set(m.nom.trim().toLowerCase(), m.valeur);
+                          });
 
                           const profilColor =
                             client.profil === 'principal' ? 'blue' :
@@ -577,14 +673,14 @@ export default function ListeClientsAvecMesures() {
                                 client.profil === 'conjoint' ? 'Conjoint' :
                                   client.profil === 'parent' ? 'Parent' : 'Autre';
 
-                          const dateFormatted = client.date_enregistrement 
+                          const dateFormatted = client.date_enregistrement
                             ? new Date(client.date_enregistrement).toLocaleDateString('fr-FR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
                             : '-';
 
                           return (
@@ -611,22 +707,28 @@ export default function ListeClientsAvecMesures() {
                                 </Text>
                               </Table.Td>
 
-                              {tousNomsMesures.map(nom => (
-                                <Table.Td
-                                  key={nom}
-                                  style={{
-                                    fontSize: '11px',
-                                    padding: '6px 3px',
-                                    whiteSpace: 'nowrap',
-                                    textAlign: 'center'
-                                  }}
-                                  title={`${nom}: ${mesuresMap.get(nom) || 'Non renseigné'}`}
-                                >
-                                  <Text size="xs" ta="center">
-                                    {mesuresMap.get(nom) || '-'}
-                                  </Text>
-                                </Table.Td>
-                              ))}
+                              {/* 🔥 Cellules des mesures avec les bonnes valeurs */}
+                              {tousNomsMesures.map(nom => {
+                                const valeur = mesuresMap.get(nom.toLowerCase()) || '-';
+                                return (
+                                  <Table.Td
+                                    key={nom}
+                                    style={{
+                                      fontSize: '10px',
+                                      padding: '4px 2px',
+                                      whiteSpace: 'nowrap',
+                                      textAlign: 'center',
+                                      minWidth: 35,
+                                      maxWidth: 50,
+                                    }}
+                                    title={`${nom}: ${valeur}`}
+                                  >
+                                    <Text size="xs" ta="center" c={valeur !== '-' ? 'dark' : 'dimmed'} fw={valeur !== '-' ? 600 : 400}>
+                                      {valeur}
+                                    </Text>
+                                  </Table.Td>
+                                );
+                              })}
 
                               <Table.Td style={{ padding: '6px 4px' }}>
                                 <Group gap={4} justify="center" wrap="nowrap">
@@ -669,7 +771,7 @@ export default function ListeClientsAvecMesures() {
             </Stack>
           </Card>
 
-          {/* Modal confirmation suppression */}
+          {/* 🔥 Modal de suppression */}
           <Modal opened={deleteId !== null} onClose={() => setDeleteId(null)} title="Confirmation" centered radius="md">
             <Stack>
               <Text>Êtes-vous sûr de vouloir supprimer ce client ?</Text>
@@ -684,59 +786,29 @@ export default function ListeClientsAvecMesures() {
             </Stack>
           </Modal>
 
-          {/* Modal mesures - CORRECTION ICI */}
+          {/* 🔥 Modal des mesures - CORRIGÉE */}
           {showModal && selectedClient && (
             <ModalMesures
-              client={selectedClient}
-              mesures={selectedClient.mesures
-                .map((m) => ({
-                  ...m,
-                  // 🔥 Conversion en nombre pour ModalMesures
-                  valeur: typeof m.valeur === 'string' ? parseFloat(m.valeur) || 0 : Number(m.valeur) || 0
-                }))
-                .sort((a, b) => {
-                  const ordreMesures = [
-                    'EPAULE',
-                    'DOS',
-                    'POITRINE',
-                    'LONG POITRINE',
-                    'TAILLE',
-                    'LONG TAILLE',
-                    'LONG CHEMISE',
-                    'MANCHE',
-                    'TOUR DE MANCHE',
-                    'COL',
-                    'POIGNET',
-                    'CEINTURE',
-                    'BASSIN',
-                    'CUISSE',
-                    'LONG PANTALON',
-                    'BAS',
-                    'LONG BASSIN',
-                    'LONG ROBE'
-                  ];
-
-                  const indexA = ordreMesures.indexOf(a.nom);
-                  const indexB = ordreMesures.indexOf(b.nom);
-
-                  if (indexA === -1 && indexB === -1) return 0;
-                  if (indexA === -1) return 1;
-                  if (indexB === -1) return -1;
-
-                  return indexA - indexB;
-                })
-              }
+              client={{
+                nom_prenom: selectedClient.nom_prenom,
+                telephone_id: selectedClient.telephone_id,
+                observations: selectedClient.observations || '',
+              }}
+              mesures={selectedClient.mesures.map((m: any) => ({
+                nom: m.nom,
+                // ✅ Conserver la valeur BRUTE : les valeurs multiples ("35/44", "23/42/57")
+                // ne doivent JAMAIS passer par parseFloat qui tronque au premier nombre
+                valeur: m.valeur ?? '',
+                unite: m.unite || 'cm'
+              }))}
               onClose={() => {
                 setShowModal(false);
-                queryClient.invalidateQueries({
-                  queryKey: ['clients_avec_mesures']
-                });
-                refetch();
+                forceRefresh();
               }}
             />
           )}
 
-          {/* Modal instructions */}
+          {/* 🔥 Modal instructions */}
           <Modal opened={infoModalOpen} onClose={() => setInfoModalOpen(false)} title="📋 Instructions" size="md" centered radius="md">
             <Stack gap="md">
               <Text size="sm">1️⃣ Renseignez les informations personnelles du client</Text>

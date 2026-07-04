@@ -1,11 +1,60 @@
-// routes/clients.ts - Version corrigée (sans ordre_affichage)
+// routes/clients.ts - Version complète corrigée
 import { Router } from "express";
 import { pool } from "../db";
 
 const router = Router();
 
 // ============================================
-// GET ALL CLIENTS AVEC MESURES - Version optimisée
+// 🔥 ROUTE SPÉCIFIQUE - DOIT ÊTRE EN PREMIER
+// ============================================
+
+// GET /clients/details/:telephone_id - Récupérer un client avec ses mesures
+router.get('/details/:telephone_id', async (req, res) => {
+  try {
+    const { telephone_id } = req.params;
+    
+    console.log(`🔍 Recherche client avec telephone_id: ${telephone_id}`);
+    
+    // Récupérer le client
+    const clientResult = await pool.query(`
+      SELECT * FROM clients 
+      WHERE telephone_id = $1 AND est_supprime = 0
+    `, [telephone_id]);
+    
+    if (clientResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+    
+    const client = clientResult.rows[0];
+    
+    // Récupérer les mesures
+    const mesuresResult = await pool.query(`
+      SELECT 
+        tm.nom,
+        mc.valeur,
+        tm.unite
+      FROM mesures_clients mc
+      JOIN types_mesures tm ON tm.id = mc.type_mesure_id
+      WHERE mc.client_id = $1
+      ORDER BY tm.id
+    `, [client.id]);
+    
+    client.mesures = mesuresResult.rows;
+    
+    console.log(`✅ Client trouvé: ${client.nom_prenom}, ${mesuresResult.rows.length} mesures`);
+    
+    res.json(client);
+  } catch (error) {
+    console.error('❌ Erreur:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération du client', 
+      details: error.message 
+    });
+  }
+});
+
+// ============================================
+// GET ALL CLIENTS AVEC MESURES
 // ============================================
 router.get("/", async (_, res) => {
   try {
@@ -25,7 +74,6 @@ router.get("/", async (_, res) => {
         COALESCE(
           json_agg(
             json_build_object(
-              'type_mesure_id', tm.id,
               'nom', tm.nom,
               'valeur', mc.valeur,
               'unite', tm.unite
@@ -45,28 +93,19 @@ router.get("/", async (_, res) => {
     const clients = result.rows;
     console.log(`✅ ${clients.length} clients récupérés`);
     
-    let totalMesures = 0;
-    for (const client of clients) {
-      if (client.mesures && Array.isArray(client.mesures)) {
-        totalMesures += client.mesures.length;
-      }
-    }
-    console.log(`✅ Total: ${totalMesures} mesures`);
-    
     res.json(clients);
     
   } catch (error) {
     console.error("❌ Erreur récupération clients:", error);
     res.status(500).json({ 
       error: "Erreur récupération clients",
-      message: error.message,
-      stack: error.stack 
+      message: error.message
     });
   }
 });
 
 // ============================================
-// GET MESURES D'UN CLIENT PAR TÉLÉPHONE - CORRIGÉ
+// GET MESURES D'UN CLIENT PAR TÉLÉPHONE
 // ============================================
 router.get("/:telephone/mesures", async (req, res) => {
   try {
@@ -78,7 +117,6 @@ router.get("/:telephone/mesures", async (req, res) => {
       return res.status(400).json({ error: 'Téléphone requis' });
     }
 
-    // D'abord, récupérer l'ID du client
     const clientResult = await pool.query(
       "SELECT id FROM clients WHERE telephone_id = $1 AND est_supprime = 0",
       [telephone]
@@ -92,10 +130,8 @@ router.get("/:telephone/mesures", async (req, res) => {
     const clientId = clientResult.rows[0].id;
     console.log(`✅ Client trouvé avec ID: ${clientId}`);
 
-    // Récupérer les mesures du client - SANS ordre_affichage
     const query = `
       SELECT 
-        tm.id as type_mesure_id,
         tm.nom,
         mc.valeur,
         tm.unite
@@ -108,9 +144,6 @@ router.get("/:telephone/mesures", async (req, res) => {
     const result = await pool.query(query, [clientId]);
     
     console.log(`✅ ${result.rows.length} mesures trouvées pour ${telephone}`);
-    if (result.rows.length > 0) {
-      console.log(`📊 Première mesure: ${JSON.stringify(result.rows[0])}`);
-    }
     
     res.json(result.rows);
     
@@ -132,13 +165,11 @@ router.post("/:telephone/mesures", async (req, res) => {
     const { mesures } = req.body;
     
     console.log(`📊 Enregistrement des mesures pour: ${telephone}`);
-    console.log("📊 Mesures reçues:", JSON.stringify(mesures, null, 2));
     
     if (!telephone) {
       return res.status(400).json({ error: 'Téléphone requis' });
     }
 
-    // D'abord, récupérer l'ID du client
     const clientResult = await pool.query(
       "SELECT id FROM clients WHERE telephone_id = $1 AND est_supprime = 0",
       [telephone]
@@ -152,20 +183,16 @@ router.post("/:telephone/mesures", async (req, res) => {
     }
 
     const clientId = clientResult.rows[0].id;
-
-    // Démarrer une transaction
     const client = await pool.connect();
     
     try {
       await client.query('BEGIN');
       
-      // Supprimer les anciennes mesures
       await client.query(
         'DELETE FROM mesures_clients WHERE client_id = $1',
         [clientId]
       );
       
-      // Insérer les nouvelles mesures
       let insertedCount = 0;
       if (mesures && Array.isArray(mesures) && mesures.length > 0) {
         for (const mesure of mesures) {

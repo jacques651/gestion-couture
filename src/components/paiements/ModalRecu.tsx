@@ -412,7 +412,7 @@ const ModalRecu: React.FC<ModalRecuProps> = ({ commande, onClose }) => {
                 <IconCalendarEvent size={16} color="#1b365d" />
                 <Text fw={600} size="sm">Rendez-vous</Text>
               </Group>
-              <SimpleGrid cols={4} spacing="xs" mb="xs">
+              <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs" mb="xs">
                 <Box>
                   <Text size="xs" c="dimmed">Date</Text>
                   <Text size="sm" fw={500}>

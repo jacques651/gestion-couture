@@ -11,8 +11,11 @@ $dir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $lanceur = Join-Path $dir 'lancer-application.ps1'
 $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
-# Icone Edge si disponible (sinon icone PowerShell par defaut)
-$edge = @(
+# Icone : Chrome de preference, sinon Edge, sinon icone PowerShell par defaut
+$navigateur = @(
+  "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+  "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+  "$env:LocalAppData\Google\Chrome\Application\chrome.exe",
   "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
   "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -28,7 +31,7 @@ foreach ($d in $dossiers) {
   $lnk.TargetPath = $powershell
   $lnk.Arguments  = "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$lanceur`""
   $lnk.WorkingDirectory = $dir
-  if ($edge) { $lnk.IconLocation = "$edge,0" }
+  if ($navigateur) { $lnk.IconLocation = "$navigateur,0" }
   $lnk.Description = "Application Gestion Couture (connexion automatique cable ou Wi-Fi)"
   $lnk.Save()
 }

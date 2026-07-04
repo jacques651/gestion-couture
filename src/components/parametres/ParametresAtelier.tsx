@@ -288,7 +288,7 @@ export default function ParametresAtelier() {
                 </Card>
 
                 {/* Message facture */}
-                <Grid.Col span={16} style={{ marginTop: 16 }}>
+                <Grid.Col span={12} style={{ marginTop: 16 }}>
                   <Card withBorder radius="lg" shadow="sm" p="xl">
                     <Stack gap="md">
                       <Title order={4}>
@@ -328,7 +328,7 @@ export default function ParametresAtelier() {
                     />
 
                     <Grid>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                           label="Téléphone"
                           placeholder="75 11 81 61"
@@ -342,7 +342,7 @@ export default function ParametresAtelier() {
                     </Grid>
 
                     <Grid>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                           label="Email"
                           placeholder="contact@atelier.com"
@@ -352,7 +352,7 @@ export default function ParametresAtelier() {
                           radius="md"
                         />
                       </Grid.Col>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <Select
                           label="Devise"
                           data={[
@@ -378,7 +378,7 @@ export default function ParametresAtelier() {
                     />
 
                     <Grid>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                           label="Ville"
                           placeholder="Ouagadougou"
@@ -388,7 +388,7 @@ export default function ParametresAtelier() {
                           radius="md"
                         />
                       </Grid.Col>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                           label="Pays"
                           placeholder="Burkina Faso"
@@ -401,7 +401,7 @@ export default function ParametresAtelier() {
                     </Grid>
 
                     <Grid>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                           label="IFU"
                           placeholder="N° IFU"
@@ -411,7 +411,7 @@ export default function ParametresAtelier() {
                           radius="md"
                         />
                       </Grid.Col>
-                      <Grid.Col span={6}>
+                      <Grid.Col span={{ base: 12, sm: 6 }}>
                         <TextInput
                           label="RCCM"
                           placeholder="N° RCCM"

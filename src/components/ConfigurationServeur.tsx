@@ -7,16 +7,18 @@ import {
 import {
   IconServer, IconCheck, IconPlugConnected,
   IconDeviceDesktop, IconWorld, IconArrowLeft,
+  IconRadar,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import { resolveApiBase, saveApiBase } from '../utils/backend';
 
 const ConfigurationServeur: React.FC = () => {
-  const [serverUrl, setServerUrl] = useState('http://192.168.2.1:3001');
+  const [serverUrl, setServerUrl] = useState('http://localhost:3001');
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [detecting, setDetecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
-  const [, setDetectedIp] = useState<string | null>(null);
 
   useEffect(() => {
     const savedUrl = localStorage.getItem('api_url');
@@ -24,17 +26,23 @@ const ConfigurationServeur: React.FC = () => {
       setServerUrl(savedUrl);
       testerConnexionSilencieuse(savedUrl);
     }
-    // Mode web : par défaut, l'API est en même origine (aucune URL à forcer).
-    detecterIpLocale();
   }, []);
 
-  const detecterIpLocale = async () => {
+  // Détection automatique : teste toutes les adresses connues
+  const detecterAutomatiquement = async () => {
+    setDetecting(true);
     try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      setDetectedIp(data.ip);
-    } catch (error) {
-      console.log('IP non détectée');
+      const base = await resolveApiBase({ maxWaitMs: 15000 });
+      if (base) {
+        setServerUrl(base);
+        setConnected(true);
+        notifications.show({ title: '✅ Serveur détecté !', message: `${base} — redirection...`, color: 'green' });
+        setTimeout(() => { window.location.href = '/'; }, 1000);
+      } else {
+        notifications.show({ title: '❌ Aucun serveur trouvé', message: 'Saisissez l\'adresse manuellement', color: 'red' });
+      }
+    } finally {
+      setDetecting(false);
     }
   };
 
@@ -85,7 +93,7 @@ const ConfigurationServeur: React.FC = () => {
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        localStorage.setItem('api_url', serverUrl);
+        saveApiBase(serverUrl);
         setConnected(true);
         notifications.show({ title: '✅ Enregistré !', message: 'Redirection...', color: 'green' });
         setTimeout(() => { window.location.href = '/'; }, 1000);
@@ -150,6 +158,18 @@ const ConfigurationServeur: React.FC = () => {
             <LoadingOverlay visible={loading} />
             <Stack gap="md">
               <Title order={4}>Adresse du backend Express</Title>
+
+              <Button
+                leftSection={<IconRadar size={18} />}
+                onClick={detecterAutomatiquement}
+                loading={detecting}
+                variant="gradient"
+                gradient={{ from: 'teal', to: 'green' }}
+                radius="md"
+                size="md"
+              >
+                🔍 Détection automatique du serveur
+              </Button>
 
               <TextInput
                 size="lg"

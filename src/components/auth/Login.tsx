@@ -39,6 +39,7 @@ import {
 } from "../../services/journal";
 import { useAuth } from "../../contexts/AuthContext";
 import { sauvegarderSession } from "../../services/session";
+import { checkHealth, getApiBase, resolveApiBase } from "../../utils/backend";
 
 interface ConfigurationAtelier {
   id: number;
@@ -73,21 +74,17 @@ const Login: React.FC = () => {
   const [loginValue, setLoginValue] = useState("");
   const [password, setPassword] = useState("");
 
-  // Vérifier la connexion au serveur au démarrage
+  // Vérifier la connexion au serveur au démarrage (détection automatique)
   useEffect(() => {
     const verifierConnexionServeur = async () => {
       try {
-        const url = localStorage.getItem('api_url') || '';
-        const response = await fetch(`${url}/health`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setApiError(false);
-          } else {
-            setApiError(true);
-          }
+        const ok = await checkHealth(getApiBase());
+        if (ok) {
+          setApiError(false);
         } else {
-          setApiError(true);
+          // Nouvelle détection automatique avant de déclarer une erreur
+          const base = await resolveApiBase({ maxWaitMs: 10000 });
+          setApiError(!base);
         }
       } catch (error) {
         console.error("Erreur connexion serveur:", error);
@@ -96,7 +93,7 @@ const Login: React.FC = () => {
         setCheckingApi(false);
       }
     };
-    
+
     verifierConnexionServeur();
   }, []);
 

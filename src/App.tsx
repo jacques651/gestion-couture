@@ -1,7 +1,7 @@
 // src/App.tsx
-import { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, BrowserRouter, useNavigate } from 'react-router-dom';
-import { AppShell, Loader, Center, MantineProvider, Button, Text, Alert } from '@mantine/core';
+import { lazy, Suspense, useState, useEffect } from 'react';
+import { Routes, Route, BrowserRouter, useNavigate, useLocation } from 'react-router-dom';
+import { Loader, Center, MantineProvider, Button, Text, Alert, Group, Stack } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from './theme';
@@ -10,62 +10,40 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import AssistantIA from './components/AssistantIA';
-import { apiGet } from './services/api';
-import HistoriquePaiements from './components/ventes/HistoriquePaiements';
+import MenuUtilisateur from './components/MenuUtilisateur';
+import { resolveApiBase } from './utils/backend';
 
-// ==================== AUTH ====================
+// ==================== IMPORTS DES PAGES ====================
 const Login = lazy(() => import('./components/auth/Login'));
-
-// ==================== DASHBOARD ====================
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
-
-// ==================== CLIENTS ====================
 const ListeClientsAvecMesures = lazy(() => import('./components/clients/ListeClientsAvecMesures'));
-
-// ==================== STOCK & INVENTAIRE ====================
+const ConfigurationMesures = lazy(() => import('./components/parametres/ConfigurationMesures'));
 const MatieresManager = lazy(() => import('./components/stock/MatieresManager'));
 const ArticlesManager = lazy(() => import('./components/stock/ArticlesManager'));
-const TypesTenuesManager = lazy(() => import('./components/stock/TypesTenuesManager')); const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
-
-// ==================== VENTES ====================
+const TypesTenuesManager = lazy(() => import('./components/stock/TypesTenuesManager'));
+const MouvementsStock = lazy(() => import('./components/stock/MouvementsStock'));
 const VentesManager = lazy(() => import('./components/ventes/VentesManager'));
-
-// ==================== FACTURES & REÇUS ====================
+const HistoriquePaiements = lazy(() => import('./components/ventes/HistoriquePaiements'));
 const FacturesRecus = lazy(() => import('./components/factures/FacturesReçus'));
-
-// ==================== RENDEZ-VOUS ====================
 const SuiviRendezVous = lazy(() => import('./components/rendezvous/SuiviRendezVous'));
-
-// ==================== FINANCES ====================
 const BilanFinancier = lazy(() => import('./components/finances/BilanFinancier'));
 const JournalCaisse = lazy(() => import('./components/finances/JournalCaisse'));
 const ListeDepenses = lazy(() => import('./components/depenses/ListeDepenses'));
 const GestionSalaires = lazy(() => import('./components/finances/GestionSalaires'));
 const HistoriqueSalaires = lazy(() => import('./components/finances/HistoriqueSalaires'));
-
-// ==================== RESSOURCES HUMAINES ====================
 const ListeEmployes = lazy(() => import('./components/employes/ListeEmployes'));
 const ListeEmprunts = lazy(() => import('./components/emprunts/ListeEmprunts'));
 const ListePrestationsRealisees = lazy(() => import('./components/prestations/ListePrestationsRealisees'));
-
-// ==================== RÉFÉRENTIELS ====================
 const TaillesManager = lazy(() => import('./components/referentiels/TaillesManager'));
 const CouleursManager = lazy(() => import('./components/referentiels/CouleursManager'));
 const TexturesManager = lazy(() => import('./components/referentiels/TexturesManager'));
 const CategoriesMatieresManager = lazy(() => import('./components/referentiels/CategoriesMatieresManager'));
 const ListeTypesPrestations = lazy(() => import('./components/prestations/ListeTypesPrestations'));
-const ConfigurationMesures = lazy(() => import('./components/parametres/ConfigurationMesures'));
-
-// ==================== PARAMÈTRES ====================
 const ParametresAtelier = lazy(() => import('./components/parametres/ParametresAtelier'));
 const ListeUtilisateurs = lazy(() => import('./components/utilisateurs/ListeUtilisateurs'));
 const JournalModifications = lazy(() => import('./components/parametres/JournalModifications'));
-
-// ==================== OUTILS ====================
 const ImportClientsExcel = lazy(() => import('./components/ImportClientsExcel'));
 const ExportImportConfiguration = lazy(() => import('./components/ExportImportConfiguration'));
-
-// ==================== SUPPORT & AIDE ====================
 const SupportTechnique = lazy(() => import('./components/support/SupportTechnique'));
 const ExportSupport = lazy(() => import('./components/support/ExportSupport'));
 const GuideUtilisation = lazy(() => import('./components/support/GuideUtilisation'));
@@ -78,456 +56,236 @@ const LoadingFallback = () => (
   </Center>
 );
 
-function RouteGuard({ children, roles, fonctionnalite }: { children: React.ReactNode; roles?: string[]; fonctionnalite?: string }) {
-  const { user, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
-  const [hasAccess, setHasAccess] = useState(true);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const check = async () => {
-      try {
-        console.log("🔍 USER:", JSON.stringify(user));
-        console.log("🔍 FONCTIONNALITE:", fonctionnalite);
-
-        if (user?.role === 'admin') {
-          console.log("🔍 Admin détecté - accès total");
-          setHasAccess(true);
-          setChecking(false);
-          return;
-        }
-
-        if (fonctionnalite) {
-          console.log("🔍 Vérification permissions pour:", fonctionnalite);
-          const perms = await apiGet(`/utilisateurs/${user?.id || 0}/permissions`);
-          console.log("🔍 PERMS reçues:", perms.length, "lignes");
-          console.log("🔍 PERMS:", JSON.stringify(perms));
-          const p = perms.find((x: any) => x.fonctionnalite === fonctionnalite);
-          console.log("🔍 Permission trouvée:", p);
-          console.log("🔍 p?.lecture:", p?.lecture, "| p?.lecture === 1:", p?.lecture === 1);
-          setHasAccess(p?.lecture === 1 || p?.lecture === true);
-        } else {
-          console.log("🔍 Pas de fonctionnalite - accès accordé");
-        }
-      } catch (error) {
-        console.error("❌ Erreur:", error);
-        setHasAccess(false);
-      } finally {
-        setChecking(false);
-      }
-    };
-
-    if (isAuthenticated) {
-      check();
-    } else {
-      setChecking(false);
-    }
-  }, [fonctionnalite, user, isAuthenticated]);
-
+const RouteGuard = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Login />;
-  if (checking) return <LoadingFallback />;
-
-  if (!hasAccess) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2>⛔ Accès non autorisé</h2>
-          <p>Permissions insuffisantes.</p>
-          <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-        </div>
-      </Center>
-    );
-  }
-
-  // ✅ Si fonctionnalite est définie, on se fie aux permissions (pas aux rôles)
-  if (fonctionnalite) {
-    return <>{children}</>;
-  }
-
-  // ✅ Sinon, on vérifie les rôles (compatibilité)
-  if (roles && user && !roles.includes(user.role)) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <h2>⛔ Accès non autorisé</h2>
-          <p>Rôle non autorisé.</p>
-          <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-        </div>
-      </Center>
-    );
-  }
-
   return <>{children}</>;
+};
+
+// ==================== LAYOUT PRINCIPAL ====================
+
+function MainLayout({ children }: { children: React.ReactNode }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Fermer la navbar quand on change de page
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
+  const handleLogout = () => {
+    if (window.confirm("Voulez-vous vous déconnecter ?")) {
+      logout();
+      navigate('/login');
+    }
+  };
+
+  const routeMap: Record<string, string> = {
+    accueil: '/',
+    dashboard: '/',
+    clients: '/clients',
+    'types-mesures': '/types-mesures',
+    articles: '/articles',
+    matieres: '/matieres',
+    'mouvements-stock': '/mouvements-stock',
+    'types-tenues': '/types-tenues',
+    'modeles-tenues': '/modeles-tenues',
+    tailles: '/tailles',
+    couleurs: '/couleurs',
+    textures: '/textures',
+    'categories-matieres': '/categories-matieres',
+    'ListeTypesPrestations': '/ListeTypesPrestations',
+    atelier: '/atelier',
+    ventes: '/ventes',
+    'factures-recus': '/factures-recus',
+    rendezvous: '/rendezvous',
+    'historique-paiements': '/historique-paiements',
+    depenses: '/depenses',
+    bilan: '/bilan',
+    journal: '/journal',
+    employes: '/employes',
+    'prestations-realisees': '/prestations-realisees',
+    salaires: '/salaires',
+    'historiques-salaires': '/historiques-salaires',
+    emprunts: '/emprunts',
+    utilisateurs: '/utilisateurs',
+    'config-serveur': '/config-serveur',
+    'import-export': '/import-export',
+    'export-config': '/export-config',
+    'journal-modifications': '/journal-modifications',
+    aide: '/aide',
+    support: '/support',
+    'export-support': '/export-support',
+    login: '/login',
+  };
+
+  const handleNavigate = (page: string) => {
+    const route = routeMap[page] || page;
+    navigate(route.startsWith('/') ? route : `/${route}`);
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f5f7fa' }}>
+      
+      {/* HEADER AVEC BOUTON HAMBURGER */}
+      <div style={{
+        backgroundColor: '#1b365d',
+        height: '56px',
+        minHeight: '56px',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+      }}>
+        
+        {/* 🔴 BOUTON HAMBURGER */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '28px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '4px',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+        >
+          {isOpen ? '✕' : '☰'}
+        </button>
+
+        <span style={{ color: '#ffd700', fontWeight: 700, fontSize: '18px', marginLeft: '8px' }}>
+          GESTION COUTURE
+        </span>
+
+        {/* Utilisateur connecté : clic → Profil / Mot de passe / Déconnexion */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <MenuUtilisateur onLogout={handleLogout} variante="header" />
+        </div>
+      </div>
+
+      {/* OVERLAY - Fond sombre derrière la navbar */}
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 999,
+          }}
+        />
+      )}
+
+      {/* NAVBAR - S'ouvre/ferme avec animation */}
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        width: '280px',
+        backgroundColor: '#1b365d',
+        zIndex: 1001,
+        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.3s ease-in-out',
+        overflow: 'auto',
+        paddingTop: '56px', // Pour ne pas être sous le header
+        boxShadow: '2px 0 12px rgba(0,0,0,0.3)',
+      }}>
+        <Navbar
+          userRole={user?.role}
+          userName={user?.nom}
+          onLogout={handleLogout}
+          onNavigate={handleNavigate}
+          onClose={() => setIsOpen(false)} // Le CloseButton de Navbar ferme aussi
+        />
+      </div>
+
+      {/* CONTENU PRINCIPAL */}
+      <div style={{
+        marginTop: '56px',
+        flex: 1,
+        overflow: 'auto',
+        padding: '16px',
+        backgroundColor: '#f5f7fa',
+        width: '100%',
+      }}>
+        <Suspense fallback={<LoadingFallback />}>
+          {children}
+        </Suspense>
+        <AssistantIA />
+      </div>
+    </div>
+  );
 }
 
 // ==================== APP AUTHENTIFIÉE ====================
 function AuthenticatedApp() {
-  const { user, logout, isAuthenticated, loading } = useAuth();
-  const navigate = useNavigate();
+  const { isAuthenticated, loading } = useAuth();
 
-  // ✅ TOUS LES HOOKS D'ABORD (avant tout return conditionnel)
-  const [erreurAPI, setErreurAPI] = useState(false);
-  const [verificationFaite, setVerificationFaite] = useState(false);
-  const [] = useState(false);
-
-  // Vérifier la connexion au démarrage
-  useEffect(() => {
-    const verifierConnexion = async () => {
-      try {
-        const url = localStorage.getItem('api_url') || '';
-        console.log('🔍 Vérification connexion à:', url);
-
-        // Ajouter un timeout de 5 secondes
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        const response = await fetch(`${url}/health`, {
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          console.log('✅ Serveur accessible');
-          setErreurAPI(false);
-        } else {
-          console.log('❌ Serveur non accessible');
-          setErreurAPI(true);
-        }
-      } catch (error) {
-        console.error('❌ Erreur de connexion:', error);
-        setErreurAPI(true);
-      } finally {
-        setVerificationFaite(true);
-      }
-    };
-
-    verifierConnexion();
-  }, []);
-
-  useEffect(() => {
-    if (!erreurAPI && verificationFaite) {
-      console.log('✅ API PostgreSQL prête');
-    }
-  }, [erreurAPI, verificationFaite]);
-
-  // ⚠️ LES RETOURS CONDITIONNELS VIENNENT APRÈS TOUS LES HOOKS
   if (loading) return <LoadingFallback />;
   if (!isAuthenticated) return <Login />;
 
-  // Affichage de l'alerte API si erreur
-  if (verificationFaite && erreurAPI) {
-    return (
-      <Center style={{ height: '100vh' }}>
-        <Alert
-          color="red"
-          title="⚠️ Connexion impossible"
-          variant="filled"
-          style={{ maxWidth: 500 }}
-        >
-          <Text>L'application ne parvient pas à contacter le serveur.</Text>
-          <Text mt="sm" fw={500}>Assurez-vous que :</Text>
-          <Text>• Le serveur (ordinateur principal) est allumé</Text>
-          <Text>• Le backend Express est démarré sur le serveur</Text>
-          <Text>• Les deux ordinateurs sont sur le même réseau</Text>
-          <Text>• Le firewall autorise le port 3001</Text>
-
-          <Button
-            mt="md"
-            onClick={() => {
-              console.log('🔧 Navigation vers configuration serveur');
-              // Utiliser window.location pour forcer la navigation
-              window.location.href = '/config-serveur';
-            }}
-            variant="white"
-          >
-            🔧 Configurer le serveur
-          </Button>
-
-          <Button
-            mt="md"
-            onClick={() => {
-              window.location.reload();
-            }}
-            variant="subtle"
-            style={{ marginLeft: '10px' }}
-          >
-            🔄 Réessayer
-          </Button>
-        </Alert>
-      </Center>
-    );
-  }
-
-
-  const handleLogout = () => {
-    const confirmed = globalThis.confirm("Voulez-vous vous déconnecter ?");
-    if (!confirmed) return;
-    logout();
-    navigate('/login');
-  };
-
-  const handleSetPage = (page: string) => {
-    const routeMap: Record<string, string> = {
-      dashboard: '/',
-      clients: '/clients',
-      types_mesures: '/types-mesures',
-      articles: '/articles',
-      matieres: '/matieres',
-      mouvements_stock: '/mouvements-stock',
-      tailles: '/tailles',
-      couleurs: '/couleurs',
-      textures: '/textures',
-      types_tenues: '/types-tenues',
-      categories_matieres: '/categories-matieres',
-      ListeTypesPrestations: '/ListeTypesPrestations',
-      atelier: '/atelier',
-      ventes: '/ventes',
-      factures_recus: '/factures-recus',
-      depenses: '/depenses',
-      bilan: '/bilan',
-      journal: '/journal',
-      employes: '/employes',
-      prestations_realisees: '/prestations-realisees',
-      salaires: '/salaires',
-      emprunts: '/emprunts',
-      utilisateurs: '/utilisateurs',
-      ConfigurationServeur: '/config-serveur',
-      import_export: '/import-export',
-      export_config: '/export-config',
-      journal_modifications: '/journal-modifications',
-      aide: '/aide',
-      support: '/support',
-      SuiviRendezVous: '/SuiviRendezVous',
-      HistoriquePaiements: '/HistoriquePaiements',
-      export_support: '/export-support',
-    };
-    navigate(routeMap[page] || '/');
-  };
-
   return (
-    <AppShell
-      padding="md"
-      navbar={{ width: 280, breakpoint: 'sm' }}
-      styles={{ main: { height: '100%', overflow: 'auto', backgroundColor: '#f5f7fa' } }}
-    >
-      <AppShell.Navbar>
-        <Navbar userRole={user?.role} userName={user?.nom} onLogout={handleLogout} onNavigate={handleSetPage} />
-      </AppShell.Navbar>
-      <AppShell.Main>
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes>
-            {/* DASHBOARD */}
-            <Route path="/" element={
-              <RouteGuard fonctionnalite="dashboard">
-                <Dashboard setPage={handleSetPage} />
-              </RouteGuard>
-            } />
-
-            {/* CLIENTS */}
-            <Route path="/clients" element={
-              <RouteGuard fonctionnalite="clients">
-                <ListeClientsAvecMesures />
-              </RouteGuard>
-            } />
-            <Route path="/types-mesures" element={
-              <RouteGuard fonctionnalite="types_mesures">
-                <ConfigurationMesures />
-              </RouteGuard>
-            } />
-
-            {/* STOCK & INVENTAIRE */}
-            <Route path="/articles" element={
-              <RouteGuard fonctionnalite="articles">
-                <ArticlesManager />
-              </RouteGuard>
-            } />
-            <Route path="/matieres" element={
-              <RouteGuard fonctionnalite="matieres">
-                <MatieresManager />
-              </RouteGuard>
-            } />
-            <Route path="/mouvements-stock" element={
-              <RouteGuard fonctionnalite="mouvements_stock">
-                <MouvementsStock />
-              </RouteGuard>
-            } />
-
-            {/* RÉFÉRENTIELS */}
-            <Route path="/tailles" element={
-              <RouteGuard fonctionnalite="tailles">
-                <TaillesManager />
-              </RouteGuard>
-            } />
-            <Route path="/couleurs" element={
-              <RouteGuard fonctionnalite="couleurs">
-                <CouleursManager />
-              </RouteGuard>
-            } />
-            <Route path="/textures" element={
-              <RouteGuard fonctionnalite="textures">
-                <TexturesManager />
-              </RouteGuard>
-            } />
-            <Route path="/types-tenues" element={
-              <RouteGuard fonctionnalite="types_tenues">
-                <TypesTenuesManager />
-              </RouteGuard>
-            } />
-            <Route path="/modeles-tenues" element={
-              <RouteGuard fonctionnalite="types_tenues">
-                <TypesTenuesManager />
-              </RouteGuard>
-            } />
-            <Route path="/categories-matieres" element={
-              <RouteGuard fonctionnalite="categories_matieres">
-                <CategoriesMatieresManager />
-              </RouteGuard>
-            } />
-            <Route path="/ListeTypesPrestations" element={
-              <RouteGuard fonctionnalite="types_prestations">
-                <ListeTypesPrestations />
-              </RouteGuard>
-            } />
-            <Route path="/atelier" element={
-              <RouteGuard fonctionnalite="atelier">
-                <ParametresAtelier />
-              </RouteGuard>
-            } />
-
-            {/* VENTES */}
-            <Route path="/ventes" element={
-              <RouteGuard fonctionnalite="ventes">
-                <VentesManager />
-              </RouteGuard>
-            } />
-
-            {/* FACTURES & REÇUS */}
-            <Route path="/factures-recus" element={
-              <RouteGuard fonctionnalite="factures_recus">
-                <FacturesRecus />
-              </RouteGuard>
-            } />
-
-            {/* RENDEZ-VOUS */}
-            <Route path="/rendezvous" element={
-              <RouteGuard fonctionnalite="rendezvous">
-                <SuiviRendezVous />
-              </RouteGuard>
-            } />
-
-            <Route path="/historique-paiements" element={
-              <RouteGuard fonctionnalite="historique_paiements">
-                <HistoriquePaiements />
-              </RouteGuard>
-            } />
-
-            {/* FINANCES */}
-            <Route path="/depenses" element={
-              <RouteGuard fonctionnalite="depenses">
-                <ListeDepenses />
-              </RouteGuard>
-            } />
-            <Route path="/bilan" element={
-              <RouteGuard fonctionnalite="bilan">
-                <BilanFinancier />
-              </RouteGuard>
-            } />
-            <Route path="/journal" element={
-              <RouteGuard fonctionnalite="journal">
-                <JournalCaisse />
-              </RouteGuard>
-            } />
-
-            {/* RESSOURCES HUMAINES */}
-            <Route path="/employes" element={
-              <RouteGuard fonctionnalite="employes">
-                <ListeEmployes />
-              </RouteGuard>
-            } />
-            <Route path="/prestations-realisees" element={
-              <RouteGuard fonctionnalite="prestations_realisees">
-                <ListePrestationsRealisees />
-              </RouteGuard>
-            } />
-            <Route path="/salaires" element={
-              <RouteGuard fonctionnalite="salaires">
-                <GestionSalaires />
-              </RouteGuard>
-            } />
-            <Route path="/historiques-salaires" element={
-              <RouteGuard fonctionnalite="historique_salaires">
-                <HistoriqueSalaires />
-              </RouteGuard>
-            } />
-            <Route path="/emprunts" element={
-              <RouteGuard fonctionnalite="emprunts">
-                <ListeEmprunts />
-              </RouteGuard>
-            } />
-
-            {/* PARAMÈTRES */}
-            <Route path="/utilisateurs" element={
-              <RouteGuard fonctionnalite="utilisateurs">
-                <ListeUtilisateurs />
-              </RouteGuard>
-            } />
-            <Route path="/config-serveur" element={
-              <RouteGuard fonctionnalite="config_serveur">
-                <ConfigurationServeur />
-              </RouteGuard>
-            } />
-            <Route path="/import-export" element={
-              <RouteGuard fonctionnalite="import_export">
-                <ImportClientsExcel />
-              </RouteGuard>
-            } />
-            <Route path="/export-config" element={
-              <RouteGuard fonctionnalite="import_export">
-                <ExportImportConfiguration />
-              </RouteGuard>
-            } />
-
-            <Route path="/journal-modifications" element={
-              <RouteGuard fonctionnalite="journal_modifications">
-                <JournalModifications />
-              </RouteGuard>
-            } />
-
-            {/* SUPPORT */}
-            <Route path="/aide" element={
-              <RouteGuard fonctionnalite="aide">
-                <GuideUtilisation />
-              </RouteGuard>
-            } />
-            <Route path="/support" element={
-              <RouteGuard fonctionnalite="support">
-                <SupportTechnique />
-              </RouteGuard>
-            } />
-            <Route path="/export-support" element={
-              <RouteGuard fonctionnalite="export_support">
-                <ExportSupport />
-              </RouteGuard>
-            } />
-
-            {/* 404 */}
-            <Route path="*" element={
-              <Center style={{ height: '50vh' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <h2>🔍 404 - Page non trouvée</h2>
-                  <p>La page que vous recherchez n'existe pas.</p>
-                  <Button onClick={() => navigate('/')} mt="md">Retour au Dashboard</Button>
-                </div>
-              </Center>
-            } />
-          </Routes>
-        </Suspense>
-        <AssistantIA />
-      </AppShell.Main>
-    </AppShell>
+    <MainLayout>
+      <Routes>
+        <Route path="/" element={<RouteGuard><Dashboard setPage={() => {}} /></RouteGuard>} />
+        <Route path="/clients" element={<RouteGuard><ListeClientsAvecMesures /></RouteGuard>} />
+        <Route path="/types-mesures" element={<RouteGuard><ConfigurationMesures /></RouteGuard>} />
+        <Route path="/articles" element={<RouteGuard><ArticlesManager /></RouteGuard>} />
+        <Route path="/matieres" element={<RouteGuard><MatieresManager /></RouteGuard>} />
+        <Route path="/mouvements-stock" element={<RouteGuard><MouvementsStock /></RouteGuard>} />
+        <Route path="/types-tenues" element={<RouteGuard><TypesTenuesManager /></RouteGuard>} />
+        <Route path="/modeles-tenues" element={<RouteGuard><TypesTenuesManager /></RouteGuard>} />
+        <Route path="/tailles" element={<RouteGuard><TaillesManager /></RouteGuard>} />
+        <Route path="/couleurs" element={<RouteGuard><CouleursManager /></RouteGuard>} />
+        <Route path="/textures" element={<RouteGuard><TexturesManager /></RouteGuard>} />
+        <Route path="/categories-matieres" element={<RouteGuard><CategoriesMatieresManager /></RouteGuard>} />
+        <Route path="/ListeTypesPrestations" element={<RouteGuard><ListeTypesPrestations /></RouteGuard>} />
+        <Route path="/atelier" element={<RouteGuard><ParametresAtelier /></RouteGuard>} />
+        <Route path="/ventes" element={<RouteGuard><VentesManager /></RouteGuard>} />
+        <Route path="/factures-recus" element={<RouteGuard><FacturesRecus /></RouteGuard>} />
+        <Route path="/rendezvous" element={<RouteGuard><SuiviRendezVous /></RouteGuard>} />
+        <Route path="/historique-paiements" element={<RouteGuard><HistoriquePaiements /></RouteGuard>} />
+        <Route path="/depenses" element={<RouteGuard><ListeDepenses /></RouteGuard>} />
+        <Route path="/bilan" element={<RouteGuard><BilanFinancier /></RouteGuard>} />
+        <Route path="/journal" element={<RouteGuard><JournalCaisse /></RouteGuard>} />
+        <Route path="/employes" element={<RouteGuard><ListeEmployes /></RouteGuard>} />
+        <Route path="/prestations-realisees" element={<RouteGuard><ListePrestationsRealisees /></RouteGuard>} />
+        <Route path="/salaires" element={<RouteGuard><GestionSalaires /></RouteGuard>} />
+        <Route path="/historiques-salaires" element={<RouteGuard><HistoriqueSalaires /></RouteGuard>} />
+        <Route path="/emprunts" element={<RouteGuard><ListeEmprunts /></RouteGuard>} />
+        <Route path="/utilisateurs" element={<RouteGuard><ListeUtilisateurs /></RouteGuard>} />
+        <Route path="/config-serveur" element={<RouteGuard><ConfigurationServeur /></RouteGuard>} />
+        <Route path="/import-export" element={<RouteGuard><ImportClientsExcel /></RouteGuard>} />
+        <Route path="/export-config" element={<RouteGuard><ExportImportConfiguration /></RouteGuard>} />
+        <Route path="/journal-modifications" element={<RouteGuard><JournalModifications /></RouteGuard>} />
+        <Route path="/aide" element={<RouteGuard><GuideUtilisation /></RouteGuard>} />
+        <Route path="/support" element={<RouteGuard><SupportTechnique /></RouteGuard>} />
+        <Route path="/export-support" element={<RouteGuard><ExportSupport /></RouteGuard>} />
+        <Route path="*" element={<RouteGuard><Center style={{ height: '50vh' }}><div><h2>🔍 404</h2><Button onClick={() => window.location.href = '/'}>Accueil</Button></div></Center></RouteGuard>} />
+      </Routes>
+    </MainLayout>
   );
 }
+
 // ==================== QUERY CLIENT ====================
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -539,29 +297,65 @@ const queryClient = new QueryClient({
   },
 });
 
-// ==================== APP PRINCIPALE ====================
+// ==================== SERVER STATUS ====================
+type ServerStatus = 'checking' | 'ready' | 'error';
+
+const ServerStartupScreen = ({ attempt }: { attempt: number }) => (
+  <Center style={{ height: '100vh', backgroundColor: '#f5f7fa' }}>
+    <Stack align="center" gap="md" p="xl">
+      <Loader size="xl" />
+      <Text fw={600} size="lg" c="#1b365d">Démarrage...</Text>
+      <Text size="sm" c="dimmed">Tentative {attempt}</Text>
+    </Stack>
+  </Center>
+);
+
+const ServerErrorScreen = ({ onRetry, onManualConfig }: { onRetry: () => void; onManualConfig: () => void }) => (
+  <Center style={{ height: '100vh', backgroundColor: '#f5f7fa', padding: 16 }}>
+    <Alert color="red" title="⚠️ Serveur introuvable" style={{ maxWidth: 500 }}>
+      <Text size="sm">Le serveur ne répond pas.</Text>
+      <Group mt="md">
+        <Button onClick={onRetry}>🔄 Réessayer</Button>
+        <Button variant="subtle" onClick={onManualConfig}>🔧 Configurer</Button>
+      </Group>
+    </Alert>
+  </Center>
+);
+
+// ==================== APP ====================
 function App() {
-  const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<ServerStatus>('checking');
+  const [attempt, setAttempt] = useState(0);
+  const [manualConfig, setManualConfig] = useState(false);
 
-  useEffect(() => {
-    const url = localStorage.getItem('api_url');
-    setIsConfigured(!!url);
-  }, []);
+  const detecterServeur = async () => {
+    setStatus('checking');
+    setAttempt(0);
+    const base = await resolveApiBase({
+      maxWaitMs: 45000,
+      onProgress: (a) => setAttempt(a),
+    });
+    setStatus(base ? 'ready' : 'error');
+  };
 
-  if (isConfigured === null) {
-    return <LoadingFallback />;
+  useEffect(() => { detecterServeur(); }, []);
+
+  if (status === 'checking') {
+    return <MantineProvider theme={theme}><ServerStartupScreen attempt={attempt} /></MantineProvider>;
   }
 
-  if (!isConfigured) {
+  if (status === 'error') {
     return (
       <QueryClientProvider client={queryClient}>
-        <MantineProvider theme={theme} defaultColorScheme="light">
-          <Notifications position="top-right" zIndex={1000} />
-          <BrowserRouter>
-            <Routes>
-              <Route path="*" element={<ConfigurationServeur />} />
-            </Routes>
-          </BrowserRouter>
+        <MantineProvider theme={theme}>
+          <Notifications />
+          {manualConfig ? (
+            <BrowserRouter>
+              <Routes><Route path="*" element={<Suspense><ConfigurationServeur /></Suspense>} /></Routes>
+            </BrowserRouter>
+          ) : (
+            <ServerErrorScreen onRetry={detecterServeur} onManualConfig={() => setManualConfig(true)} />
+          )}
         </MantineProvider>
       </QueryClientProvider>
     );
@@ -569,8 +363,8 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="light">
-        <Notifications position="top-right" zIndex={1000} />
+      <MantineProvider theme={theme}>
+        <Notifications />
         <BrowserRouter>
           <AuthProvider>
             <AuthenticatedApp />

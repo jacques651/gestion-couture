@@ -781,7 +781,7 @@ const MatieresManager: React.FC = () => {
                 </Stack>
 
                 <Grid>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <Select
                       label="Unité"
                       data={[
@@ -796,7 +796,7 @@ const MatieresManager: React.FC = () => {
                       size="md" radius="md"
                     />
                   </Grid.Col>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <TextInput
                       label="Emplacement"
                       placeholder="Rayon, étagère..."
@@ -808,7 +808,7 @@ const MatieresManager: React.FC = () => {
                 </Grid>
 
                 <Grid>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <NumberInput
                       label="Prix d'achat (FCFA)" placeholder="0"
                       value={formData.prix_achat}
@@ -816,7 +816,7 @@ const MatieresManager: React.FC = () => {
                       size="md" radius="md" leftSection={<Text size="sm" fw={600}>FCFA</Text>} thousandSeparator=" " hideControls
                     />
                   </Grid.Col>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <NumberInput
                       label="Stock initial"
                       value={formData.stock_actuel}
@@ -827,7 +827,7 @@ const MatieresManager: React.FC = () => {
                 </Grid>
 
                 <Grid>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <NumberInput
                       label="Seuil d'alerte" description="Alerte si stock ≤ ce seuil"
                       value={formData.seuil_alerte}
@@ -835,7 +835,7 @@ const MatieresManager: React.FC = () => {
                       size="md" radius="md" hideControls
                     />
                   </Grid.Col>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <TextInput
                       label="Référence fournisseur" placeholder="Réf. fournisseur"
                       value={formData.reference_fournisseur}

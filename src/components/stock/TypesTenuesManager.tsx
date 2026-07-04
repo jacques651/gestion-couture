@@ -341,19 +341,19 @@ const TypesTenuesManager: React.FC = () => {
                 <TextInput label="Désignation" placeholder="Ex: Robe chemisier..." value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} required withAsterisk size="md" radius="md" />
 
                 <Grid>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <Select label="Catégorie" placeholder="Sélectionnez" data={[{ value: 'femme', label: 'Femme' }, { value: 'homme', label: 'Homme' }, { value: 'enfant', label: 'Enfant' }, { value: 'accessoire', label: 'Accessoire' }]} value={formData.categorie} onChange={handleCategorieChange} size="md" radius="md" required withAsterisk />
                   </Grid.Col>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <TextInput label="Code type (auto)" value={formData.code_type || 'Sera généré (T-01, T-02...)'} size="md" radius="md" disabled description="Généré automatiquement" />
                   </Grid.Col>
                 </Grid>
 
                 <Grid>
-                  <Grid.Col span={7}>
+                  <Grid.Col span={{ base: 12, sm: 7 }}>
                     <Textarea label="Description" placeholder="Description détaillée..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={4} size="md" radius="md" />
                   </Grid.Col>
-                  <Grid.Col span={5}>
+                  <Grid.Col span={{ base: 12, sm: 5 }}>
                     <Stack gap={4}>
                       <Text size="sm" fw={500}>Image</Text>
                       {imagePreview ? (

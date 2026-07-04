@@ -1098,7 +1098,7 @@ const submitVenteAvecPaiement = async (montantRegle: number, mode: string) => {
               <Paper p="md" radius="md" withBorder>
                 <Group justify="space-between" mb="xs"><Text fw={600}>Total</Text><Text fw={700} size="lg" c="blue">{getEditTotal().toLocaleString()} FCFA</Text></Group>
                 <Divider my="xs" />
-                <SimpleGrid cols={2} spacing="md">
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                   <NumberInput label="Montant réglé" value={editVenteData.montant_regle} onChange={(val) => setEditVenteData({ ...editVenteData, montant_regle: val || 0 })} min={0} step={1000} size="sm" radius="md" />
                   <Box><Text size="xs" fw={500} mb={4}>Reste à payer</Text><Text fw={600} c="red">{(getEditTotal() - (editVenteData.montant_regle || 0)).toLocaleString()} FCFA</Text></Box>
                 </SimpleGrid>
@@ -1139,11 +1139,11 @@ const submitVenteAvecPaiement = async (montantRegle: number, mode: string) => {
           {venteType === 'commande' ? (
             <Stack gap="xs">
               <Select label="Sélectionnez le client" placeholder="Rechercher..." data={clientOptions} value={clientId} onChange={setClientId} searchable clearable size="sm" radius="md" leftSection={<IconUser size={16} />} />
-              <SimpleGrid cols={2} spacing="xs"><TextInput label="Nom complet" value={clientNom} onChange={(e) => setClientNom(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone" value={clientTelephone} size="sm" radius="md" readOnly /></SimpleGrid>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs"><TextInput label="Nom complet" value={clientNom} onChange={(e) => setClientNom(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone" value={clientTelephone} size="sm" radius="md" readOnly /></SimpleGrid>
               <Button variant="subtle" size="compact-xs" leftSection={<IconPlus size={12} />} onClick={() => setShowFormulaireClient(true)}>Nouveau client</Button>
             </Stack>
           ) : (
-            <SimpleGrid cols={2} spacing="xs"><TextInput label="Nom client (optionnel)" value={clientNomSimple} onChange={(e) => setClientNomSimple(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone (optionnel)" value={clientTelephoneSimple} onChange={(e) => setClientTelephoneSimple(e.target.value)} size="sm" radius="md" /></SimpleGrid>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs"><TextInput label="Nom client (optionnel)" value={clientNomSimple} onChange={(e) => setClientNomSimple(e.target.value)} size="sm" radius="md" /><TextInput label="Téléphone (optionnel)" value={clientTelephoneSimple} onChange={(e) => setClientTelephoneSimple(e.target.value)} size="sm" radius="md" /></SimpleGrid>
           )}
         </Card>
 

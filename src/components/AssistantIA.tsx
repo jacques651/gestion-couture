@@ -1,5 +1,6 @@
 // src/components/AssistantIA.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Stack,
   Card,
@@ -14,6 +15,7 @@ import {
   Popover,
   Badge,
   ActionIcon,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconRobot,
@@ -23,6 +25,7 @@ import {
   IconVolume,
   IconTrash,
   IconMessageCircle,
+  IconArrowRight,
 } from '@tabler/icons-react';
 
 interface Message {
@@ -30,6 +33,9 @@ interface Message {
   text: string;
   sender: 'user' | 'assistant';
   timestamp: Date;
+  /** Lien d'action proposé avec le message (navigation) */
+  link?: string;
+  linkLabel?: string;
 }
 
 const ASSISTANT_KNOWLEDGE: Record<string, { title: string; content: string; link?: string; linkLabel?: string }> = {
@@ -306,7 +312,7 @@ const INTENTS: { keywords: string[]; responseKey: string }[] = [
 
 const generateResponse = (question: string): { title: string; content: string; link?: string; linkLabel?: string } | null => {
   const lowerQuestion = question.toLowerCase();
-  
+
   for (const intent of INTENTS) {
     for (const keyword of intent.keywords) {
       if (lowerQuestion.includes(keyword.toLowerCase())) {
@@ -314,22 +320,107 @@ const generateResponse = (question: string): { title: string; content: string; l
       }
     }
   }
-  
+
   return null;
 };
 
+// ============================================================
+// 🎮 MOTEUR DE COMMANDES : l'assistant CONTRÔLE l'application
+// "Ouvre-moi la fonctionnalité client", "va aux ventes",
+// "affiche le bilan", "montre-moi le stock"... → navigation directe
+// ============================================================
+
+/** Normalise le texte : minuscules + sans accents */
+const normaliser = (texte: string): string =>
+  texte.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** Verbes qui déclenchent une ACTION (et non une question d'aide) */
+const VERBES_ACTION = [
+  'ouvre', 'ouvrir', 'ouvres',
+  'va ', 'vas ', 'aller', 'allez',
+  'affiche', 'afficher', 'affiches',
+  'montre', 'montrer', 'montres',
+  'accede', 'acceder',
+  'navigue', 'naviguer',
+  'lance', 'lancer',
+  'amene', 'amener', 'emmene',
+  'fais moi voir', 'fait moi voir',
+  'je veux voir', 'je veux aller',
+];
+
+/** Cibles de navigation : mots-clés (normalisés) → route + libellé */
+const CIBLES_NAVIGATION: { keywords: string[]; path: string; label: string }[] = [
+  { keywords: ['tableau de bord', 'dashboard', 'accueil'], path: '/', label: 'le Tableau de bord' },
+  { keywords: ['type de mesure', 'types de mesures', 'configuration mesure'], path: '/types-mesures', label: 'les Types de mesures' },
+  { keywords: ['client'], path: '/clients', label: 'la Liste des clients' },
+  { keywords: ['historique des paiements', 'historique paiement', 'paiement'], path: '/historique-paiements', label: "l'Historique des paiements" },
+  { keywords: ['facture', 'recu', 'reçu'], path: '/factures-recus', label: 'les Factures & Reçus' },
+  { keywords: ['rendez-vous', 'rendez vous', 'rendezvous', 'rdv'], path: '/rendezvous', label: 'les Rendez-vous' },
+  { keywords: ['vente'], path: '/ventes', label: 'la Gestion des ventes' },
+  { keywords: ['mouvement de stock', 'mouvements de stock', 'mouvement stock'], path: '/mouvements-stock', label: 'les Mouvements de stock' },
+  { keywords: ['matiere premiere', 'matieres premieres', 'matiere'], path: '/matieres', label: 'les Matières premières' },
+  { keywords: ['article', 'inventaire', 'stock'], path: '/articles', label: "l'Inventaire des tenues" },
+  { keywords: ['taille'], path: '/tailles', label: 'les Tailles' },
+  { keywords: ['couleur'], path: '/couleurs', label: 'les Couleurs' },
+  { keywords: ['texture'], path: '/textures', label: 'les Textures' },
+  { keywords: ['type de tenue', 'types de tenues', 'modele de tenue', 'modeles de tenues', 'tenue'], path: '/types-tenues', label: 'les Types de tenues' },
+  { keywords: ['categorie matiere', 'categories matieres', 'categorie'], path: '/categories-matieres', label: 'les Catégories de matières' },
+  { keywords: ['prestation realisee', 'prestations realisees'], path: '/prestations-realisees', label: 'les Prestations réalisées' },
+  { keywords: ['type de prestation', 'types de prestations', 'prestation'], path: '/ListeTypesPrestations', label: 'les Types de prestations' },
+  { keywords: ['atelier', 'configuration atelier'], path: '/atelier', label: "la Configuration de l'atelier" },
+  { keywords: ['depense'], path: '/depenses', label: 'les Dépenses' },
+  { keywords: ['bilan'], path: '/bilan', label: 'le Bilan financier' },
+  { keywords: ['journal de caisse', 'journal caisse', 'caisse'], path: '/journal', label: 'le Journal de caisse' },
+  { keywords: ['journal des modifications', 'journal modification'], path: '/journal-modifications', label: 'le Journal des modifications' },
+  { keywords: ['employe'], path: '/employes', label: 'les Employés' },
+  { keywords: ['historique salaire', 'historiques salaires'], path: '/historiques-salaires', label: "l'Historique des salaires" },
+  { keywords: ['salaire'], path: '/salaires', label: 'la Gestion des salaires' },
+  { keywords: ['emprunt'], path: '/emprunts', label: 'les Emprunts' },
+  { keywords: ['utilisateur'], path: '/utilisateurs', label: 'les Utilisateurs' },
+  { keywords: ['configuration serveur', 'config serveur', 'serveur', 'reseau'], path: '/config-serveur', label: 'la Configuration serveur' },
+  { keywords: ['import', 'export excel', 'excel'], path: '/import-export', label: "l'Import/Export" },
+  { keywords: ['guide', 'aide', 'documentation', 'manuel'], path: '/aide', label: "le Guide d'utilisation" },
+  { keywords: ['support technique', 'support'], path: '/support', label: 'le Support technique' },
+];
+
+interface CommandeDetectee {
+  path: string;
+  label: string;
+}
+
+/** Détecte une commande de navigation dans la phrase de l'utilisateur */
+const detecterCommande = (texte: string): CommandeDetectee | null => {
+  const normalise = normaliser(texte);
+
+  const contientVerbe = VERBES_ACTION.some((v) => normalise.includes(v));
+  if (!contientVerbe) return null;
+
+  // Chercher la cible la plus spécifique (mot-clé le plus long en premier)
+  let meilleure: { cible: CommandeDetectee; longueur: number } | null = null;
+  for (const cible of CIBLES_NAVIGATION) {
+    for (const kw of cible.keywords) {
+      if (normalise.includes(kw) && (!meilleure || kw.length > meilleure.longueur)) {
+        meilleure = { cible: { path: cible.path, label: cible.label }, longueur: kw.length };
+      }
+    }
+  }
+  return meilleure?.cible || null;
+};
+
 const AssistantIA: React.FC = () => {
+  const navigate = useNavigate();
   const [opened, setOpened] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "👋 Bonjour ! Je suis votre assistant Gestion Couture. Je peux vous aider avec :\n\n• 📝 Commandes sur mesure\n• 👕 Ventes prêt-à-porter\n• 📦 Gestion du stock\n• 👥 Clients et mesures\n• 💰 Finances et salaires\n• ⚙️ Configuration\n\nPosez-moi votre question !",
+      text: "👋 Bonjour ! Je suis votre assistant Gestion Couture. Je peux :\n\n🎮 CONTRÔLER l'application — dites par exemple :\n• « Ouvre-moi la fonctionnalité client »\n• « Va aux ventes »\n• « Affiche le bilan »\n\n💬 VOUS GUIDER — demandez :\n• « Comment créer une commande ? »\n• « Comment payer un salaire ? »\n\n🎤 Utilisez le micro pour me parler en vocal !",
       sender: 'assistant',
       timestamp: new Date(),
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollViewport = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -341,12 +432,29 @@ const AssistantIA: React.FC = () => {
     }
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!inputValue.trim()) return;
+  const speakResponse = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text.replace(/\*\*/g, '').replace(/👉/g, '').replace(/[•🎮💬🎤✅📂]/g, ''));
+      utterance.lang = 'fr-FR';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  /**
+   * Envoi d'un message.
+   * @param texteDirect - texte explicite (indispensable pour le vocal : ne pas
+   *   dépendre de inputValue qui n'est pas encore à jour dans la closure)
+   * @param depuisVocal - si true, la réponse est aussi lue à voix haute
+   */
+  const sendMessage = (texteDirect?: string, depuisVocal = false) => {
+    const texte = (texteDirect ?? inputValue).trim();
+    if (!texte) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputValue,
+      text: texte,
       sender: 'user',
       timestamp: new Date(),
     };
@@ -355,20 +463,45 @@ const AssistantIA: React.FC = () => {
     setIsTyping(true);
 
     setTimeout(() => {
-      const response = generateResponse(userMessage.text);
-      const responseText = response 
-        ? `**${response.title}**\n\n${response.content}${response.link ? `\n\n👉 ${response.linkLabel || 'Accéder'}` : ''}`
-        : "Je n'ai pas d'information précise sur ce sujet. Essayez de reformuler votre question avec des termes comme : commande, client, stock, salaire, facture, mesure, etc.\n\nVous pouvez aussi consulter le guide d'utilisation dans SUPPORT → Guide d'utilisation.";
-      
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: responseText,
-        sender: 'assistant',
-        timestamp: new Date(),
-      };
+      let assistantMessage: Message;
+
+      // 1️⃣ COMMANDE D'ACTION ? → exécuter (navigation)
+      const commande = detecterCommande(texte);
+      if (commande) {
+        assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          text: `✅ C'est fait ! J'ouvre ${commande.label}.`,
+          sender: 'assistant',
+          timestamp: new Date(),
+          link: commande.path,
+          linkLabel: `Rouvrir ${commande.label}`,
+        };
+        navigate(commande.path);
+      } else {
+        // 2️⃣ Sinon : réponse d'aide (base de connaissances)
+        const response = generateResponse(texte);
+        const responseText = response
+          ? `**${response.title}**\n\n${response.content}`
+          : "Je n'ai pas compris. Vous pouvez :\n\n• Me donner un ordre : « ouvre les clients », « va aux ventes », « affiche le bilan »...\n• Me poser une question : « comment créer une commande ? »\n\nOu consulter le guide dans SUPPORT → Guide d'utilisation.";
+
+        assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          text: responseText,
+          sender: 'assistant',
+          timestamp: new Date(),
+          link: response?.link,
+          linkLabel: response?.linkLabel,
+        };
+      }
+
       setMessages(prev => [...prev, assistantMessage]);
       setIsTyping(false);
-    }, 500);
+
+      // 🔊 Si la demande était vocale, répondre en vocal
+      if (depuisVocal) {
+        speakResponse(assistantMessage.text);
+      }
+    }, 400);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -387,35 +520,45 @@ const AssistantIA: React.FC = () => {
     }]);
   };
 
-  const speakResponse = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text.replace(/\*\*/g, '').replace(/👉/g, ''));
-      utterance.lang = 'fr-FR';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
   const startListening = () => {
-    if ('webkitSpeechRecognition' in window) {
-      const recognition = new (window as any).webkitSpeechRecognition();
+    const SpeechRecognitionAPI =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionAPI) {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        text: "🎤 La reconnaissance vocale n'est pas disponible dans cet environnement. Utilisez le navigateur Chrome (téléphone ou PC) pour me parler en vocal, ou tapez votre commande.",
+        sender: 'assistant',
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionAPI();
       recognition.lang = 'fr-FR';
       recognition.continuous = false;
-      recognition.onstart = () => {};
+      recognition.interimResults = false;
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
       recognition.onresult = (event: any) => {
-        setInputValue(event.results[0][0].transcript);
-        setTimeout(() => sendMessage(), 100);
+        const transcript = event.results[0][0].transcript;
+        setIsListening(false);
+        // ✅ Passer le texte DIRECTEMENT (corrige le bug de closure qui envoyait un message vide)
+        sendMessage(transcript, true);
       };
       recognition.start();
+    } catch {
+      setIsListening(false);
     }
   };
 
   const suggestions = [
+    "Ouvre les clients",
+    "Va aux ventes",
+    "Affiche le bilan",
     "Comment créer une commande ?",
-    "Comment gérer le stock ?",
-    "Comment payer un salaire ?",
-    "Comment ajouter un client ?",
   ];
 
   return (
@@ -468,6 +611,17 @@ const AssistantIA: React.FC = () => {
                     )}
                     <Paper p="sm" radius="md" bg={message.sender === 'user' ? '#1b365d' : 'gray.1'} style={{ maxWidth: '85%', whiteSpace: 'pre-wrap' }}>
                       <Text size="sm" c={message.sender === 'user' ? 'white' : 'dark'}>{message.text}</Text>
+                      {message.sender === 'assistant' && message.link && (
+                        <Button
+                          size="xs"
+                          mt={8}
+                          variant="light"
+                          rightSection={<IconArrowRight size={12} />}
+                          onClick={() => navigate(message.link!)}
+                        >
+                          {message.linkLabel || 'Accéder'}
+                        </Button>
+                      )}
                       <Text size="10px" c={message.sender === 'user' ? 'blue.1' : 'dimmed'} mt={4}>
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
@@ -501,7 +655,7 @@ const AssistantIA: React.FC = () => {
                 <Group gap="xs" wrap="wrap">
                   {suggestions.map((s, i) => (
                     <Badge key={i} variant="light" color="blue" style={{ cursor: 'pointer' }}
-                      onClick={() => { setInputValue(s); setTimeout(() => sendMessage(), 100); }}>
+                      onClick={() => sendMessage(s)}>
                       {s}
                     </Badge>
                   ))}
@@ -521,10 +675,18 @@ const AssistantIA: React.FC = () => {
                   radius="xl"
                   disabled={isTyping}
                 />
-                <ActionIcon variant="subtle" onClick={startListening} disabled={isTyping}>
-                  <IconMicrophone size={18} />
-                </ActionIcon>
-                <ActionIcon variant="filled" color="#1b365d" onClick={sendMessage} disabled={isTyping || !inputValue.trim()} radius="xl">
+                <Tooltip label={isListening ? 'Je vous écoute…' : 'Commande vocale'}>
+                  <ActionIcon
+                    variant={isListening ? 'filled' : 'subtle'}
+                    color={isListening ? 'red' : undefined}
+                    onClick={startListening}
+                    disabled={isTyping}
+                    style={isListening ? { animation: 'pulse 1s infinite' } : undefined}
+                  >
+                    <IconMicrophone size={18} />
+                  </ActionIcon>
+                </Tooltip>
+                <ActionIcon variant="filled" color="#1b365d" onClick={() => sendMessage()} disabled={isTyping || !inputValue.trim()} radius="xl">
                   <IconSend size={16} />
                 </ActionIcon>
               </Group>

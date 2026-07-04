@@ -785,7 +785,7 @@ const ArticlesManager: React.FC = () => {
               <Stack gap="md">
                 {/* Type de tenue + Image */}
                 <Grid>
-                  <Grid.Col span={8}>
+                  <Grid.Col span={{ base: 12, md: 8 }}>
                     <Select
                       label="Type de tenue"
                       placeholder="Sélectionnez un type de tenue"
@@ -804,7 +804,7 @@ const ArticlesManager: React.FC = () => {
                       error={!formData.type_tenue_id && formSubmitted ? "Le type de tenue est requis" : null}
                     />
                   </Grid.Col>
-                  <Grid.Col span={4}>
+                  <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
                     <Stack gap={4}>
                       <Text size="sm" fw={500}>Modèle (image)</Text>
                       {formData.image_url ? (
@@ -868,7 +868,7 @@ const ArticlesManager: React.FC = () => {
 
                 {/* Taille + Couleur + Texture */}
                 <Grid>
-                  <Grid.Col span={4}>
+                  <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
                     <Select
                       label="Taille"
                       placeholder="Sélectionnez"
@@ -886,7 +886,7 @@ const ArticlesManager: React.FC = () => {
                       clearable
                     />
                   </Grid.Col>
-                  <Grid.Col span={4}>
+                  <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
                     <Select
                       label="Couleur (optionnelle)"
                       placeholder="Sélectionnez"
@@ -919,7 +919,7 @@ const ArticlesManager: React.FC = () => {
                       }}
                     />
                   </Grid.Col>
-                  <Grid.Col span={4}>
+                  <Grid.Col span={{ base: 12, sm: 6, md: 4 }}>
                     <Stack gap={4}>
                       <Text size="sm" fw={500}>Texture (optionnelle)</Text>
                       <Group align="flex-end" gap="xs">
@@ -962,7 +962,7 @@ const ArticlesManager: React.FC = () => {
 
                 {/* Prix */}
                 <Grid>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <NumberInput
                       label="Prix d'achat (FCFA)"
                       placeholder="0"
@@ -975,7 +975,7 @@ const ArticlesManager: React.FC = () => {
                       step={100}
                     />
                   </Grid.Col>
-                  <Grid.Col span={6}>
+                  <Grid.Col span={{ base: 12, sm: 6 }}>
                     <NumberInput
                       label="Prix de vente (FCFA)"
                       placeholder="0"
@@ -994,7 +994,7 @@ const ArticlesManager: React.FC = () => {
 
                 {/* Stock + Seuil + Emplacement + Code barre */}
                 <Grid>
-                  <Grid.Col span={3}>
+                  <Grid.Col span={{ base: 6, sm: 3 }}>
                     <NumberInput
                       label="Stock"
                       placeholder="0"
@@ -1005,7 +1005,7 @@ const ArticlesManager: React.FC = () => {
                       min={0}
                     />
                   </Grid.Col>
-                  <Grid.Col span={3}>
+                  <Grid.Col span={{ base: 6, sm: 3 }}>
                     <NumberInput
                       label="Seuil alerte"
                       placeholder="5"
@@ -1016,7 +1016,7 @@ const ArticlesManager: React.FC = () => {
                       min={0}
                     />
                   </Grid.Col>
-                  <Grid.Col span={3}>
+                  <Grid.Col span={{ base: 6, sm: 3 }}>
                     <TextInput
                       label="Emplacement"
                       placeholder="Ex: Étagère A"
@@ -1026,7 +1026,7 @@ const ArticlesManager: React.FC = () => {
                       radius="md"
                     />
                   </Grid.Col>
-                  <Grid.Col span={3}>
+                  <Grid.Col span={{ base: 6, sm: 3 }}>
                     <TextInput
                       label="Code barre"
                       placeholder="1234567890"

@@ -572,7 +572,7 @@ const JournalModifications: React.FC = () => {
 
           <Paper p="md" withBorder bg="yellow.0">
             <Text fw={600} size="sm" mb="xs">🎯 Actions enregistrées</Text>
-            <SimpleGrid cols={2} spacing="xs">
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
               <Group gap="xs"><Badge color="green">CREATE</Badge><Text size="xs">Création</Text></Group>
               <Group gap="xs"><Badge color="orange">UPDATE</Badge><Text size="xs">Modification</Text></Group>
               <Group gap="xs"><Badge color="red">DELETE</Badge><Text size="xs">Suppression</Text></Group>

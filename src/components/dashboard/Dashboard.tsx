@@ -19,7 +19,7 @@ import { apiGet } from '../../services/api';
 type PageKey =
   | 'dashboard' | 'clients' | 'ventes' | 'depenses' | 'salaires'
   | 'journal_caisse' | 'stock_global' | 'matieres' | 'articles' | 'modeles'
-  | 'factures-recus' | 'mouvements_stock';
+  | 'factures-recus' | 'mouvements_stock' | 'bilan' | 'journal' | 'historique_paiements';
 
 interface DashboardProps {
   setPage?: (page: PageKey) => void;
@@ -27,7 +27,7 @@ interface DashboardProps {
 
 const formatCurrency = (v?: number) => `${(v || 0).toLocaleString('fr-FR')} FCFA`;
 
-const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
+const Dashboard: React.FC<DashboardProps> = () => {
   const { canRead, user } = useAuth();  // canWrite retiré car non utilisé
   const [loading, setLoading] = useState(true);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
@@ -383,13 +383,28 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
       setLoading(false);
     }
   };
+  // ✅ Routes réelles de chaque page (navigation directe, fiable)
+  const pageRoutes: Record<PageKey, string> = {
+    dashboard: '/',
+    clients: '/clients',
+    ventes: '/ventes',
+    depenses: '/depenses',
+    salaires: '/salaires',
+    journal_caisse: '/journal',
+    stock_global: '/articles',
+    matieres: '/matieres',
+    articles: '/articles',
+    modeles: '/types-tenues',
+    'factures-recus': '/factures-recus',
+    mouvements_stock: '/mouvements-stock',
+    bilan: '/bilan',
+    journal: '/journal',
+    historique_paiements: '/historique-paiements',
+  };
+
   const handleNavigate = (page: PageKey, requiredPermission: string) => {
     if (canRead(requiredPermission)) {
-      if (setPage) {
-        setPage(page);
-      } else {
-        navigate(`/${page}`);
-      }
+      navigate(pageRoutes[page] || '/');
     } else {
       notifications.show({
         title: 'Accès refusé',
@@ -538,12 +553,21 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
 
           <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
             {[
-              { label: "Chiffre d'affaires", value: stats.chiffreAffaires, color: 'blue', icon: <IconTrendingUp size={18} />, bg: '#e8f4fd' },
-              { label: 'Encaissements', value: stats.encaissements, color: 'green', icon: <IconCash size={18} />, bg: '#e8f5e9', extra: `${Math.round(tauxRecouvrement)}% du CA` },
-              { label: 'Dépenses', value: stats.depenses, color: 'red', icon: <IconReceipt size={18} />, bg: '#ffebee' },
-              { label: 'Valeur du stock', value: stockTotal, color: 'teal', icon: <IconPackage size={18} />, bg: '#e0f7fa' },
+              { label: "Chiffre d'affaires", value: stats.chiffreAffaires, color: 'blue', icon: <IconTrendingUp size={18} />, bg: '#e8f4fd', page: 'ventes' as PageKey, perm: 'ventes' },
+              { label: 'Encaissements', value: stats.encaissements, color: 'green', icon: <IconCash size={18} />, bg: '#e8f5e9', extra: `${Math.round(tauxRecouvrement)}% du CA`, page: 'historique_paiements' as PageKey, perm: 'historique_paiements' },
+              { label: 'Dépenses', value: stats.depenses, color: 'red', icon: <IconReceipt size={18} />, bg: '#ffebee', page: 'depenses' as PageKey, perm: 'depenses' },
+              { label: 'Valeur du stock', value: stockTotal, color: 'teal', icon: <IconPackage size={18} />, bg: '#e0f7fa', page: 'articles' as PageKey, perm: 'articles' },
             ].map((c, i) => (
-              <Paper key={i} p="md" radius="lg" withBorder bg={c.bg}>
+              <Paper
+                key={i}
+                p="md"
+                radius="lg"
+                withBorder
+                bg={c.bg}
+                className="carte-cliquable"
+                onClick={() => handleNavigate(c.page, c.perm)}
+                title={`Ouvrir : ${c.label}`}
+              >
                 <Group justify="space-between" mb="xs">
                   <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{c.label}</Text>
                   <ThemeIcon size="lg" radius="md" color={c.color} variant="light">{c.icon}</ThemeIcon>
@@ -565,6 +589,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
                     radius="lg"
                     p="sm"
                     bg={link.bg}
+                    className={link.permission ? 'carte-cliquable' : undefined}
                     style={{
                       cursor: link.permission ? 'pointer' : 'not-allowed',
                       opacity: link.permission ? 1 : 0.5,
@@ -591,7 +616,16 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
 
           <Grid>
             <Grid.Col span={{ base: 12, md: 6 }}>
-              <Card withBorder radius="lg" shadow="sm" p="xl" h="100%">
+              <Card
+                withBorder
+                radius="lg"
+                shadow="sm"
+                p="xl"
+                h="100%"
+                className="carte-cliquable"
+                onClick={() => handleNavigate('bilan', 'bilan')}
+                title="Ouvrir le Bilan financier"
+              >
                 <Title order={3} size="h4" mb="md">💰 Situation financière</Title>
                 <Divider mb="md" />
                 <Stack gap="md">
@@ -636,7 +670,17 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
                     </Center>
                   ) : (
                     stockAlertes.slice(0, 10).map((item, i) => (
-                      <Paper key={i} p="md" radius="md" withBorder mb="sm" style={{ borderLeft: `4px solid ${item.stock <= 0 ? '#e03131' : '#f08c00'}`, cursor: 'pointer' }}>
+                      <Paper
+                        key={i}
+                        p="md"
+                        radius="md"
+                        withBorder
+                        mb="sm"
+                        className="carte-cliquable"
+                        style={{ borderLeft: `4px solid ${item.stock <= 0 ? '#e03131' : '#f08c00'}` }}
+                        onClick={() => handleNavigate(item.type === 'matiere' ? 'matieres' : 'articles', item.type === 'matiere' ? 'matieres' : 'articles')}
+                        title={item.type === 'matiere' ? 'Ouvrir les Matières premières' : "Ouvrir l'Inventaire"}
+                      >
                         <Group justify="space-between" mb={6}>
                           <Group gap={8}>
                             <Badge size="sm" variant="filled" color={item.type === 'matiere' ? 'blue' : 'violet'}>
@@ -661,7 +705,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
                           variant="subtle"
                           size="compact-xs"
                           color={item.type === 'matiere' ? 'blue' : 'violet'}
-                          onClick={() => handleNavigate(item.type === 'matiere' ? 'matieres' : 'articles', item.type === 'matiere' ? 'matieres' : 'articles')}
+                          onClick={(e) => { e.stopPropagation(); handleNavigate(item.type === 'matiere' ? 'matieres' : 'articles', item.type === 'matiere' ? 'matieres' : 'articles'); }}
                           rightSection={<IconShoppingBag size={12} />}
                           mt={4}
                         >
@@ -675,7 +719,15 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
             </Grid.Col>
           </Grid>
 
-          <Card withBorder radius="lg" shadow="sm" p="xl">
+          <Card
+            withBorder
+            radius="lg"
+            shadow="sm"
+            p="xl"
+            className="carte-cliquable"
+            onClick={() => handleNavigate('journal', 'journal')}
+            title="Ouvrir le Journal de caisse"
+          >
             <Title order={3} size="h4" mb="md">📋 Dernières transactions</Title>
             <Divider mb="md" />
             <ScrollArea h={300}>
@@ -725,3 +777,4 @@ const Dashboard: React.FC<DashboardProps> = ({ setPage }) => {
 };
 
 export default Dashboard;
+// Cartes cliquables : KPI, accès rapides, alertes stock, situation financière, transactions

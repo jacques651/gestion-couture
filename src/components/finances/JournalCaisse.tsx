@@ -791,7 +791,7 @@ async () => {
                   </Table>
 
                   <Box p="md" bg="#f8f9fa" style={{ borderTop: '1px solid #e9ecef' }}>
-                    <SimpleGrid cols={3} spacing="md">
+                    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
                       <Paper p="sm" radius="md" withBorder bg="white" ta="center">
                         <Text size="xs" c="dimmed">Total entrées</Text>
                         <Text fw={700} c="green">{totalEntrees.toLocaleString()} FCFA</Text>

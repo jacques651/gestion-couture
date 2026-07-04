@@ -32,9 +32,16 @@ import adminRoutes from './routes/admin';
 import financesRoutes from "./routes/finances";
 import stockRoutes from "./routes/stock";
 
-dotenv.config({
-  path: path.join(path.dirname(process.execPath), ".env")
-});
+// Chargement du .env : on cherche au bon endroit selon le contexte
+// - exe empaqueté (pkg)     → à côté de l'exécutable
+// - dev / node dist/server  → dossier backend
+const envCandidates = [
+  path.join(path.dirname(process.execPath), ".env"), // exe pkg
+  path.join(__dirname, "..", ".env"),                // backend/.env (dev et dist)
+  path.join(process.cwd(), ".env"),                  // dossier courant
+];
+const envPath = envCandidates.find(p => fs.existsSync(p));
+dotenv.config(envPath ? { path: envPath } : {});
 
 const app = express();
 
@@ -57,14 +64,75 @@ app.use((req, res, next) => {
 // SERVIR LE FRONTEND STATIQUE
 // ============================================
 
-const publicPath = path.join(__dirname, 'public');
+// Résolution intelligente du dossier frontend :
+// - production (dist/server.js ou exe) → dist/public
+// - développement (ts-node depuis src) → backend/public (sortie de vite build)
+const publicCandidates = [
+  path.join(__dirname, 'public'),        // backend/dist/public (production)
+  path.join(__dirname, '..', 'public'),  // backend/public (sortie vite build)
+];
+const publicPath = publicCandidates.find(p => fs.existsSync(p)) || publicCandidates[0];
+
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
   console.log(`✅ Frontend statique servi depuis: ${publicPath}`);
 } else {
   console.warn(`⚠️ Dossier public non trouvé: ${publicPath}`);
-  console.warn('   Construis le frontend avec: npm run build');
+  console.warn('   Construis le frontend avec: npm run build (en mode dev, utilisez plutôt http://localhost:1420)');
 }
+
+// ============================================
+// 🔥 ROUTE SPÉCIFIQUE - DOIT ÊTRE AVANT LA ROUTE GENERIQUE
+// ============================================
+
+// GET /api/clients/details/:telephone_id - Récupérer un client avec ses mesures
+app.get('/api/clients/details/:telephone_id', async (req, res) => {
+  try {
+    const { telephone_id } = req.params;
+    
+    console.log(`🔍 Recherche client avec telephone_id: ${telephone_id}`);
+    
+    // Décoder l'URL si nécessaire
+    const decodedTelephone = decodeURIComponent(telephone_id);
+    console.log(`🔍 Téléphone décodé: ${decodedTelephone}`);
+    
+    // Récupérer le client
+    const clientResult = await pool.query(`
+      SELECT * FROM clients 
+      WHERE telephone_id = $1 AND est_supprime = 0
+    `, [decodedTelephone]);
+    
+    if (clientResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+    
+    const client = clientResult.rows[0];
+    
+    // Récupérer les mesures
+    const mesuresResult = await pool.query(`
+      SELECT 
+        tm.nom,
+        mc.valeur,
+        tm.unite
+      FROM mesures_clients mc
+      JOIN types_mesures tm ON tm.id = mc.type_mesure_id
+      WHERE mc.client_id = $1
+      ORDER BY tm.id
+    `, [client.id]);
+    
+    client.mesures = mesuresResult.rows;
+    
+    console.log(`✅ Client trouvé: ${client.nom_prenom}, ${mesuresResult.rows.length} mesures`);
+    
+    res.json(client);
+  } catch (error) {
+    console.error('❌ Erreur:', error);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération du client', 
+      details: error.message 
+    });
+  }
+});
 
 // ============================================
 // ROUTES API (préfixées par /api)

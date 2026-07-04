@@ -33,35 +33,53 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             greet,
             hash_password,
             verify_password
         ])
-        .setup(|_app| {
+        .setup(|app| {
+            // ============================================================
+            // 1. DÉMARRAGE AUTOMATIQUE DU BACKEND (sidecar)
+            //    En production, le backend Express est lancé automatiquement.
+            //    Le frontend attend ensuite /health tout seul : aucune
+            //    manipulation de l'utilisateur n'est nécessaire.
+            // ============================================================
             #[cfg(not(debug_assertions))]
             {
-                use std::process::Command;
-                use std::path::PathBuf;
-                
-                std::thread::spawn(|| {
-                    // Petite pause avant de démarrer le backend
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    
-                    // Récupérer le chemin de l'exécutable
-                    let exe_path = std::env::current_exe().expect("Failed to get exe path");
-                    let exe_dir = exe_path.parent().expect("Failed to get exe dir");
-                    let backend_path = exe_dir.join("backend.exe");
-                    
-                    println!("🔧 Démarrage backend depuis: {:?}", backend_path);
-                    
-                    // Démarrer le backend
-                    let _ = Command::new(backend_path)
-                        .spawn();
-                    
-                    println!("✅ Backend démarré");
-                });
+                use tauri_plugin_shell::ShellExt;
+                match app.shell().sidecar("backend") {
+                    Ok(cmd) => match cmd.spawn() {
+                        Ok(_) => log::info!("✅ Backend sidecar démarré"),
+                        Err(e) => log::error!("❌ Échec du démarrage du backend: {e}"),
+                    },
+                    Err(e) => log::error!("❌ Sidecar backend introuvable: {e}"),
+                }
             }
+
+            // ============================================================
+            // 2. DÉMARRAGE AUTOMATIQUE AVEC WINDOWS
+            //    L'application (et donc son backend) se lance au démarrage
+            //    de la session Windows. Activé uniquement en production.
+            // ============================================================
+            #[cfg(not(debug_assertions))]
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let autostart = app.autolaunch();
+                match autostart.is_enabled() {
+                    Ok(true) => log::info!("✅ Démarrage automatique Windows déjà actif"),
+                    _ => match autostart.enable() {
+                        Ok(_) => log::info!("✅ Démarrage automatique Windows activé"),
+                        Err(e) => log::warn!("⚠️ Impossible d'activer l'autostart: {e}"),
+                    },
+                }
+            }
+
+            let _ = app;
             Ok(())
         })
         .run(tauri::generate_context!())
